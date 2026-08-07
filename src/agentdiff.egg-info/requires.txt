@@ -2,6 +2,10 @@ pydantic>=2.0
 rich>=13.0
 watchdog>=4.0
 GitPython>=3.1
+mkdocs>=1.6.1
+mkdocs-material>=9.7.7
+mkdocstrings>=1.0.6
+mkdocstrings-python>=2.0.5
 
 [all]
 langchain-core>=0.3

@@ -1,0 +1,98 @@
+site_name: AgentDiff
+site_description: Full-state trajectory evaluation for AI agents
+site_url: https://agentdiff.dev
+repo_url: https://github.com/muskw/agentdiff
+repo_name: muskw/agentdiff
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Concepts:
+    - Cleanliness Score: concepts/cleanliness.md
+    - Side Effects: concepts/side-effects.md
+    - Trajectory Tracking: concepts/trajectory.md
+  - CLI Reference: cli.md
+  - Python API: api.md
+  - Integrations:
+    - LangChain/LangGraph: integrations/langchain.md
+    - Custom Frameworks: integrations/custom.md
+  - Tutorials:
+    - CI/CD Integration: tutorials/ci-cd.md
+    - Benchmarking Agents: tutorials/benchmarking.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_toc_entry: false
+            members_order: source
+            docstring_style: google
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/muskw/agentdiff
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/agentdiff/
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX
+  version:
+    provider: mike
+
+copyright: Copyright &copy; 2026 AgentDiff Contributors
