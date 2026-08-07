@@ -21,6 +21,16 @@ from agentdiff import (
 )
 
 
+def isolated_engine(path: str | Path, *, capture_env_vars: bool = False) -> DiffEngine:
+    """Build a deterministic engine for tests that do not exercise live system churn."""
+    return DiffEngine(
+        watch_paths=[str(path)],
+        capture_env_vars=capture_env_vars,
+        capture_processes=False,
+        capture_ports=False,
+    )
+
+
 class TestDiffEngine:
     """Tests for the filesystem/environment diff engine."""
 
@@ -34,17 +44,17 @@ class TestDiffEngine:
             subdir.mkdir()
             (subdir / "nested.txt").write_text("nested")
 
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir)
             fs_snap, _env_snap = engine.snapshot()
 
-            assert str(test_file) in fs_snap.file_hashes
-            assert str(subdir / "nested.txt") in fs_snap.file_hashes
-            assert str(subdir) in fs_snap.directories
+            assert str(test_file.resolve()) in fs_snap.file_hashes
+            assert str((subdir / "nested.txt").resolve()) in fs_snap.file_hashes
+            assert str(subdir.resolve()) in fs_snap.directories
 
     def test_filesystem_diff_detects_changes(self):
         """Test diff detects file creation, modification, deletion."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir)
 
             # Create a file first, then snapshot
             new_file = Path(tmpdir) / "created.txt"
@@ -71,7 +81,7 @@ class TestDiffEngine:
 
             # Check created - should NOT include created.txt since it existed in pre
             # But we can verify created.txt is in pre_fs
-            assert str(new_file) in pre_fs.file_hashes
+            assert str(new_file.resolve()) in pre_fs.file_hashes
 
             # Check modified
             modified = [d for d in diff.filesystem_diffs if d.diff_type.value == "file_modified"]
@@ -84,7 +94,7 @@ class TestDiffEngine:
     def test_environment_diff(self):
         """Test environment variable diffs."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir, capture_env_vars=True)
             pre_fs, pre_env = engine.snapshot()
 
             # Modify environment - add new var and modify existing
@@ -198,7 +208,7 @@ class TestEvaluator:
             target_file = Path(tmpdir) / "target.txt"
             target_file.write_text("original")
 
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir)
             pre_fs, pre_env = engine.snapshot()
 
             # Simulate agent: modifies target (good) and creates temp file (bad)
@@ -236,7 +246,7 @@ class TestEvaluator:
             important_file = Path(tmpdir) / "important.txt"
             important_file.write_text("do not delete")
 
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir)
             pre_fs, pre_env = engine.snapshot()
 
             # Agent deletes important file (critical side effect)
@@ -269,7 +279,7 @@ class TestEvaluator:
             target_file = Path(tmpdir) / "target.txt"
             target_file.write_text("original")
 
-            engine = DiffEngine(watch_paths=[tmpdir])
+            engine = isolated_engine(tmpdir)
             pre_fs, pre_env = engine.snapshot()
 
             # Clean run: only modifies target
@@ -305,7 +315,7 @@ class TestIntegration:
             (project / "main.py").write_text("def foo():\n    return 1\n")
             (project / "test.py").write_text("def test_foo():\n    assert foo() == 1\n")
 
-            engine = DiffEngine(watch_paths=[str(project)])
+            engine = isolated_engine(project)
             pre_fs, pre_env = engine.snapshot()
 
             # Simulate agent fixing a bug but introducing a side effect

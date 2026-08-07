@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
+
+import psutil
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,6 +47,22 @@ def test_demo_json_output_is_machine_readable(capsys) -> None:
     assert payload["metrics"]["cleanliness_score"] < 1.0
 
 
+def test_demo_json_ignores_live_process_churn(capsys, monkeypatch) -> None:
+    process_snapshots = iter(
+        [
+            [SimpleNamespace(info={"pid": 1})],
+            [SimpleNamespace(info={"pid": 1}), SimpleNamespace(info={"pid": 2})],
+        ]
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter(next(process_snapshots)))
+    monkeypatch.setattr(psutil, "net_connections", lambda **_kwargs: [])
+
+    run_demo(show_json=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["metrics"]["total_mutations"] == 3
+
+
 def test_cli_snapshot_files_round_trip_into_diff(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -52,12 +71,29 @@ def test_cli_snapshot_files_round_trip_into_diff(tmp_path: Path) -> None:
 
     before = tmp_path / "before.json"
     after = tmp_path / "after.json"
+    snapshot_flags = ("--no-env", "--no-proc", "--no-ports")
 
-    first = run_cli("snapshot", "--root", str(workspace), "-o", str(before), cwd=tmp_path)
+    first = run_cli(
+        "snapshot",
+        "--root",
+        str(workspace),
+        *snapshot_flags,
+        "-o",
+        str(before),
+        cwd=tmp_path,
+    )
     assert first.returncode == 0, first.stderr
 
     target.write_text("after\n")
-    second = run_cli("snapshot", "--root", str(workspace), "-o", str(after), cwd=tmp_path)
+    second = run_cli(
+        "snapshot",
+        "--root",
+        str(workspace),
+        *snapshot_flags,
+        "-o",
+        str(after),
+        cwd=tmp_path,
+    )
     assert second.returncode == 0, second.stderr
 
     result = run_cli(

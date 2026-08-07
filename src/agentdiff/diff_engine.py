@@ -288,23 +288,29 @@ class DiffEngine:
         if self.capture_ports:
             try:
                 import psutil
-
-                for conn in psutil.net_connections(kind="inet"):
-                    if conn.status == "LISTEN" and conn.laddr:
-                        open_ports.add(conn.laddr.port)
             except ImportError:
                 pass
+            else:
+                try:
+                    for conn in psutil.net_connections(kind="inet"):
+                        if conn.status == "LISTEN" and conn.laddr:
+                            open_ports.add(conn.laddr.port)
+                except (OSError, psutil.Error):
+                    pass
 
         # Collect process PIDs
         process_pids = set()
         if self.capture_processes:
             try:
                 import psutil
-
-                for proc in psutil.process_iter(["pid"]):
-                    process_pids.add(proc.info["pid"])
             except ImportError:
                 pass
+            else:
+                try:
+                    for proc in psutil.process_iter(["pid"]):
+                        process_pids.add(proc.info["pid"])
+                except (OSError, psutil.Error):
+                    pass
 
         return EnvironmentSnapshot(
             env_vars=env_vars,

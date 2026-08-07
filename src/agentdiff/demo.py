@@ -71,7 +71,12 @@ def simulate_agent_run(project_dir: Path) -> tuple:
     Simulate an agent fixing the bug but introducing side effects.
     Returns (trajectory, pre_snapshot, post_snapshot)
     """
-    engine = DiffEngine(watch_paths=[str(project_dir)])
+    engine = DiffEngine(
+        watch_paths=[str(project_dir)],
+        capture_env_vars=False,
+        capture_processes=False,
+        capture_ports=False,
+    )
 
     # First, take pre-snapshot of the INITIAL state
     pre_fs, pre_env = engine.snapshot()
