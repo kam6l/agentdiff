@@ -1,80 +1,63 @@
 # Contributing
 
-Thanks for contributing to AgentDiff! 
+AgentDiff welcomes focused bug fixes, tests, documentation improvements, and carefully scoped integrations.
 
-## Development Setup
+## Development setup
 
 ```bash
-git clone https://github.com/muskw/agentdiff
+git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
-uv sync --dev
+uv sync --locked --group dev --group docs --group build --extra langchain
 ```
 
-## Running Tests
+## Quality gates
+
+Run the same checks expected in CI:
 
 ```bash
-# All tests
-uv run pytest
-
-# With coverage
-uv run pytest --cov=agentdiff --cov-report=html
-
-# Specific test file
-uv run pytest tests/test_agentdiff.py -v
-```
-
-## Code Style
-
-```bash
-# Format
-uv run ruff format src tests
-
-# Lint
+uv run ruff format --check src tests
 uv run ruff check src tests
-
-# Type check
 uv run mypy src/agentdiff
+uv run pytest tests/ --cov=agentdiff --cov-report=term-missing
+uv build
+uv run twine check dist/*
+uv run check-wheel-contents dist/*.whl
+uv run mkdocs build --strict
 ```
 
-## Pre-commit Hooks
+Apply formatting with `uv run ruff format src tests`.
 
-```bash
-uv run pre-commit install
-uv run pre-commit run --all-files
-```
+## Change workflow
 
-## Adding a New Feature
+1. Open an issue for behavior changes or large features.
+2. Create a focused branch from `main`.
+3. Add a regression test that fails for the bug or missing behavior.
+4. Implement the smallest complete change.
+5. Update source documentation in `docs_src/`.
+6. Run all local gates.
+7. Open a pull request describing behavior, risks, and verification.
 
-1. Create an issue describing the feature
-2. Fork and create a feature branch
-3. Add tests for new functionality
-4. Update documentation in `docs/`
-5. Submit PR with description and test results
+Do not commit generated `site/`, `docs/`, coverage, cache, environment, or distribution artifacts.
 
-## Adding a Framework Integration
+## Framework integrations
 
-1. Create `src/agentdiff/integrations/{name}.py` following the `BaseFrameworkAdapter` pattern
-2. Register in `src/agentdiff/integrations/__init__.py`
-3. Add docs in `docs/integrations/{name}.md`
-4. Add integration test in `tests/test_integrations.py`
+- Keep optional framework dependencies out of the core install.
+- Convert framework events into AgentDiff trajectory calls rather than duplicating evaluation logic.
+- Include an integration test that runs with the corresponding extra.
+- Document exactly which callback events are supported.
+- Do not publish placeholder adapters.
 
 ## Documentation
 
 ```bash
-# Serve locally
 uv run mkdocs serve
-
-# Build
-uv run mkdocs build
+uv run mkdocs build --strict
 ```
 
-## Release Process
+The site is deployed from `docs_src/` by GitHub Actions. Public examples must use `kam6l/agentdiff`, source installation until PyPI exists, and implemented commands only.
 
-1. Update version in `pyproject.toml`
-2. Update `CHANGELOG.md`
-3. Create release PR
-4. On merge: GitHub Actions publishes to PyPI
+## Reporting security issues
 
-## Code of Conduct
+Do not post credentials, private trajectories, or environment snapshots in a public issue. Open a minimal issue requesting a private contact path when disclosure needs to remain confidential.
 
-Be respectful, inclusive, and constructive. See [Code of Conduct](https://github.com/muskw/agentdiff/blob/main/CODE_OF_CONDUCT.md).
+Be respectful, specific, and constructive in issues and reviews.

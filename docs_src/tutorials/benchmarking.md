@@ -1,197 +1,81 @@
-# Benchmarking Agents
+# Regression testing agent runs
 
-Use AgentDiff to objectively compare agent implementations, models, and prompts.
+AgentDiff does not ship a benchmark runner. It supplies run-level state and trajectory metrics that you can collect inside your own repeatable harness.
 
-## Why Benchmark with AgentDiff?
+## What to compare
 
-Traditional benchmarks (SWE-bench, WebArena) only measure **outcome**: pass/fail.
+Useful regression signals include:
 
-AgentDiff measures **quality of execution**:
-- Cleanliness Score (collateral damage)
-- Efficiency (steps, loops, redundant calls)
-- Side Effect Profile (what broke)
-- Step-level fault attribution
+- task tests or an external outcome score
+- cleanliness score
+- unintended mutation count
+- critical and warning side effects
+- tool success rate
+- loop and redundant-call counts
+- token use and duration as supporting diagnostics
 
-## Quick Benchmark
+AgentDiff is not primarily a speed benchmark. A fast run with collateral mutations is still a poor run.
 
-```bash
-# Run multiple agents on same task
-agentdiff benchmark \
-  --task "Fix the add() function in calculator.py" \
-  --agents "langgraph,crewai,autogen" \
-  --runs 5 \
-  --output benchmark.json
-```
-
-## Programmatic Benchmarking
+## Minimal harness
 
 ```python
-from agentdiff import AgentDiffSession, benchmark
-from agentdiff.integrations import LangChainCallbackHandler, CrewAIAdapter
+import json
+from pathlib import Path
 
-agents = {
-    "langgraph-gpt4": lambda: create_langgraph_agent("gpt-4"),
-    "langgraph-claude": lambda: create_langgraph_agent("claude-3"),
-    "crewai-gpt4": lambda: create_crewai_agent("gpt-4"),
-    "custom-agent": lambda: MyCustomAgent(),
-}
+from agentdiff import AgentDiffConfig, AgentDiffSession
 
-results = benchmark(
-    agents=agents,
-    task="Refactor the user authentication module",
-    repo_path="/repo",
-    target_paths=["/repo/src/auth/"],
-    runs=3,  # Statistical significance
-)
 
-# Results: DataFrame with cleanliness, efficiency, side effects per agent/run
-print(results.summary())
-"""
-                    cleanliness  efficiency  side_effects  duration_s
-agent           run                                         
-langgraph-gpt4  0        0.92      0.88            1        45.2
-                1        0.89      0.91            2        42.1
-                2        0.94      0.85            0        48.7
-langgraph-claude 0       0.96      0.93            0        52.3
-                ...
-"""
+def evaluate_variant(name, run_agent, workspace):
+    config = AgentDiffConfig(
+        root=str(workspace),
+        target_paths=["src/target.py"],
+        capture_processes=False,
+        capture_ports=False,
+    )
+
+    with AgentDiffSession(f"Regression: {name}", config) as session:
+        run_agent(session)
+
+    result = session.evaluate()
+    return {
+        "variant": name,
+        "passed": result.passed,
+        "cleanliness": result.metrics.cleanliness_score,
+        "unintended_mutations": result.metrics.unintended_mutations,
+        "efficiency": result.metrics.efficiency_score,
+        "tool_success_rate": result.metrics.success_rate,
+        "side_effects": [effect.to_dict() for effect in result.side_effects],
+    }
+
+
+rows = []
+for name, agent in variants.items():
+    reset_fixture(Path("/tmp/agent-benchmark"))
+    rows.append(evaluate_variant(name, agent, Path("/tmp/agent-benchmark")))
+
+Path("agent-regressions.json").write_text(json.dumps(rows, indent=2))
 ```
 
-## Statistical Comparison
+Your `run_agent(session)` function should call `session.record(...)` at its tool-execution seam.
 
-```python
-import pandas as pd
+## Fair comparisons
 
-df = results.to_dataframe()
+1. Restore the same fixture before every run.
+2. Run variants in isolated directories or containers.
+3. Use the same declared target set.
+4. Keep collector settings identical.
+5. Repeat stochastic agents and report distributions, not only the best run.
+6. Pair AgentDiff metrics with task correctness.
+7. Preserve raw trajectories and state diffs for failures.
 
-# Mean cleanliness per agent
-print(df.groupby("agent")["cleanliness"].mean())
-"""
-agent
-langgraph-claude    0.95
-langgraph-gpt4      0.92
-crewai-gpt4         0.78
-custom-agent        0.65
-"""
+## CI regression policy
 
-# Significance test
-from scipy import stats
-stat, p = stats.ttest_ind(
-    df[df.agent=="langgraph-claude"]["cleanliness"],
-    df[df.agent=="crewai-gpt4"]["cleanliness"]
-)
-print(f"p-value: {p:.4f}")  # p < 0.05 = significant difference
-```
+A practical policy might fail when:
 
-## SWE-bench Integration
+- task tests fail;
+- cleanliness falls below a historical floor;
+- unintended mutations increase;
+- a new critical side effect appears; or
+- loop counts exceed a known baseline.
 
-```bash
-# Evaluate on SWE-bench trajectories
-agentdiff eval --dataset swe-bench --split test --output swe_results.json
-
-# Compare with published baselines
-agentdiff compare --baseline swe_bench_paper.csv --current swe_results.json
-```
-
-## Custom Benchmark Suite
-
-```python
-from agentdiff import BenchmarkSuite
-
-suite = BenchmarkSuite(name="my-org-agents")
-
-suite.add_task(
-    name="bugfix-auth",
-    description="Fix authentication bypass in login.py",
-    repo_path="/benchmarks/auth-bug",
-    target_paths=["/benchmarks/auth-bug/login.py"],
-    setup_script="git checkout buggy-version",
-)
-
-suite.add_task(
-    name="refactor-user-service",
-    description="Extract UserService from monolith",
-    repo_path="/benchmarks/monolith",
-    target_paths=["/benchmarks/monolith/services/user/"],
-)
-
-suite.add_agent("langgraph-gpt4", create_langgraph_gpt4)
-suite.add_agent("langgraph-claude", create_langgraph_claude)
-suite.add_agent("my-custom", MyCustomAgent)
-
-results = suite.run(runs=3)
-results.save("benchmark_results.json")
-results.to_html("benchmark_report.html")
-```
-
-## CI Benchmarking (Nightly)
-
-```yaml
-# .github/workflows/nightly-benchmark.yml
-name: Nightly Agent Benchmark
-
-on:
-  schedule:
-    - cron: '0 2 * * *'  # 2 AM daily
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-      
-      - name: Run benchmark suite
-        run: |
-          pip install agentdiff
-          python run_benchmarks.py
-      
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: benchmark_results.json
-      
-      - name: Post to dashboard
-        run: |
-          curl -X POST https://agentdiff.dev/api/benchmark \
-            -H "Authorization: Bearer ${{ secrets.AGENTDIFF_TOKEN }}" \
-            -d @benchmark_results.json
-```
-
-## Visualizing Results
-
-```python
-# Built-in visualization
-results.to_html("report.html")  # Interactive charts
-
-# Or with matplotlib/seaborn
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-df = results.to_dataframe()
-
-# Cleanliness distribution
-sns.boxplot(data=df, x="agent", y="cleanliness")
-plt.title("Cleanliness Score by Agent")
-plt.savefig("cleanliness_boxplot.png")
-
-# Efficiency vs Cleanliness scatter
-sns.scatterplot(data=df, x="efficiency", y="cleanliness", hue="agent")
-plt.savefig("efficiency_vs_cleanliness.png")
-```
-
-## Publishing Results
-
-```bash
-# Generate shareable report
-agentdiff report benchmark_results.json --html --public
-
-# Uploads to https://agentdiff.dev/b/abc123
-# Shareable link with interactive filters
-```
-
-## Related
-
-- [CI/CD Integration](ci-cd.md) — Gate quality in pipelines
-- [Python API](../api.md) — Programmatic evaluation
+Do not compare token counts across providers without accounting for tokenizer and usage-reporting differences. Process and port measurements can also vary on shared runners, so disable those collectors when they are not part of the behavior under test.

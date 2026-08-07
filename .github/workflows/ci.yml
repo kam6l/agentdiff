@@ -5,95 +5,165 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.12"
+  UV_LOCKED: "1"
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  tests:
+    name: Tests · ${{ matrix.os }} · Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: ubuntu-latest
+            python-version: "3.14"
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
-      
-      - name: Install dependencies
-        run: uv sync --dev
-      
+          python-version: ${{ matrix.python-version }}
+          cache-dependency-glob: uv.lock
+
+      - name: Install test dependencies
+        run: uv sync --locked --group dev --python ${{ matrix.python-version }}
+
       - name: Run tests
-        run: uv run pytest tests/ -v
-      
-      - name: Run type checks
-        run: uv run mypy src/agentdiff
-      
-      - name: Run linting
-        run: uv run ruff check src tests
-      
+        run: uv run --python ${{ matrix.python-version }} pytest tests/ --cov=agentdiff --cov-report=term-missing --cov-report=xml
+
+      - name: Upload reference coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python-3.12
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  quality:
+    name: Lint · types · optional integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          python-version: "3.12"
+          cache-dependency-glob: uv.lock
+
+      - name: Install quality and LangChain dependencies
+        run: uv sync --locked --group dev --extra langchain
+
       - name: Check formatting
         run: uv run ruff format --check src tests
 
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Type-check
+        run: uv run mypy src/agentdiff
+
+      - name: Exercise optional integration
+        run: uv run pytest tests/test_integrations.py -v
+
   docs:
+    name: Documentation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
-      
-      - name: Install dependencies
-        run: uv sync --dev
-      
-      - name: Build docs
+          python-version: "3.12"
+          cache-dependency-glob: uv.lock
+
+      - name: Install documentation dependencies
+        run: uv sync --locked --group docs
+
+      - name: Build strict documentation
         run: uv run mkdocs build --strict
-      
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
         with:
           name: mkdocs-site
           path: site/
+          if-no-files-found: error
           retention-days: 7
 
-  build:
+  package:
+    name: Package validation
     runs-on: ubuntu-latest
-    needs: [test, docs]
+    needs: [tests, quality, docs]
+    timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
-      
-      - name: Build package
+          python-version: "3.12"
+          cache-dependency-glob: uv.lock
+
+      - name: Install build tools
+        run: uv sync --locked --group build
+
+      - name: Build source and wheel distributions
         run: uv build
-      
-      - name: Check package
+
+      - name: Validate distribution metadata
         run: uv run twine check dist/*
-      
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+
+      - name: Validate wheel contents
+        run: uv run check-wheel-contents dist/*.whl
+
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          uv venv /tmp/agentdiff-wheel --python 3.12
+          uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
+          /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
+          /tmp/agentdiff-wheel/bin/agentdiff --help
+          /tmp/agentdiff-wheel/bin/agentdiff-demo --json > /tmp/agentdiff-demo.json
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: distributions
           path: dist/
+          if-no-files-found: error
           retention-days: 7

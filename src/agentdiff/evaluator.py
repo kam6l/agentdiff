@@ -13,12 +13,19 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from .diff_engine import DiffEntry, DiffResult, DiffType
+from .diff_engine import (
+    DiffEntry,
+    DiffResult,
+    DiffType,
+    EnvironmentSnapshot,
+    FilesystemSnapshot,
+)
 from .trajectory import TrajectoryRecord
 
 
 class SideEffectSeverity(Enum):
     """Severity levels for detected side effects."""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -27,6 +34,7 @@ class SideEffectSeverity(Enum):
 @dataclass
 class SideEffect:
     """A detected side effect from agent execution."""
+
     severity: SideEffectSeverity
     category: str
     description: str
@@ -48,6 +56,7 @@ class SideEffect:
 @dataclass
 class CleanlinessMetrics:
     """Quantitative metrics for trajectory cleanliness."""
+
     # State mutation metrics
     total_mutations: int = 0
     target_mutations: int = 0
@@ -96,6 +105,7 @@ class CleanlinessMetrics:
 @dataclass
 class EvaluationResult:
     """Complete evaluation result for an agent run."""
+
     run_id: str
     task_description: str
     passed: bool
@@ -140,7 +150,9 @@ class EvaluationResult:
 
         # Overall status
         status = "✅ PASSED" if self.passed else "❌ FAILED"
-        c.print(Panel(f"[bold]{status}[/bold] — {self.task_description}", title=f"Run: {self.run_id}"))
+        c.print(
+            Panel(f"[bold]{status}[/bold] — {self.task_description}", title=f"Run: {self.run_id}")
+        )
 
         # Metrics table
         metrics_table = Table(title="Cleanliness Metrics")
@@ -182,13 +194,16 @@ class AgentDiffEvaluator:
         target_paths: list[str] | None = None,
         ignore_patterns: list[str] | None = None,
         severity_threshold: SideEffectSeverity = SideEffectSeverity.WARNING,
+        cleanliness_threshold: float = 0.5,
     ):
         from .diff_engine import DiffEngine
+
         self.diff_engine = DiffEngine(
             watch_paths=target_paths,
             ignore_patterns=ignore_patterns,
         )
         self.severity_threshold = severity_threshold
+        self.cleanliness_threshold = cleanliness_threshold
         self._target_mutations: set[str] = set()
         self._targets_explicitly_set: bool = False
 
@@ -200,15 +215,15 @@ class AgentDiffEvaluator:
     def evaluate(
         self,
         trajectory: TrajectoryRecord,
-        pre_fs_snapshot=None,
-        pre_env_snapshot=None,
-        post_fs_snapshot=None,
-        post_env_snapshot=None,
+        pre_fs_snapshot: FilesystemSnapshot | str | Path | None = None,
+        pre_env_snapshot: EnvironmentSnapshot | str | Path | None = None,
+        post_fs_snapshot: FilesystemSnapshot | str | Path | None = None,
+        post_env_snapshot: EnvironmentSnapshot | str | Path | None = None,
         custom_checks: dict[str, Callable] | None = None,
     ) -> EvaluationResult:
         """
         Full evaluation pipeline.
-        
+
         Args:
             trajectory: The agent's trajectory record
             pre_fs_snapshot: Filesystem snapshot before run (or path to load)
@@ -216,30 +231,44 @@ class AgentDiffEvaluator:
             post_fs_snapshot: Filesystem snapshot after run
             post_env_snapshot: Environment snapshot after run
             custom_checks: Dict of check_name -> callable(trajectory, diff) -> bool
-            
+
         Returns:
             EvaluationResult with metrics, side effects, and pass/fail
         """
         # Load snapshots if paths provided
         if isinstance(pre_fs_snapshot, (str, Path)):
             from .diff_engine import EnvironmentSnapshot, FilesystemSnapshot
-            pre_fs_snapshot = FilesystemSnapshot.from_dict(json.loads(Path(pre_fs_snapshot).read_text()))
+
+            pre_fs_snapshot = FilesystemSnapshot.from_dict(
+                json.loads(Path(pre_fs_snapshot).read_text())
+            )
         if isinstance(pre_env_snapshot, (str, Path)):
             from .diff_engine import EnvironmentSnapshot
-            pre_env_snapshot = EnvironmentSnapshot.from_dict(json.loads(Path(pre_env_snapshot).read_text()))
+
+            pre_env_snapshot = EnvironmentSnapshot.from_dict(
+                json.loads(Path(pre_env_snapshot).read_text())
+            )
         if isinstance(post_fs_snapshot, (str, Path)):
             from .diff_engine import FilesystemSnapshot
-            post_fs_snapshot = FilesystemSnapshot.from_dict(json.loads(Path(post_fs_snapshot).read_text()))
+
+            post_fs_snapshot = FilesystemSnapshot.from_dict(
+                json.loads(Path(post_fs_snapshot).read_text())
+            )
         if isinstance(post_env_snapshot, (str, Path)):
             from .diff_engine import EnvironmentSnapshot
-            post_env_snapshot = EnvironmentSnapshot.from_dict(json.loads(Path(post_env_snapshot).read_text()))
+
+            post_env_snapshot = EnvironmentSnapshot.from_dict(
+                json.loads(Path(post_env_snapshot).read_text())
+            )
 
         # Compute diff if snapshots provided
         diff_result = None
         if pre_fs_snapshot and post_fs_snapshot and pre_env_snapshot and post_env_snapshot:
             diff_result = self.diff_engine.diff(
-                pre_fs_snapshot, post_fs_snapshot,
-                pre_env_snapshot, post_env_snapshot,
+                pre_fs_snapshot,
+                post_fs_snapshot,
+                pre_env_snapshot,
+                post_env_snapshot,
             )
 
         # Compute metrics
@@ -254,7 +283,7 @@ class AgentDiffEvaluator:
             for name, check_fn in custom_checks.items():
                 try:
                     custom_results[name] = check_fn(trajectory, diff_result)
-                except Exception:
+                except Exception:  # noqa: BLE001 - user checks must not abort evaluation
                     custom_results[name] = False
 
         # Determine pass/fail
@@ -303,8 +332,7 @@ class AgentDiffEvaluator:
         m.total_llm_tokens = trajectory.total_llm_tokens
         m.total_duration_seconds = trajectory.duration_seconds
         m.avg_step_duration_ms = (
-            trajectory.duration_seconds * 1000 / m.total_steps
-            if m.total_steps > 0 else 0
+            trajectory.duration_seconds * 1000 / m.total_steps if m.total_steps > 0 else 0
         )
 
         # Error metrics
@@ -312,13 +340,14 @@ class AgentDiffEvaluator:
         m.failed_tool_calls = len(failed_calls)
         m.success_rate = (
             (m.total_tool_calls - m.failed_tool_calls) / m.total_tool_calls
-            if m.total_tool_calls > 0 else 1.0
+            if m.total_tool_calls > 0
+            else 1.0
         )
 
         # Loop detection
         loops = trajectory.detect_loops()
         m.loop_count = len(loops)
-        m.redundant_calls = sum(l["repetitions"] * l["window_size"] for l in loops)
+        m.redundant_calls = sum(loop["repetitions"] * loop["window_size"] for loop in loops)
 
         # Efficiency score (inverse of redundancy + failure rate)
         if m.total_tool_calls > 0:
@@ -340,8 +369,7 @@ class AgentDiffEvaluator:
                     m.unintended_mutations += 1
 
             m.cleanliness_score = (
-                m.target_mutations / m.total_mutations
-                if m.total_mutations > 0 else 1.0
+                m.target_mutations / m.total_mutations if m.total_mutations > 0 else 1.0
             )
 
         return m
@@ -360,7 +388,7 @@ class AgentDiffEvaluator:
         diff_result: DiffResult | None,
     ) -> list[SideEffect]:
         """Detect and classify side effects from diffs and trajectory."""
-        effects = []
+        effects: list[SideEffect] = []
 
         if not diff_result:
             return effects
@@ -380,14 +408,16 @@ class AgentDiffEvaluator:
             # Find related trajectory steps
             related_steps = self._find_related_steps(trajectory, diff)
 
-            effects.append(SideEffect(
-                severity=severity,
-                category=category,
-                description=description,
-                diff_entry=diff,
-                related_steps=related_steps,
-                metadata={"diff_type": diff.diff_type.value},
-            ))
+            effects.append(
+                SideEffect(
+                    severity=severity,
+                    category=category,
+                    description=description,
+                    diff_entry=diff,
+                    related_steps=related_steps,
+                    metadata={"diff_type": diff.diff_type.value},
+                )
+            )
 
         return effects
 
@@ -489,15 +519,12 @@ class AgentDiffEvaluator:
         if not all(custom_checks.values()):
             return False
 
-        # Fail on low cleanliness (configurable threshold)
-        if metrics.cleanliness_score < 0.5:
+        # Fail when the run does not meet the configured cleanliness gate.
+        if metrics.cleanliness_score < self.cleanliness_threshold:
             return False
 
         # Fail on excessive loops
-        if metrics.loop_count > 5:
-            return False
-
-        return True
+        return metrics.loop_count <= 5
 
 
 def evaluate_agent_run(
@@ -509,14 +536,14 @@ def evaluate_agent_run(
 ) -> EvaluationResult:
     """
     Convenience function for one-shot evaluation.
-    
+
     Args:
         trajectory: Agent trajectory record
         pre_snapshot: (FilesystemSnapshot, EnvironmentSnapshot) before run
         post_snapshot: (FilesystemSnapshot, EnvironmentSnapshot) after run
         target_paths: Expected mutation paths
         custom_checks: Custom validation functions
-        
+
     Returns:
         EvaluationResult
     """

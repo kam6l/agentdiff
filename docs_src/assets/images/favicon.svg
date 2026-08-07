@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AgentDiff mark">
+  <rect width="64" height="64" rx="12" fill="#11120f"/>
+  <path d="M18 16h18v8H26v16h10v8H18V16Z" fill="#f4f1e8"/>
+  <path d="M46 16v32H28v-8h10V24H28v-8h18Z" fill="#ff5a36"/>
+</svg>

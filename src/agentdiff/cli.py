@@ -5,8 +5,6 @@ AgentDiff CLI
 Commands:
   agentdiff eval      - Evaluate a trajectory file
   agentdiff diff      - Diff two snapshots
-  agentdiff replay    - Replay a trajectory
-  agentdiff init      - Initialize config for project
   agentdiff snapshot  - Capture current environment snapshot
 """
 
@@ -25,16 +23,19 @@ def cmd_snapshot(args):
         watch_paths=[args.root] if args.root else None,
         ignore_patterns=args.ignore.split(",") if args.ignore else None,
         max_file_size_mb=args.max_size // (1024 * 1024) if args.max_size else 100,
+        capture_env_vars=not args.no_env,
+        capture_processes=not args.no_proc,
+        capture_ports=not args.no_ports,
     )
     fs_snap, env_snap = engine.snapshot()
-    
+
     # Combine into a single snapshot dict for saving
     snapshot_data = {
         "filesystem": fs_snap.to_dict(),
         "environment": env_snap.to_dict(),
         "timestamp": fs_snap.timestamp,
     }
-    
+
     output = args.output or f"snapshot_{snapshot_data['timestamp']}.json"
     Path(output).write_text(json.dumps(snapshot_data, indent=2))
     print(f"Snapshot saved to {output}")
@@ -49,26 +50,36 @@ def cmd_diff(args):
     """Diff two snapshots."""
     pre_data = json.loads(Path(args.pre).read_text())
     post_data = json.loads(Path(args.post).read_text())
-    
-    pre_fs = FilesystemSnapshot(**pre_data["filesystem"])
-    pre_env = EnvironmentSnapshot(**pre_data["environment"])
-    post_fs = FilesystemSnapshot(**post_data["filesystem"])
-    post_env = EnvironmentSnapshot(**post_data["environment"])
-    
+
+    pre_fs = FilesystemSnapshot.from_dict(pre_data["filesystem"])
+    pre_env = EnvironmentSnapshot.from_dict(pre_data["environment"])
+    post_fs = FilesystemSnapshot.from_dict(post_data["filesystem"])
+    post_env = EnvironmentSnapshot.from_dict(post_data["environment"])
+
     engine = DiffEngine(
         watch_paths=[args.root] if args.root else None,
     )
     diff = engine.diff(pre_fs, post_fs, pre_env, post_env)
-    
+
     if args.format == "json":
-        print(diff.model_dump_json(indent=2))
+        print(json.dumps(diff.to_dict(), indent=2))
     else:
         # Use summary property
         summary = diff.summary
-        print(f"Files: +{summary.get('file_created', 0)} ~{summary.get('file_modified', 0)} -{summary.get('file_deleted', 0)}")
+        print(
+            f"Files: +{summary.get('file_created', 0)} "
+            f"~{summary.get('file_modified', 0)} "
+            f"-{summary.get('file_deleted', 0)}"
+        )
         print(f"Dirs:  +{summary.get('dir_created', 0)} -{summary.get('dir_deleted', 0)}")
-        print(f"Env:   +{summary.get('env_var_added', 0)} ~{summary.get('env_var_modified', 0)} -{summary.get('env_var_removed', 0)}")
-        print(f"Procs: +{summary.get('process_spawned', 0)} -{summary.get('process_terminated', 0)}")
+        print(
+            f"Env:   +{summary.get('env_var_added', 0)} "
+            f"~{summary.get('env_var_modified', 0)} "
+            f"-{summary.get('env_var_removed', 0)}"
+        )
+        print(
+            f"Procs: +{summary.get('process_spawned', 0)} -{summary.get('process_terminated', 0)}"
+        )
         print(f"Ports: +{summary.get('port_opened', 0)} -{summary.get('port_closed', 0)}")
 
 
@@ -96,33 +107,43 @@ def cmd_eval(args):
         final_result=trajectory_data.get("final_result"),
         final_error=trajectory_data.get("final_error"),
     )
-    
+
     # Load snapshots if provided
-    diff = None
+    snapshots = None
     if args.pre and args.post:
         pre_data = json.loads(Path(args.pre).read_text())
         post_data = json.loads(Path(args.post).read_text())
-        
-        pre_fs = FilesystemSnapshot(**pre_data["filesystem"])
-        pre_env = EnvironmentSnapshot(**pre_data["environment"])
-        post_fs = FilesystemSnapshot(**post_data["filesystem"])
-        post_env = EnvironmentSnapshot(**post_data["environment"])
-        
-        engine = DiffEngine(
-            watch_paths=[args.root] if args.root else None,
+
+        pre_snapshot = (
+            FilesystemSnapshot.from_dict(pre_data["filesystem"]),
+            EnvironmentSnapshot.from_dict(pre_data["environment"]),
         )
-        diff = engine.diff(pre_fs, post_fs, pre_env, post_env)
-    
+        post_snapshot = (
+            FilesystemSnapshot.from_dict(post_data["filesystem"]),
+            EnvironmentSnapshot.from_dict(post_data["environment"]),
+        )
+        snapshots = (pre_snapshot, post_snapshot)
+
     # Evaluate
     evaluator = AgentDiffEvaluator(
-        target_paths=args.target.split(",") if args.target else [],
+        target_paths=[args.root] if args.root else None,
         cleanliness_threshold=args.threshold,
     )
-    result = evaluator.evaluate(diff, trajectory)
-    
+    target_root = Path(args.root or ".").resolve()
+    targets = [
+        str(path.resolve() if path.is_absolute() else (target_root / path).resolve())
+        for target in (args.target.split(",") if args.target else [])
+        if (path := Path(target))
+    ]
+    evaluator.set_target_mutations(targets)
+    if snapshots:
+        result = evaluator.evaluate_from_snapshots(trajectory, *snapshots)
+    else:
+        result = evaluator.evaluate(trajectory)
+
     # Output
     if args.format == "json":
-        print(result.model_dump_json(indent=2))
+        print(result.to_json())
     else:
         print(f"Cleanliness: {result.metrics.cleanliness_score:.1%}")
         print(f"Efficiency:  {result.metrics.efficiency_score:.1%}")
@@ -130,67 +151,10 @@ def cmd_eval(args):
         print(f"Side Effects: {len(result.side_effects)}")
         for effect in result.side_effects:
             print(f"  {effect.severity.value}: {effect.description}")
-    
+
     # Exit code for CI
     if args.fail_below_threshold and not result.passed:
         sys.exit(1)
-
-
-def cmd_replay(args):
-    """Replay a trajectory (placeholder for future implementation)."""
-    print("Replay functionality coming in v0.2")
-    print("For now, use the trajectory JSON to manually re-run steps")
-    sys.exit(1)
-
-
-def cmd_init(args):
-    """Initialize agentdiff config for project."""
-    config = """# AgentDiff Configuration
-# See https://github.com/your-org/agentdiff for full options
-
-diff_engine:
-  root: "."
-  ignore_patterns:
-    - "*.pyc"
-    - "__pycache__"
-    - ".git"
-    - "*.log"
-    - ".venv"
-    - "node_modules"
-  max_file_size: 10000000
-  hash_algorithm: "sha256"
-  capture_env_vars: true
-  env_denylist:
-    - "*KEY*"
-    - "*SECRET*"
-    - "*TOKEN*"
-    - "*PASSWORD*"
-  capture_processes: true
-  capture_ports: true
-
-evaluator:
-  cleanliness_threshold: 0.8
-  efficiency_threshold: 0.7
-  critical_types:
-    - "file_deleted"
-    - "dir_deleted"
-    - "process_terminated"
-    - "port_closed"
-    - "env_var_removed"
-  warning_types:
-    - "file_modified"
-    - "file_created"
-    - "env_var_added"
-    - "process_spawned"
-
-trajectory:
-  max_steps: 1000
-  loop_detection_window: 10
-  loop_similarity_threshold: 0.9
-"""
-    output = Path(args.output or "agentdiff.yaml")
-    output.write_text(config)
-    print(f"Config written to {output}")
 
 
 def main():
@@ -199,7 +163,7 @@ def main():
         description="Full-state trajectory evaluation for AI agents",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    
+
     # snapshot
     p_snap = subparsers.add_parser("snapshot", help="Capture environment snapshot")
     p_snap.add_argument("--root", default=".", help="Root directory")
@@ -210,7 +174,7 @@ def main():
     p_snap.add_argument("--no-ports", action="store_true", help="Skip ports")
     p_snap.add_argument("-o", "--output", help="Output file")
     p_snap.set_defaults(func=cmd_snapshot)
-    
+
     # diff
     p_diff = subparsers.add_parser("diff", help="Diff two snapshots")
     p_diff.add_argument("pre", help="Pre-snapshot JSON file")
@@ -218,7 +182,7 @@ def main():
     p_diff.add_argument("--root", help="Root directory for relative paths")
     p_diff.add_argument("--format", choices=["json", "summary"], default="summary")
     p_diff.set_defaults(func=cmd_diff)
-    
+
     # eval
     p_eval = subparsers.add_parser("eval", help="Evaluate trajectory")
     p_eval.add_argument("trajectory", help="Trajectory JSON file")
@@ -228,20 +192,15 @@ def main():
     p_eval.add_argument("--target", help="Comma-separated target paths")
     p_eval.add_argument("--threshold", type=float, default=0.8, help="Cleanliness threshold")
     p_eval.add_argument("--format", choices=["json", "summary"], default="summary")
-    p_eval.add_argument("--fail-below-threshold", action="store_true", help="Exit 1 if failed")
+    p_eval.add_argument(
+        "--fail-on-failure",
+        "--fail-below-threshold",
+        dest="fail_below_threshold",
+        action="store_true",
+        help="Exit 1 when the evaluation fails",
+    )
     p_eval.set_defaults(func=cmd_eval)
-    
-    # replay
-    p_replay = subparsers.add_parser("replay", help="Replay trajectory")
-    p_replay.add_argument("trajectory", help="Trajectory JSON file")
-    p_replay.add_argument("--dry-run", action="store_true")
-    p_replay.set_defaults(func=cmd_replay)
-    
-    # init
-    p_init = subparsers.add_parser("init", help="Initialize config")
-    p_init.add_argument("-o", "--output", help="Output config file")
-    p_init.set_defaults(func=cmd_init)
-    
+
     args = parser.parse_args()
     args.func(args)
 

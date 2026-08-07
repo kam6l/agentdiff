@@ -1,32 +1,29 @@
 site_name: AgentDiff
 site_description: Full-state trajectory evaluation for AI agents
-site_url: https://kam6l.github.io/agentdiff
+site_author: kam6l
+site_url: https://kam6l.github.io/agentdiff/
 repo_url: https://github.com/kam6l/agentdiff
 repo_name: kam6l/agentdiff
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs_src/
 docs_dir: docs_src
-site_dir: docs
+site_dir: site
+
+copyright: Copyright &copy; 2026 AgentDiff contributors
 
 theme:
   name: material
+  language: en
+  favicon: assets/images/favicon.svg
+  font: false
   palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+    scheme: default
+    primary: black
+    accent: deep orange
   features:
     - navigation.tabs
     - navigation.sections
-    - navigation.expand
     - navigation.top
+    - navigation.tracking
     - search.highlight
     - search.share
     - content.code.copy
@@ -38,17 +35,17 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Concepts:
-    - Cleanliness Score: concepts/cleanliness.md
-    - Side Effects: concepts/side-effects.md
-    - Trajectory Tracking: concepts/trajectory.md
+      - Cleanliness Score: concepts/cleanliness.md
+      - Side Effects: concepts/side-effects.md
+      - Trajectory Tracking: concepts/trajectory.md
   - CLI Reference: cli.md
   - Python API: api.md
   - Integrations:
-    - LangChain/LangGraph: integrations/langchain.md
-    - Custom Frameworks: integrations/custom.md
+      - LangChain / LangGraph: integrations/langchain.md
+      - Custom Frameworks: integrations/custom.md
   - Tutorials:
-    - CI/CD Integration: tutorials/ci-cd.md
-    - Benchmarking Agents: tutorials/benchmarking.md
+      - CI/CD Integration: tutorials/ci-cd.md
+      - Regression Testing: tutorials/benchmarking.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 
@@ -68,6 +65,7 @@ plugins:
             docstring_style: google
 
 markdown_extensions:
+  - meta
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -85,16 +83,15 @@ markdown_extensions:
   - toc:
       permalink: true
 
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/site.js
+
 extra:
+  homepage: https://kam6l.github.io/agentdiff/
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/muskw/agentdiff
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/agentdiff/
-  analytics:
-    provider: google
-    property: G-XXXXXXXXXX
-  version:
-    provider: mike
-
-copyright: Copyright &copy; 2026 AgentDiff Contributors
+      link: https://github.com/kam6l/agentdiff
+      name: AgentDiff on GitHub

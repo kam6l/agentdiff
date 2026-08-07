@@ -37,29 +37,25 @@ from .trajectory import (
 
 __version__ = "0.1.0"
 __all__ = [
-    # diff_engine
-    "FilesystemSnapshot",
-    "EnvironmentSnapshot",
-    "DiffEngine",
-    "DiffResult",
-    "DiffEntry",
-    "DiffType",
-    # trajectory
-    "TrajectoryStep",
-    "TrajectoryRecord",
-    "TrajectoryTracker",
-    "ToolCall",
-    "StepResult",
+    "AgentDiffConfig",
+    "AgentDiffEvaluator",
+    "AgentDiffSession",
     "AgentFramework",
-    # evaluator
-    "EvaluationResult",
+    "BaseAgentDiffAdapter",
     "CleanlinessMetrics",
+    "DiffEngine",
+    "DiffEntry",
+    "DiffResult",
+    "DiffType",
+    "EnvironmentSnapshot",
+    "EvaluationResult",
+    "FilesystemSnapshot",
     "SideEffect",
     "SideEffectSeverity",
-    "AgentDiffEvaluator",
+    "StepResult",
+    "ToolCall",
+    "TrajectoryRecord",
+    "TrajectoryStep",
+    "TrajectoryTracker",
     "evaluate_agent_run",
-    # integrations
-    "AgentDiffConfig",
-    "AgentDiffSession",
-    "BaseAgentDiffAdapter",
 ]

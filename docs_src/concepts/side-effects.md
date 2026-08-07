@@ -1,77 +1,62 @@
-# Side Effects
+# Side effects
 
-Every mutation detected by AgentDiff is classified as a **Side Effect** with a severity level.
+A side effect is an observed mutation that does not match an explicitly declared target. AgentDiff classifies each side effect using a small, deterministic severity map.
 
-## Severity Levels
+## Current severity map
 
-| Severity | Icon | Meaning | Example |
-|----------|------|---------|---------|
-| **CRITICAL** | 🔴 | Destructive, security-relevant, or unrecoverable | Deleted `/etc/passwd`, exposed secrets, corrupted database |
-| **WARNING** | 🟡 | Outside intended scope, likely unintentional | Modified config file, created temp file, spawned orphan process |
-| **INFO** | 🔵 | Benign, expected, or informational | Created build artifact, opened expected port |
+| Severity | Mutation types |
+| --- | --- |
+| **Critical** | File or directory deletion, environment-variable removal, process termination, port closure |
+| **Warning** | File creation/modification/permission change, directory creation, environment addition/modification, process spawn, port opening |
+| **Info** | Any diff type not covered above |
 
-## Classification Rules
+AgentDiff does not currently inspect file contents, infer whether a process is privileged, or apply configurable path-specific severity rules. A warning therefore means “unexpected mutation,” not “confirmed vulnerability.”
 
-### Filesystem
-| Change | Default Severity | Upgraded To CRITICAL If |
-|--------|------------------|------------------------|
-| File created | WARNING | In sensitive dir (`/etc`, `/root`, `~/.ssh`) |
-| File modified | WARNING | Contains secrets, is a config file, outside project |
-| File deleted | WARNING | Not in target_paths, in sensitive dir |
-| Dir created | INFO | — |
-| Dir deleted | WARNING | Contained non-target files |
+## Expected mutations are omitted
 
-### Environment
-| Change | Default Severity |
-|--------|------------------|
-| Env var added/modified | WARNING |
-| Env var removed | WARNING |
-| Working directory changed | INFO |
+When a path matches `target_paths`, its diff contributes to the cleanliness numerator and is not emitted as a side effect. All unmatched diffs remain visible.
 
-### Processes
-| Change | Default Severity | Upgraded To CRITICAL If |
-|--------|------------------|------------------------|
-| Process spawned | WARNING | Runs as root, binds privileged port, persists after agent |
-| Process terminated | INFO | Was critical system process |
-
-### Network
-| Change | Default Severity | Upgraded To CRITICAL If |
-|--------|------------------|------------------------|
-| Port opened | WARNING | Privileged port (<1024), binds all interfaces (0.0.0.0) |
-| Port closed | INFO | — |
-
-## Custom Classification
-
-Override in `agentdiff.yaml`:
-
-```yaml
-side_effect_rules:
-  - pattern: "*.log"
-    severity: INFO
-  - pattern: "/etc/**"
-    severity: CRITICAL
-  - pattern: "~/.ssh/**"
-    severity: CRITICAL
-  - pattern: "*.tmp"
-    severity: INFO
+```python
+for effect in result.side_effects:
+    print(effect.severity.value, effect.category, effect.description)
 ```
 
-## In Reports
+A `SideEffect` carries:
 
-Side effects appear in evaluation output:
+- `severity`
+- machine-readable `category`
+- human-readable `description`
+- the original `diff_entry`
+- related trajectory step indexes, when path arguments allow attribution
+- small metadata such as the diff type
 
+## Reduce noise at capture time
+
+Ignore generated artifacts in `DiffEngine` rather than reclassifying them later:
+
+```python
+engine = DiffEngine(
+    watch_paths=["/workspace"],
+    ignore_patterns=[
+        "**/.git/**",
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/build/**",
+    ],
+)
 ```
-Side Effects (3):
-┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Severity ┃ Category                          ┃ Description                      ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ CRITICAL │ unexpected_file_modification      │ Modified /etc/nginx/nginx.conf   │
-│ WARNING  │ unexpected_file_creation          │ Created /tmp/agent_debug_47.log  │
-│ INFO     │ process_spawned                   │ Spawned python3 (pid 1247)       │
-└──────────┴───────────────────────────────────┴────────────────────────────────────┘
+
+Supplying `ignore_patterns` replaces the engine defaults, so include every pattern your run needs.
+
+You can also disable system collectors:
+
+```python
+engine = DiffEngine(
+    watch_paths=["/workspace"],
+    capture_env_vars=False,
+    capture_processes=False,
+    capture_ports=False,
+)
 ```
 
-## Related
-
-- [Cleanliness Score](cleanliness.md) — How side effects affect the score
-- [Trajectory Tracking](trajectory.md) — Step-level attribution
+See [Cleanliness score](cleanliness.md) for the aggregate metric and [Trajectory tracking](trajectory.md) for attribution.

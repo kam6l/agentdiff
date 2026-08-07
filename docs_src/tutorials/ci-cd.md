@@ -1,167 +1,104 @@
-# CI/CD Integration
+# CI quality gate
 
-Gate agent quality in your pipelines — fail builds when agents are sloppy.
+AgentDiff can return a nonzero exit status when a saved run falls below its cleanliness threshold or triggers another evaluation failure.
 
-## GitHub Actions
+## GitHub Actions example
 
-### Basic Workflow
+Until a package is released, pin installation to a Git commit instead of assuming PyPI availability.
 
 ```yaml
-# .github/workflows/agent-quality.yml
-name: Agent Quality Gate
+name: Agent quality
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
-  agent-eval:
+  evaluate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
-      
-      - name: Install AgentDiff
-        run: pip install agentdiff
-      
-      - name: Capture baseline
-        run: agentdiff snapshot -o before.json
-      
-      - name: Run agent
-        run: python run_agent.py  # Your agent script
-        # Ensure your agent saves trajectory.json
-      
-      - name: Capture post state
-        run: agentdiff snapshot -o after.json
-      
-      - name: Evaluate with AgentDiff
+          enable-cache: true
+
+      - name: Install pinned AgentDiff source
         run: |
-          agentdiff eval \
-            --trajectory trajectory.json \
+          uv venv
+          uv pip install "agentdiff @ git+https://github.com/kam6l/agentdiff.git@<commit-sha>"
+
+      - name: Capture baseline
+        run: uv run agentdiff snapshot --root "$GITHUB_WORKSPACE" -o before.json
+
+      - name: Run the agent
+        run: uv run python scripts/run_agent.py
+        # The runner must save trajectory.json.
+
+      - name: Capture final state
+        run: uv run agentdiff snapshot --root "$GITHUB_WORKSPACE" -o after.json
+
+      - name: Gate the run
+        run: |
+          uv run agentdiff eval trajectory.json \
             --pre before.json \
             --post after.json \
-            --fail-below 0.85
+            --root "$GITHUB_WORKSPACE" \
+            --target src/evaluator.py,tests/test_evaluator.py \
+            --threshold 0.80 \
+            --format json \
+            --fail-on-failure > agentdiff-result.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agentdiff-evaluation
+          path: |
+            before.json
+            after.json
+            trajectory.json
+            agentdiff-result.json
+          if-no-files-found: warn
 ```
 
-### With JUnit Output (for PR annotations)
+Replace `<commit-sha>` with a reviewed AgentDiff commit. Avoid tracking `main` in a security-sensitive pipeline.
+
+## Evaluating inside this repository
+
+The AgentDiff repository itself uses its lockfile:
 
 ```yaml
-- name: Evaluate with JUnit output
-  run: |
-    agentdiff eval \
-      --trajectory trajectory.json \
-      --pre before.json \
-      --post after.json \
-      --fail-below 0.85 \
-      --junit report.xml
-
-- name: Publish test results
-  uses: actions/upload-artifact@v4
-  with:
-    name: agentdiff-report
-    path: report.xml
+- uses: astral-sh/setup-uv@v7
+- run: uv sync --locked --group dev --group docs --group build
+- run: uv run pytest tests/ --cov=agentdiff
+- run: uv run ruff check src tests
+- run: uv run mypy src/agentdiff
 ```
 
-### Fail PR on Low Cleanliness
+## Other CI systems
 
-```yaml
-- name: Check cleanliness threshold
-  run: |
-    REPORT=$(agentdiff eval -t trajectory.json --pre before.json --post after.json --format json)
-    CLEANLINESS=$(echo $REPORT | jq -r '.cleanliness_score')
-    THRESHOLD=0.85
-    
-    if (( $(echo "$CLEANLINESS < $THRESHOLD" | bc -l) )); then
-      echo "::error::Cleanliness $CLEANLINESS below threshold $THRESHOLD"
-      exit 1
-    fi
+The quality gate is not GitHub-specific. The portable sequence is:
+
+```bash
+agentdiff snapshot --root "$WORKSPACE" -o before.json
+python run_agent.py
+agentdiff snapshot --root "$WORKSPACE" -o after.json
+agentdiff eval trajectory.json \
+  --pre before.json --post after.json \
+  --root "$WORKSPACE" --target src/expected.py \
+  --threshold 0.8 --fail-on-failure
 ```
 
-## GitLab CI
+## Make runs reproducible
 
-```yaml
-# .gitlab-ci.yml
-agent_quality:
-  stage: test
-  image: python:3.11
-  script:
-    - pip install agentdiff
-    - agentdiff snapshot -o before.json
-    - python run_agent.py
-    - agentdiff snapshot -o after.json
-    - agentdiff eval -t trajectory.json --pre before.json --post after.json --fail-below 0.85
-  artifacts:
-    reports:
-      junit: report.xml
-    when: always
-```
+- Start from a clean checkout or disposable workspace.
+- Pin the agent, model configuration, and AgentDiff revision.
+- Disable process and port capture when unrelated runner services create noise.
+- Wait for intended child processes to exit before the final snapshot.
+- Keep secrets out of trajectory tool arguments and results.
+- Upload raw artifacts when a gate fails.
+- Establish thresholds from repeated baseline runs rather than choosing one arbitrarily.
 
-## Jenkins Pipeline
-
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Agent Eval') {
-            steps {
-                sh 'pip install agentdiff'
-                sh 'agentdiff snapshot -o before.json'
-                sh 'python run_agent.py'
-                sh 'agentdiff snapshot -o after.json'
-                sh '''
-                    agentdiff eval \
-                        -t trajectory.json \
-                        --pre before.json \
-                        --post after.json \
-                        --fail-below 0.85 \
-                        --junit report.xml
-                '''
-            }
-            post {
-                always {
-                    junit 'report.xml'
-                }
-            }
-        }
-    }
-}
-```
-
-## Pre-commit Hook (Local)
-
-```yaml
-# .pre-commit-config.yaml
-repos:
-  - repo: local
-    hooks:
-      - id: agentdiff
-        name: AgentDiff Quality Check
-        entry: agentdiff eval -t trajectory.json --pre before.json --post after.json --fail-below 0.8
-        language: system
-        pass_filenames: false
-        always_run: true
-```
-
-## Quality Gate Strategies
-
-| Strategy | Threshold | Use Case |
-|----------|-----------|----------|
-| **Strict** | 0.95 | Production agents, security-sensitive |
-| **Standard** | 0.80 | General purpose, CI gate |
-| **Lenient** | 0.60 | Experimental, research, early dev |
-| **Monitor Only** | 0.00 | Baseline collection, no failures |
-
-## Badge for README
-
-```markdown
-![AgentDiff Cleanliness](https://img.shields.io/endpoint?url=https://agentdiff.dev/badge/your-repo.json)
-```
-
-## Related
-
-- [CLI Reference](../cli.md) — All eval options
-- [Python API](../api.md) — Programmatic evaluation
+`--format json` writes the same evaluation data used for the exit decision; no separate JUnit or hosted dashboard feature is implied.

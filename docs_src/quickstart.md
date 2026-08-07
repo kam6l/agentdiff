@@ -1,99 +1,83 @@
 # Quickstart
 
-## Installation
+AgentDiff is currently installed from source. A PyPI release is not available yet.
+
+## Set up the project
 
 ```bash
-pip install agentdiff
+git clone https://github.com/kam6l/agentdiff.git
+cd agentdiff
+uv sync --locked --group dev
 ```
 
-Or with uv:
-```bash
-uv add agentdiff
-```
-
-## Initialize Configuration
+Run the bundled scripted demonstration:
 
 ```bash
-agentdiff init
+uv run agentdiff-demo
 ```
 
-Creates `agentdiff.yaml` in your project root:
-```yaml
-watch_paths:
-  - .
-target_paths: []
-exclude_patterns:
-  - "*.pyc"
-  - "__pycache__"
-  - ".git"
-  - "*.log"
-cleanliness_threshold: 0.8
-```
+Add `--json` when you want machine-readable output.
 
-## Run the Demo
+## Capture a real agent run
+
+Create the baseline before the agent starts:
 
 ```bash
-agentdiff demo
+uv run agentdiff snapshot --root . -o before.json
 ```
 
-Outputs a full evaluation report with cleanliness score and side effects.
+Run your agent and save its trajectory as `trajectory.json`, then capture the final state:
 
-## Basic CLI Workflow
-
-### 1. Capture baseline snapshot (before agent runs)
 ```bash
-agentdiff snapshot --output before.json
+uv run agentdiff snapshot --root . -o after.json
 ```
 
-### 2. Run your agent
+Inspect the raw state mutation summary:
+
 ```bash
-# Any agent framework - LangGraph, CrewAI, custom, etc.
-python run_my_agent.py
+uv run agentdiff diff before.json after.json
 ```
 
-### 3. Capture post snapshot
+Evaluate the trajectory and declare the files the agent was meant to change:
+
 ```bash
-agentdiff snapshot --output after.json
+uv run agentdiff eval trajectory.json \
+  --pre before.json \
+  --post after.json \
+  --root . \
+  --target src/evaluator.py \
+  --threshold 0.8
 ```
 
-### 4. Evaluate
-```bash
-agentdiff eval --trajectory trajectory.json --pre before.json --post after.json
-```
+For CI, add `--fail-on-failure`; AgentDiff exits with status 1 when the evaluation does not pass.
 
-### 5. View results
-```
-Cleanliness Score: 0.847
-Total Mutations: 12
-Target Mutations: 10
-Unintended Mutations: 2
-Side Effects: 2 WARNING, 0 CRITICAL
-```
-
-## Save Trajectory from Your Agent
+## Record a trajectory
 
 ```python
 from agentdiff import TrajectoryTracker
 
-tracker = TrajectoryTracker(task_description="Fix login bug")
+tracker = TrajectoryTracker(task_description="Fix the evaluator")
+tracker.start_step("Inspect the failing module")
+tracker.record_tool_call(
+    "read_file",
+    {"path": "src/evaluator.py"},
+    result="...",
+    duration_ms=42,
+)
+tracker.end_step("Found the threshold bug")
 
-# During agent execution
-tracker.start_step("Reading auth module")
-tracker.record_tool_call("read_file", {"path": "auth.py"}, result="...", duration_ms=45)
-tracker.end_step("Found the bug")
-
-tracker.start_step("Fixing the bug")
-tracker.record_tool_call("write_file", {"path": "auth.py", "content": "..."}, result="OK", duration_ms=120)
-tracker.end_step("Fix applied")
-
-# Save for evaluation
 trajectory = tracker.finish(final_result="Tests pass")
 trajectory.save("trajectory.json")
 ```
 
-## Next Steps
+For framework-neutral instrumentation with automatic state capture, use [`AgentDiffSession`](api.md#framework-neutral-session).
 
-- [CLI Reference](cli.md) — All commands and options
-- [Python API](api.md) — Programmatic usage
-- [Integrations](integrations/langchain.md) — LangChain/LangGraph callback
-- [CI/CD Tutorial](tutorials/ci-cd.md) — Gate agent quality in pipelines
+!!! note "Privacy defaults"
+    Environment variables whose names resemble tokens, secrets, passwords, credentials, private keys, or API keys are excluded. Use `--no-env`, `--no-proc`, and `--no-ports` when those collectors are unnecessary.
+
+## Continue
+
+- [CLI reference](cli.md)
+- [Python API](api.md)
+- [LangChain callback](integrations/langchain.md)
+- [CI quality gate](tutorials/ci-cd.md)

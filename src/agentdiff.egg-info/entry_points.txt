@@ -1,3 +1,0 @@
-[console_scripts]
-agentdiff = agentdiff.cli:main
-agentdiff-demo = agentdiff.demo:main

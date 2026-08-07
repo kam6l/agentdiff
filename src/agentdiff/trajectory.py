@@ -8,15 +8,19 @@ for later evaluation and debugging.
 import json
 import time
 import uuid
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from typing_extensions import Self
+
 
 class AgentFramework(Enum):
     """Supported agent frameworks."""
+
     LANGCHAIN = "langchain"
     CREWAI = "crewai"
     AUTOGEN = "autogen"
@@ -28,12 +32,13 @@ class AgentFramework(Enum):
 @dataclass
 class StepResult:
     """Result of a single trajectory step."""
+
     success: bool = True
     error: str | None = None
     tokens_in: int = 0
     tokens_out: int = 0
     duration: float = 0.0
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "success": self.success,
@@ -42,7 +47,7 @@ class StepResult:
             "tokens_out": self.tokens_out,
             "duration": self.duration,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StepResult":
         return cls(
@@ -57,6 +62,7 @@ class StepResult:
 @dataclass
 class ToolCall:
     """A single tool/function call made by the agent."""
+
     name: str
     arguments: dict[str, Any]
     result: Any | None = None
@@ -84,6 +90,7 @@ class ToolCall:
 @dataclass
 class TrajectoryStep:
     """A single step in the agent's trajectory."""
+
     step_index: int
     thought: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
@@ -123,6 +130,7 @@ class TrajectoryStep:
 @dataclass
 class TrajectoryRecord:
     """Complete trajectory record for an agent run."""
+
     run_id: str
     task_description: str
     framework: AgentFramework
@@ -224,12 +232,12 @@ class TrajectoryRecord:
 
     def get_unique_tools_used(self) -> list[str]:
         """Get list of unique tool names used."""
-        return list(set(tc.name for tc in self.get_tool_call_sequence()))
+        return list({tc.name for tc in self.get_tool_call_sequence()})
 
     def detect_loops(self, min_repeat: int = 3) -> list[dict[str, Any]]:
         """
         Detect repeated tool call patterns (potential loops).
-        
+
         Returns list of loop patterns found.
         """
         calls = self.get_tool_call_sequence()
@@ -240,28 +248,32 @@ class TrajectoryRecord:
         # Simple sliding window detection
         for window_size in range(2, min(10, len(calls) // 2)):
             for i in range(len(calls) - window_size * min_repeat + 1):
-                pattern = tuple(c.name for c in calls[i:i+window_size])
+                pattern = tuple(c.name for c in calls[i : i + window_size])
                 matches = 1
                 for j in range(1, min_repeat):
-                    next_pattern = tuple(c.name for c in calls[i+j*window_size:i+(j+1)*window_size])
+                    next_pattern = tuple(
+                        c.name for c in calls[i + j * window_size : i + (j + 1) * window_size]
+                    )
                     if next_pattern == pattern:
                         matches += 1
                     else:
                         break
                 if matches >= min_repeat:
-                    loops.append({
-                        "pattern": list(pattern),
-                        "start_index": i,
-                        "repetitions": matches,
-                        "window_size": window_size,
-                    })
+                    loops.append(
+                        {
+                            "pattern": list(pattern),
+                            "start_index": i,
+                            "repetitions": matches,
+                            "window_size": window_size,
+                        }
+                    )
         return loops
 
 
 class TrajectoryTracker:
     """
     Records agent execution trajectories.
-    
+
     Can be used as a context manager or by manually calling
     start_step() / end_step() / record_tool_call().
     """
@@ -282,7 +294,9 @@ class TrajectoryTracker:
         self._current_step: TrajectoryStep | None = None
         self._step_start_time: float | None = None
 
-    def start_step(self, thought: str | None = None, step_index: int | None = None) -> TrajectoryStep:
+    def start_step(
+        self, thought: str | None = None, step_index: int | None = None
+    ) -> TrajectoryStep:
         """Begin a new trajectory step."""
         if self._current_step is not None:
             self.end_step()
@@ -323,6 +337,7 @@ class TrajectoryTracker:
         """Record a tool call in the current step."""
         if self._current_step is None:
             self.start_step()
+        assert self._current_step is not None
 
         tool_call = ToolCall(
             name=name,
@@ -335,20 +350,33 @@ class TrajectoryTracker:
         return tool_call
 
     @contextmanager
-    def track_tool(self, name: str, arguments: dict[str, Any]):
+    def track_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> Iterator[Callable[[Any], None]]:
         """Context manager to time and record a tool call."""
         start = time.time()
-        error = None
-        result = None
+        error: str | None = None
+        result_box: dict[str, Any] = {}
+
+        def set_result(value: Any) -> None:
+            result_box["value"] = value
+
         try:
-            yield lambda r: setattr(result, 'value', r) if hasattr(result, 'value') else None
-            result = result.value if hasattr(result, 'value') else None
-        except Exception as e:
-            error = str(e)
+            yield set_result
+        except Exception as exc:
+            error = str(exc)
             raise
         finally:
             duration_ms = (time.time() - start) * 1000
-            self.record_tool_call(name, arguments, result, error, duration_ms)
+            self.record_tool_call(
+                name,
+                arguments,
+                result_box.get("value"),
+                error,
+                duration_ms,
+            )
 
     def record_llm_usage(
         self,
@@ -359,6 +387,7 @@ class TrajectoryTracker:
         """Record LLM token usage for current step."""
         if self._current_step is None:
             self.start_step()
+        assert self._current_step is not None
         self._current_step.llm_input_tokens = input_tokens
         self._current_step.llm_output_tokens = output_tokens
         self._current_step.llm_model = model
@@ -381,7 +410,7 @@ class TrajectoryTracker:
         """Save trajectory to file."""
         self.record.save(path)
 
-    def __enter__(self) -> "TrajectoryTracker":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -393,7 +422,7 @@ class TrajectoryTracker:
 # Framework-specific integrations
 class LangChainCallbackHandler:
     """LangChain callback handler for automatic trajectory tracking."""
-    
+
     def __init__(self, tracker: TrajectoryTracker):
         self.tracker = tracker
         self._current_tool_start: float | None = None
@@ -406,16 +435,16 @@ class LangChainCallbackHandler:
 
     def on_llm_end(self, response, **kwargs) -> None:
         # Extract token usage if available
-        if hasattr(response, 'llm_output') and response.llm_output:
-            usage = response.llm_output.get('token_usage', {})
+        if hasattr(response, "llm_output") and response.llm_output:
+            usage = response.llm_output.get("token_usage", {})
             self.tracker.record_llm_usage(
-                usage.get('prompt_tokens', 0),
-                usage.get('completion_tokens', 0),
+                usage.get("prompt_tokens", 0),
+                usage.get("completion_tokens", 0),
             )
 
     def on_tool_start(self, serialized: dict, input_str: str, **kwargs) -> None:
         self._current_tool_start = time.time()
-        self._current_tool_name = serialized.get('name', 'unknown')
+        self._current_tool_name = serialized.get("name", "unknown")
         self._current_tool_args = {"input": input_str}
 
     def on_tool_end(self, output: str, **kwargs) -> None:

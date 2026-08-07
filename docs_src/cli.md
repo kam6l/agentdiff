@@ -1,131 +1,69 @@
-# CLI Reference
+# CLI reference
 
-## Commands
+The `agentdiff` executable exposes three implemented commands. Run any command with `--help` for the installed version's exact interface.
 
-### `agentdiff init`
-Initialize configuration file.
+## `snapshot`
 
-```bash
-agentdiff init [--force]
-```
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Overwrite existing config |
-
----
-
-### `agentdiff snapshot`
-Capture environment snapshot.
+Capture filesystem and optional system state into one JSON file.
 
 ```bash
-agentdiff snapshot [--output FILE] [--root PATH] [--format json|yaml]
+agentdiff snapshot --root . -o before.json
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-o, --output` | Output file (default: stdout) |
-| `-r, --root` | Root path to watch (default: cwd) |
-| `-f, --format` | Output format (default: json) |
+| Option | Meaning |
+| --- | --- |
+| `--root PATH` | Directory to scan; defaults to the current directory |
+| `--ignore GLOBS` | Comma-separated `pathlib` glob patterns |
+| `--max-size BYTES` | Maximum file size considered for content hashing |
+| `--no-env` | Do not capture environment-variable names and values |
+| `--no-proc` | Do not capture process IDs |
+| `--no-ports` | Do not capture listening ports |
+| `-o, --output FILE` | Output path; otherwise a timestamped JSON file is created |
 
----
+Secret-like environment names are denied by default. `.git`, `.agentdiff`, virtual environments, Python caches, and Node dependencies are ignored by the default collector.
 
-### `agentdiff diff`
-Diff two snapshots.
+## `diff`
+
+Compare two snapshot files.
 
 ```bash
-agentdiff diff --pre FILE --post FILE [--root PATH] [--format json|text]
+agentdiff diff before.json after.json
+agentdiff diff before.json after.json --format json
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--pre` | Pre-snapshot file (required) |
-| `--post` | Post-snapshot file (required) |
-| `-r, --root` | Root path for relative paths |
-| `-f, --format` | Output format (default: text) |
+The two snapshot paths are positional. `--format` accepts `summary` or `json`; `--root` controls the engine root used while producing the diff.
 
----
+## `eval`
 
-### `agentdiff eval`
-Evaluate a trajectory.
+Evaluate a saved trajectory, optionally against a snapshot pair.
 
 ```bash
-agentdiff eval --trajectory FILE [--pre FILE] [--post FILE] [--root PATH] [--format json|text] [--fail-below FLOAT]
+agentdiff eval trajectory.json \
+  --pre before.json \
+  --post after.json \
+  --root . \
+  --target src/evaluator.py,tests/test_evaluator.py \
+  --threshold 0.8 \
+  --format json \
+  --fail-on-failure
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-t, --trajectory` | Trajectory JSON file (required) |
-| `--pre` | Pre-snapshot file |
-| `--post` | Post-snapshot file |
-| `-r, --root` | Root path for relative paths |
-| `-f, --format` | Output format (default: text) |
-| `--fail-below` | Exit code 1 if cleanliness below threshold |
+| Option | Meaning |
+| --- | --- |
+| `--pre FILE` / `--post FILE` | Snapshot pair; provide both or neither |
+| `--root PATH` | Base directory for relative target paths |
+| `--target PATHS` | Comma-separated intended mutation paths |
+| `--threshold FLOAT` | Required cleanliness score; default `0.8` |
+| `--format summary|json` | Human or machine-readable result |
+| `--fail-on-failure` | Exit 1 when evaluation fails |
 
----
+`--fail-below-threshold` remains an alias for `--fail-on-failure`.
 
-### `agentdiff replay`
-Replay trajectory steps.
+## Exit status
 
-```bash
-agentdiff replay --trajectory FILE [--step INT] [--format json|text]
-```
+- `0`: command completed; or evaluation passed when gating is enabled
+- `1`: gated evaluation failed
+- `2`: invalid command-line arguments (from `argparse`)
+- other nonzero status: invalid input or an operating-system error
 
-| Option | Description |
-|--------|-------------|
-| `-t, --trajectory` | Trajectory JSON file (required) |
-| `-s, --step` | Start from specific step |
-| `-f, --format` | Output format (default: text) |
-
----
-
-### `agentdiff demo`
-Run built-in demonstration.
-
-```bash
-agentdiff demo [--output-dir PATH]
-```
-
-| Option | Description |
-|--------|-------------|
-| `-o, --output-dir` | Directory for demo artifacts (default: temp) |
-
----
-
-## Global Options
-
-| Option | Description |
-|--------|-------------|
-| `-h, --help` | Show help |
-| `-v, --verbose` | Verbose output |
-| `--version` | Show version |
-
----
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Evaluation failed (cleanliness below threshold) |
-| 2 | Invalid arguments |
-| 3 | File not found / IO error |
-| 4 | Invalid JSON / data format |
-
----
-
-## Examples
-
-```bash
-# Full workflow
-agentdiff snapshot -o before.json
-python run_agent.py
-agentdiff snapshot -o after.json
-agentdiff eval -t trajectory.json --pre before.json --post after.json --fail-below 0.8
-
-# Just diff two snapshots
-agentdiff diff --pre before.json --post after.json
-
-# CI/CD integration
-agentdiff eval -t run.json --pre before.json --post after.json --fail-below 0.85 || exit 1
-```
+AgentDiff deliberately does not advertise replay, report generation, YAML output, or configuration-file loading in version 0.1 because those capabilities are not implemented.

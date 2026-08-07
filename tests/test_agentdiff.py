@@ -5,27 +5,19 @@ This test simulates an agent run that modifies files and environment,
 then evaluates the trajectory for cleanliness and side effects.
 """
 
-import tempfile
-import shutil
 import os
-import json
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from agentdiff import (
-    DiffEngine,
-    FilesystemSnapshot,
-    EnvironmentSnapshot,
-    TrajectoryTracker,
-    TrajectoryRecord,
-    TrajectoryStep,
-    ToolCall,
-    AgentFramework,
     AgentDiffEvaluator,
-    CleanlinessMetrics,
+    AgentFramework,
+    DiffEngine,
     SideEffectSeverity,
-    evaluate_agent_run,
+    TrajectoryRecord,
+    TrajectoryTracker,
 )
 
 
@@ -43,7 +35,7 @@ class TestDiffEngine:
             (subdir / "nested.txt").write_text("nested")
 
             engine = DiffEngine(watch_paths=[tmpdir])
-            fs_snap, env_snap = engine.snapshot()
+            fs_snap, _env_snap = engine.snapshot()
 
             assert str(test_file) in fs_snap.file_hashes
             assert str(subdir / "nested.txt") in fs_snap.file_hashes
@@ -127,11 +119,15 @@ class TestTrajectoryTracker:
         )
 
         tracker.start_step(thought="I need to read a file")
-        tracker.record_tool_call("read_file", {"path": "/tmp/test.txt"}, result="content", duration_ms=100)
+        tracker.record_tool_call(
+            "read_file", {"path": "/tmp/test.txt"}, result="content", duration_ms=100
+        )
         tracker.end_step(observation="File read successfully")
 
         tracker.start_step(thought="Now I'll write a file")
-        tracker.record_tool_call("write_file", {"path": "/tmp/out.txt", "content": "hello"}, result="ok", duration_ms=50)
+        tracker.record_tool_call(
+            "write_file", {"path": "/tmp/out.txt", "content": "hello"}, result="ok", duration_ms=50
+        )
         tracker.end_step(observation="File written")
 
         record = tracker.finish(final_result="success")
@@ -141,6 +137,19 @@ class TestTrajectoryTracker:
         assert record.final_result == "success"
         assert record.steps[0].tool_calls[0].name == "read_file"
         assert record.steps[1].tool_calls[0].name == "write_file"
+
+    def test_track_tool_context_records_result(self):
+        """The tool context's setter stores the result on the trajectory."""
+        tracker = TrajectoryTracker(task_description="Context manager test")
+        tracker.start_step(thought="Call a tool")
+
+        with tracker.track_tool("lookup", {"query": "agentdiff"}) as set_result:
+            set_result({"found": True})
+
+        tracker.end_step(observation="Lookup complete")
+        record = tracker.finish()
+
+        assert record.steps[0].tool_calls[0].result == {"found": True}
 
     def test_trajectory_save_load(self):
         """Test saving and loading trajectory records."""
@@ -165,15 +174,17 @@ class TestTrajectoryTracker:
         # Simulate a loop: read -> write -> read -> write -> read -> write
         for i in range(6):
             tracker.start_step()
-            tracker.record_tool_call("read_file", {"path": f"/tmp/file{i%2}.txt"}, result="content")
-            tracker.record_tool_call("write_file", {"path": f"/tmp/out{i%2}.txt"}, result="ok")
+            tracker.record_tool_call(
+                "read_file", {"path": f"/tmp/file{i % 2}.txt"}, result="content"
+            )
+            tracker.record_tool_call("write_file", {"path": f"/tmp/out{i % 2}.txt"}, result="ok")
             tracker.end_step()
         record = tracker.finish()
 
         loops = record.detect_loops(min_repeat=2)
         assert len(loops) > 0
         # Should detect the read/write pattern
-        pattern_names = [l["pattern"] for l in loops]
+        pattern_names = [loop["pattern"] for loop in loops]
         assert any("read_file" in p and "write_file" in p for p in pattern_names)
 
 
@@ -200,7 +211,9 @@ class TestEvaluator:
             tracker = TrajectoryTracker(task_description="Modify target")
             tracker.start_step()
             tracker.record_tool_call("edit_file", {"path": str(target_file)}, result="ok")
-            tracker.record_tool_call("write_file", {"path": str(Path(tmpdir) / "temp_junk.txt")}, result="ok")
+            tracker.record_tool_call(
+                "write_file", {"path": str(Path(tmpdir) / "temp_junk.txt")}, result="ok"
+            )
             tracker.end_step()
             trajectory = tracker.finish()
 
@@ -244,7 +257,9 @@ class TestEvaluator:
             )
 
             # Should detect critical side effect
-            critical_effects = [se for se in result.side_effects if se.severity == SideEffectSeverity.CRITICAL]
+            critical_effects = [
+                se for se in result.side_effects if se.severity == SideEffectSeverity.CRITICAL
+            ]
             assert len(critical_effects) > 0
             assert not result.passed  # Should fail due to critical effect
 
@@ -306,16 +321,30 @@ class TestIntegration:
                 framework=AgentFramework.CUSTOM,
             )
             tracker.start_step(thought="Reading main.py to understand the bug")
-            tracker.record_tool_call("read_file", {"path": str(project / "main.py")}, result="def foo():\n    return 1\n")
+            tracker.record_tool_call(
+                "read_file", {"path": str(project / "main.py")}, result="def foo():\n    return 1\n"
+            )
             tracker.end_step()
 
             tracker.start_step(thought="Fixing the return value")
-            tracker.record_tool_call("write_file", {"path": str(project / "main.py"), "content": "def foo():\n    return 2\n"}, result="ok")
+            tracker.record_tool_call(
+                "write_file",
+                {"path": str(project / "main.py"), "content": "def foo():\n    return 2\n"},
+                result="ok",
+            )
             tracker.end_step()
 
             tracker.start_step(thought="Adding debug logging")
-            tracker.record_tool_call("write_file", {"path": str(project / "debug.log"), "content": "DEBUG: entered foo\n"}, result="ok")
-            tracker.record_tool_call("write_file", {"path": str(project / "config.json"), "content": '{"debug": true}\n'}, result="ok")
+            tracker.record_tool_call(
+                "write_file",
+                {"path": str(project / "debug.log"), "content": "DEBUG: entered foo\n"},
+                result="ok",
+            )
+            tracker.record_tool_call(
+                "write_file",
+                {"path": str(project / "config.json"), "content": '{"debug": true}\n'},
+                result="ok",
+            )
             tracker.end_step()
 
             trajectory = tracker.finish(final_result="Bug fixed, but added debug artifacts")
@@ -331,7 +360,7 @@ class TestIntegration:
             # Verify results
             assert result.metrics.target_mutations == 1  # main.py
             assert result.metrics.unintended_mutations == 2  # debug.log, config.json
-            assert result.metrics.cleanliness_score == pytest.approx(1/3, rel=0.1)
+            assert result.metrics.cleanliness_score == pytest.approx(1 / 3, rel=0.1)
             assert len(result.side_effects) == 2
             assert not result.passed  # Failed due to side effects
 
@@ -341,5 +370,4 @@ class TestIntegration:
 
 if __name__ == "__main__":
     # Run tests manually
-    import sys
     pytest.main([__file__, "-v", "--tb=short"])

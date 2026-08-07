@@ -1,350 +1,285 @@
-"""
-LangChain/LangGraph Callback Handler for AgentDiff
+"""LangChain callback integration for AgentDiff."""
 
-Usage:
-    from agentdiff.integrations.langchain_callback import AgentDiffCallbackHandler
-    
-    callback = AgentDiffCallbackHandler(
-        target_paths=["src/"],
-        cleanliness_threshold=0.8,
-    )
-    
-    agent = create_react_agent(..., callbacks=[callback])
-    result = agent.invoke({"input": "Fix the bug"})
-    
-    eval_result = callback.get_evaluation_result()
-    print(f"Cleanliness: {eval_result.metrics.cleanliness_score:.1%}")
-"""
+from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
-from uuid import UUID
+import json
+import time
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.outputs import LLMResult
 
 if TYPE_CHECKING:
-    from agentdiff import AgentDiffEvaluator, DiffEngine, TrajectoryTracker
-    from agentdiff.diff_engine import EnvironmentSnapshot
-    from agentdiff.evaluator import EvaluationResult
-    from agentdiff.integrations import AgentDiffConfig
-    from agentdiff.trajectory import StepResult, ToolCall
+    from types import TracebackType
+    from uuid import UUID
+
+    from langchain_core.agents import AgentAction, AgentFinish
+    from langchain_core.outputs import LLMResult
+
+from ..diff_engine import DiffEngine, DiffResult, EnvironmentSnapshot, FilesystemSnapshot
+from ..evaluator import AgentDiffEvaluator, EvaluationResult
+from ..trajectory import AgentFramework, TrajectoryRecord, TrajectoryTracker
+from . import AgentDiffConfig, _resolve_targets
+
+Snapshot = tuple[FilesystemSnapshot, EnvironmentSnapshot]
 
 
 class AgentDiffCallbackHandler(BaseCallbackHandler):
-    """
-    LangChain callback handler that tracks agent trajectory and evaluates side effects.
-    
-    Captures:
-    - LLM thoughts (on_llm_start/end)
-    - Tool calls (on_tool_start/end)
-    - Tool observations (on_tool_end)
-    - Agent finish (on_agent_finish)
-    
-    Then evaluates full trajectory against environment state changes.
-    """
-    
+    """Record LangChain tool activity and evaluate the resulting state changes."""
+
     def __init__(
         self,
+        task_description: str = "LangChain agent run",
         target_paths: list[str] | None = None,
         cleanliness_threshold: float = 0.8,
-        efficiency_threshold: float = 0.7,
         root: str = ".",
         ignore_patterns: list[str] | None = None,
         capture_env_vars: bool = True,
         capture_processes: bool = True,
         capture_ports: bool = True,
         config: AgentDiffConfig | None = None,
-    ):
+    ) -> None:
         super().__init__()
-        
-        if config:
-            self.config = config
-        else:
-            self.config = AgentDiffConfig(
-                target_paths=target_paths or [],
-                cleanliness_threshold=cleanliness_threshold,
-                efficiency_threshold=efficiency_threshold,
-                root=root,
-                ignore_patterns=ignore_patterns or [
-                    "*.pyc", "__pycache__", ".git", "*.log", ".venv", "node_modules"
-                ],
-                capture_env_vars=capture_env_vars,
-                capture_processes=capture_processes,
-                capture_ports=capture_ports,
-            )
-        
+        self._task_description = task_description
+        self.config = config or AgentDiffConfig(
+            target_paths=target_paths,
+            cleanliness_threshold=cleanliness_threshold,
+            root=root,
+            ignore_patterns=ignore_patterns,
+            capture_env_vars=capture_env_vars,
+            capture_processes=capture_processes,
+            capture_ports=capture_ports,
+        )
+        targets = self.config.target_paths or []
         self.engine = DiffEngine(
-            root=self.config.root,
+            watch_paths=[self.config.root],
             ignore_patterns=self.config.ignore_patterns,
             capture_env_vars=self.config.capture_env_vars,
             capture_processes=self.config.capture_processes,
             capture_ports=self.config.capture_ports,
         )
-        self.tracker = TrajectoryTracker()
-        self.pre_snapshot: EnvironmentSnapshot | None = None
+        self.tracker = TrajectoryTracker(
+            task_description=task_description,
+            framework=AgentFramework.LANGCHAIN,
+        )
         self.evaluator = AgentDiffEvaluator(
-            target_paths=self.config.target_paths,
+            target_paths=[self.config.root],
             cleanliness_threshold=self.config.cleanliness_threshold,
         )
-        
-        # State tracking
-        self._current_thought: str = ""
-        self._current_tool_call: ToolCall | None = None
-        self._tool_start_time: float = 0
-        self._llm_start_time: float = 0
-        self._step_count: int = 0
-    
+        self.evaluator.set_target_mutations(_resolve_targets(self.config.root, targets))
+        self.pre_snapshot: Snapshot | None = None
+        self._current_thought = ""
+        self._current_tool_name: str | None = None
+        self._current_tool_args: dict[str, Any] = {}
+        self._tool_start_time: float | None = None
+        self._last_llm_tokens = (0, 0)
+        self._final_result: Any = None
+        self._final_error: str | None = None
+
     def start(self) -> None:
-        """Explicitly start tracking (capture pre-snapshot)."""
-        self.pre_snapshot = self.engine.capture()
-    
+        """Capture the state immediately before the agent run."""
+        self.pre_snapshot = self.engine.snapshot()
+
     def on_llm_start(
         self,
         serialized: dict[str, Any],
         prompts: list[str],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track LLM start - capture the prompt as 'thought'."""
-        import time
-        self._llm_start_time = time.time()
-        
-        # Extract the last user message or system prompt as thought
+        """Keep a bounded prompt excerpt as context for the next tool step."""
+        del serialized, run_id, kwargs
         if prompts:
-            # Take the last prompt as the agent's current thinking
-            self._current_thought = prompts[-1][:2000]  # Limit length
-    
+            self._current_thought = prompts[-1][:2000]
+
     def on_llm_end(
         self,
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track LLM end - capture token usage."""
-        import time
-        duration = time.time() - self._llm_start_time
-        
-        # Extract token usage if available
-        tokens_in = 0
-        tokens_out = 0
-        if response.llm_output and "token_usage" in response.llm_output:
-            usage = response.llm_output["token_usage"]
-            tokens_in = usage.get("prompt_tokens", 0)
-            tokens_out = usage.get("completion_tokens", 0)
-        
-        # Store for next tool call
-        self._last_llm_tokens = (tokens_in, tokens_out)
-        self._last_llm_duration = duration
-    
+        """Capture token usage when the model provider exposes it."""
+        del run_id, kwargs
+        usage = (response.llm_output or {}).get("token_usage", {})
+        self._last_llm_tokens = (
+            int(usage.get("prompt_tokens", 0)),
+            int(usage.get("completion_tokens", 0)),
+        )
+
     def on_tool_start(
         self,
         serialized: dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track tool start."""
-        import time
-        self._tool_start_time = time.time()
-        
-        tool_name = serialized.get("name", "unknown_tool")
-        # Parse input_str as JSON if possible
-        import json
+        """Start timing a LangChain tool call."""
+        del run_id, kwargs
+        self._tool_start_time = time.perf_counter()
+        self._current_tool_name = str(serialized.get("name") or "unknown_tool")
         try:
-            tool_args = json.loads(input_str)
+            parsed = json.loads(input_str)
+            self._current_tool_args = parsed if isinstance(parsed, dict) else {"input": parsed}
         except (json.JSONDecodeError, TypeError):
-            tool_args = {"input": input_str}
-        
-        self._current_tool_call = ToolCall(
-            name=tool_name,
-            args=tool_args,
-            tool_id=str(run_id),
-        )
-    
+            self._current_tool_args = {"input": input_str}
+
     def on_tool_end(
         self,
-        output: str,
+        output: Any,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track tool end - record complete step."""
-        import time
-        duration = time.time() - self._tool_start_time
-        
-        # Get token usage from last LLM call
-        tokens_in, tokens_out = getattr(self, "_last_llm_tokens", (0, 0))
-        
-        # Record the step
-        self.tracker.start_step(thought=self._current_thought or "Tool execution")
-        if self._current_tool_call:
-            self.tracker.record_tool_call(
-                name=self._current_tool_call.name,
-                arguments=self._current_tool_call.arguments,
-                result=self._current_tool_call.result,
-                error=self._current_tool_call.error,
-                duration_ms=duration * 1000,
-            )
-        self.tracker.end_step(observation=output[:5000])
-        
-        self._step_count += 1
-        self._current_thought = ""
-        self._current_tool_call = None
-    
+        """Record a successful tool call as one trajectory step."""
+        del run_id, kwargs
+        self._record_tool_step(result=output)
+
     def on_tool_error(
         self,
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track tool error."""
-        import time
-        duration = time.time() - self._tool_start_time
-        
-        tokens_in, tokens_out = getattr(self, "_last_llm_tokens", (0, 0))
-        
-        self.tracker.start_step(thought=self._current_thought or "Tool execution (failed)")
-        if self._current_tool_call:
-            self.tracker.record_tool_call(
-                name=self._current_tool_call.name,
-                arguments=self._current_tool_call.arguments,
-                result=None,
-                error=str(error),
-                duration_ms=duration * 1000,
-            )
-        self.tracker.end_step(observation=f"ERROR: {error!s}")
-        
-        self._step_count += 1
+        """Record a failed tool call as one trajectory step."""
+        del run_id, kwargs
+        self._record_tool_step(error=str(error))
+
+    def _record_tool_step(self, result: Any = None, error: str | None = None) -> None:
+        duration_ms = 0.0
+        if self._tool_start_time is not None:
+            duration_ms = (time.perf_counter() - self._tool_start_time) * 1000
+        self.tracker.start_step(thought=self._current_thought or "Tool execution")
+        self.tracker.record_llm_usage(*self._last_llm_tokens)
+        self.tracker.record_tool_call(
+            name=self._current_tool_name or "unknown_tool",
+            arguments=self._current_tool_args,
+            result=result,
+            error=error,
+            duration_ms=duration_ms,
+        )
+        observation = f"ERROR: {error}" if error else str(result)
+        self.tracker.end_step(observation=observation[:5000])
         self._current_thought = ""
-        self._current_tool_call = None
-    
+        self._current_tool_name = None
+        self._current_tool_args = {}
+        self._tool_start_time = None
+        self._last_llm_tokens = (0, 0)
+
     def on_agent_action(
         self,
         action: AgentAction,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track agent action (for ReAct-style agents)."""
-        # This is called before tool execution in some agent types
+        """Use ReAct logs as the thought associated with the next tool call."""
+        del run_id, kwargs
         self._current_thought = action.log or f"Action: {action.tool}"
-    
+
     def on_agent_finish(
         self,
         finish: AgentFinish,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track agent finish - record final step."""
-        # Record final thought/result
-        output = finish.return_values.get("output", "")
-        
-        self.tracker.start_step(thought="Agent completed task")
-        self.tracker.end_step(observation=output[:5000])
-        
-        self._step_count += 1
-    
+        """Store the agent's final result without inventing an extra tool step."""
+        del run_id, kwargs
+        self._final_result = finish.return_values
+
     def on_chain_error(
         self,
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Track chain/agent error."""
-        self.tracker.start_step(thought="Agent execution failed")
-        self.tracker.end_step(observation=f"ERROR: {error!s}")
-    
+        """Store the final chain error for the evaluation record."""
+        del run_id, kwargs
+        self._final_error = str(error)
+
     def get_evaluation_result(self) -> EvaluationResult:
-        """
-        Evaluate the complete trajectory against environment changes.
-        
-        Must be called after agent execution completes.
-        """
+        """Capture the final state and evaluate the complete run."""
         if self.pre_snapshot is None:
-            raise RuntimeError(
-                "Pre-snapshot not captured. Call start() before running the agent, "
-                "or ensure the callback is used from the beginning."
-            )
-        
-        post_snapshot = self.engine.capture()
-        diff = self.engine.diff(self.pre_snapshot, post_snapshot)
-        trajectory = self.tracker.get_trajectory()
-        
-        return self.evaluator.evaluate(diff, trajectory)
-    
-    def get_trajectory(self):
-        """Get the recorded trajectory."""
-        return self.tracker.get_trajectory()
-    
-    def get_diff(self):
-        """Get the environment diff (requires pre_snapshot to be set)."""
+            raise RuntimeError("Call start() before running the LangChain agent")
+        post_snapshot = self.engine.snapshot()
+        trajectory = self.tracker.finish(
+            final_result=self._final_result,
+            final_error=self._final_error,
+        )
+        return self.evaluator.evaluate_from_snapshots(
+            trajectory,
+            self.pre_snapshot,
+            post_snapshot,
+        )
+
+    def get_trajectory(self) -> TrajectoryRecord:
+        """Return the trajectory collected so far."""
+        return self.tracker.record
+
+    def get_diff(self) -> DiffResult:
+        """Capture and return the current state diff."""
         if self.pre_snapshot is None:
-            raise RuntimeError("Pre-snapshot not captured")
-        post_snapshot = self.engine.capture()
-        return self.engine.diff(self.pre_snapshot, post_snapshot)
-    
+            raise RuntimeError("Call start() before requesting a diff")
+        post_snapshot = self.engine.snapshot()
+        pre_fs, pre_env = self.pre_snapshot
+        post_fs, post_env = post_snapshot
+        return self.engine.diff(pre_fs, post_fs, pre_env, post_env)
+
     def reset(self) -> None:
-        """Reset for a new agent run."""
-        self.tracker = TrajectoryTracker()
+        """Reset callback state for a new run with the same configuration."""
+        self.tracker = TrajectoryTracker(
+            task_description=self._task_description,
+            framework=AgentFramework.LANGCHAIN,
+        )
         self.pre_snapshot = None
         self._current_thought = ""
-        self._current_tool_call = None
-        self._step_count = 0
+        self._current_tool_name = None
+        self._current_tool_args = {}
+        self._tool_start_time = None
+        self._last_llm_tokens = (0, 0)
+        self._final_result = None
+        self._final_error = None
 
 
-# Convenience function for simple usage
-def create_agentdiff_callback(
-    target_paths: list[str] | None = None,
-    cleanliness_threshold: float = 0.8,
-    **kwargs,
-) -> AgentDiffCallbackHandler:
-    """Create a pre-configured AgentDiff callback handler."""
-    return AgentDiffCallbackHandler(
-        target_paths=target_paths,
-        cleanliness_threshold=cleanliness_threshold,
-        **kwargs,
-    )
+LangChainCallbackHandler = AgentDiffCallbackHandler
 
 
-# Context manager for explicit control
+def create_agentdiff_callback(**kwargs: Any) -> AgentDiffCallbackHandler:
+    """Create a configured AgentDiff callback handler."""
+    return AgentDiffCallbackHandler(**kwargs)
+
+
 class AgentDiffLangChainSession:
-    """
-    Context manager for explicit AgentDiff tracking with LangChain.
-    
-    Usage:
-        with AgentDiffLangChainSession(target_paths=["src/"]) as session:
-            result = agent.invoke({"input": "Fix the bug"})
-            eval_result = session.evaluate()
-    """
-    
-    def __init__(self, **kwargs):
+    """Context manager that starts an AgentDiff LangChain callback."""
+
+    def __init__(self, **kwargs: Any) -> None:
         self.callback = AgentDiffCallbackHandler(**kwargs)
-    
+
     def __enter__(self) -> AgentDiffCallbackHandler:
         self.callback.start()
         return self.callback
-    
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        pass
-    
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if exc_val is not None:
+            self.callback._final_error = str(exc_val)
+
     def evaluate(self) -> EvaluationResult:
+        """Evaluate the callback's completed run."""
         return self.callback.get_evaluation_result()
+
+
+__all__ = [
+    "AgentDiffCallbackHandler",
+    "AgentDiffLangChainSession",
+    "LangChainCallbackHandler",
+    "create_agentdiff_callback",
+]

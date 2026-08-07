@@ -1,127 +1,75 @@
-# LangChain / LangGraph Integration
+# LangChain / LangGraph
 
-AgentDiff provides a first-class callback handler for LangChain and LangGraph.
-
-## Installation
+AgentDiff includes an optional `langchain-core` callback. From a source checkout, install the extra with:
 
 ```bash
-pip install agentdiff[langchain]
-# or
-uv add agentdiff[langchain]
+uv sync --locked --extra langchain --group dev
 ```
 
-## Quick Start
+## Callback usage
 
 ```python
-from agentdiff.integrations import AgentDiffSession, LangChainCallbackHandler
-from langgraph.graph import StateGraph
+from agentdiff.integrations.langchain_callback import AgentDiffCallbackHandler
 
-# 1. Create session (starts pre-snapshot automatically)
-with AgentDiffSession(
-    paths=["/repo"],
-    target_paths=["/repo/src/"]
-) as session:
-    
-    # 2. Create callback handler
-    callback = LangChainCallbackHandler(session)
-    
-    # 3. Run your LangGraph agent
-    graph = create_my_agent_graph()
-    result = graph.invoke(
-        {"input": "Fix the authentication bug"},
-        config={"callbacks": [callback]}
-    )
+callback = AgentDiffCallbackHandler(
+    task_description="Fix authentication",
+    root="/workspace",
+    target_paths=["src/auth.py"],
+    cleanliness_threshold=0.8,
+)
+callback.start()
 
-# 4. Session exits → auto-runs evaluation
-report = session.evaluate()
-print(f"Cleanliness: {report.cleanliness_score:.1%}")
+result = graph.invoke(
+    {"input": "Fix the authentication bug"},
+    config={"callbacks": [callback]},
+)
+
+report = callback.get_evaluation_result()
+print(report.metrics.cleanliness_score)
 ```
 
-## With LangChain Chains
+For a LangChain runnable, pass the same handler through its callback configuration:
 
 ```python
-from langchain.chains import LLMChain
-from agentdiff.integrations import AgentDiffSession, LangChainCallbackHandler
-
-with AgentDiffSession(paths=["/repo"], target_paths=["/repo/src/"]) as session:
-    callback = LangChainCallbackHandler(session)
-    
-    chain = LLMChain(llm=llm, prompt=prompt)
-    result = chain.invoke(
-        {"input": "Refactor the user service"},
-        callbacks=[callback]
-    )
-
-report = session.evaluate()
+result = chain.invoke(inputs, config={"callbacks": [callback]})
 ```
 
-## What Gets Captured Automatically
+## Events recorded
 
-| Event | Captured As |
-|-------|-------------|
-| `on_chain_start` | Trajectory step start (thought) |
-| `on_chain_end` | Trajectory step end (observation) |
-| `on_tool_start` | Tool call with arguments |
-| `on_tool_end` | Tool result + duration |
-| `on_tool_error` | Tool error |
-| `on_llm_start` | LLM call (tokens tracked) |
-| `on_llm_end` | LLM response (tokens tracked) |
+| LangChain callback | AgentDiff behavior |
+| --- | --- |
+| `on_llm_start` | Keeps a bounded prompt excerpt as step context |
+| `on_llm_end` | Reads provider token usage when available |
+| `on_agent_action` | Uses the ReAct log for the next tool step |
+| `on_tool_start` | Parses arguments and starts a timer |
+| `on_tool_end` | Records a successful tool step and observation |
+| `on_tool_error` | Records the failed tool step and error |
+| `on_agent_finish` | Stores the final result on the trajectory |
+| `on_chain_error` | Stores the final error |
 
-## Advanced: Custom Step Boundaries
+Each completed tool call becomes one trajectory step. Token accounting depends on the model provider exposing `llm_output.token_usage`.
+
+## Explicit context
 
 ```python
-from agentdiff.integrations import LangChainCallbackHandler
+from agentdiff.integrations.langchain_callback import AgentDiffLangChainSession
 
-class CustomCallbackHandler(LangChainCallbackHandler):
-    def on_chain_start(self, serialized, inputs, **kwargs):
-        # Only create steps for specific chain types
-        if serialized.get("name") == "AgentExecutor":
-            super().on_chain_start(serialized, inputs, **kwargs)
-    
-    def on_tool_end(self, output, **kwargs):
-        # Add custom metadata
-        self._current_tool_call.metadata["custom_field"] = "value"
-        super().on_tool_end(output, **kwargs)
+with AgentDiffLangChainSession(
+    task_description="Refactor service",
+    root="/workspace",
+    target_paths=["src/service.py"],
+) as callback:
+    chain.invoke(inputs, config={"callbacks": [callback]})
 
-with AgentDiffSession(...) as session:
-    callback = CustomCallbackHandler(session)
-    # ...
+report = callback.get_evaluation_result()
 ```
 
-## Accessing the Report
+## Operational notes
 
-```python
-with AgentDiffSession(...) as session:
-    callback = LangChainCallbackHandler(session)
-    # ... run agent ...
-    
-    # Get report anytime (even before session exits)
-    report = session.get_report()
-    
-    # Or wait for full evaluation
-    report = session.evaluate()
+- Call `start()` immediately before execution when not using the context manager.
+- Call `get_evaluation_result()` after the run and after temporary processes have exited.
+- Use `capture_env_vars=False`, `capture_processes=False`, or `capture_ports=False` for restricted runners.
+- Call `reset()` before reusing one callback for another run.
+- This integration depends only on `langchain-core`; AgentDiff does not create or configure your agent.
 
-# Export formats
-report.to_json("report.json")
-report.to_html("report.html")
-report.to_junit("report.xml")
-```
-
-## Configuration
-
-```yaml
-# agentdiff.yaml
-langchain:
-  capture_llm_tokens: true
-  capture_tool_args: true
-  capture_tool_results: true
-  step_boundary_chains:
-    - "AgentExecutor"
-    - "PlanAndExecute"
-    - "CustomAgent"
-```
-
-## Related
-
-- [Custom Framework Integration](custom.md) — Build your own adapter
-- [CI/CD Tutorial](../tutorials/ci-cd.md) — Use in pipelines
+For frameworks without LangChain callbacks, use the [framework-neutral integration](custom.md).

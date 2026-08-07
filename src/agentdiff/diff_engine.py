@@ -5,6 +5,7 @@ Captures lightweight snapshots of system state and computes
 deterministic diffs between pre- and post-execution states.
 """
 
+import fnmatch
 import hashlib
 import os
 import time
@@ -17,6 +18,7 @@ from typing import Any
 
 class DiffType(Enum):
     """Types of state differences detected."""
+
     FILE_CREATED = "file_created"
     FILE_MODIFIED = "file_modified"
     FILE_DELETED = "file_deleted"
@@ -35,6 +37,7 @@ class DiffType(Enum):
 @dataclass
 class DiffEntry:
     """A single state difference entry."""
+
     diff_type: DiffType
     path: str
     old_value: str | None = None
@@ -67,6 +70,7 @@ class DiffEntry:
 @dataclass
 class FilesystemSnapshot:
     """Lightweight snapshot of filesystem state for a set of paths."""
+
     file_hashes: dict[str, str] = field(default_factory=dict)  # path -> sha256
     file_sizes: dict[str, int] = field(default_factory=dict)
     file_mtimes: dict[str, float] = field(default_factory=dict)
@@ -99,6 +103,7 @@ class FilesystemSnapshot:
 @dataclass
 class EnvironmentSnapshot:
     """Snapshot of environment variables and process state."""
+
     env_vars: dict[str, str] = field(default_factory=dict)
     open_ports: set[int] = field(default_factory=set)
     process_pids: set[int] = field(default_factory=set)
@@ -125,6 +130,7 @@ class EnvironmentSnapshot:
 @dataclass
 class DiffResult:
     """Complete diff result between two snapshots."""
+
     filesystem_diffs: list[DiffEntry] = field(default_factory=list)
     environment_diffs: list[DiffEntry] = field(default_factory=list)
     pre_fs_snapshot: FilesystemSnapshot | None = None
@@ -139,7 +145,7 @@ class DiffResult:
 
     @property
     def summary(self) -> dict[str, int]:
-        summary = {}
+        summary: dict[str, int] = {}
         for diff in self.all_diffs:
             summary[diff.diff_type.value] = summary.get(diff.diff_type.value, 0) + 1
         return summary
@@ -151,7 +157,9 @@ class DiffResult:
             "pre_fs_snapshot": self.pre_fs_snapshot.to_dict() if self.pre_fs_snapshot else None,
             "post_fs_snapshot": self.post_fs_snapshot.to_dict() if self.post_fs_snapshot else None,
             "pre_env_snapshot": self.pre_env_snapshot.to_dict() if self.pre_env_snapshot else None,
-            "post_env_snapshot": self.post_env_snapshot.to_dict() if self.post_env_snapshot else None,
+            "post_env_snapshot": self.post_env_snapshot.to_dict()
+            if self.post_env_snapshot
+            else None,
             "duration_seconds": self.duration_seconds,
             "summary": self.summary,
         }
@@ -160,7 +168,7 @@ class DiffResult:
 class DiffEngine:
     """
     Core diff engine for capturing and comparing system state snapshots.
-    
+
     Supports:
     - Filesystem content hashing (SHA256)
     - File metadata (size, mtime, permissions)
@@ -176,11 +184,17 @@ class DiffEngine:
         ignore_patterns: list[str] | None = None,
         max_file_size_mb: int = 100,
         hash_workers: int = 4,
+        env_denylist: list[str] | None = None,
+        capture_env_vars: bool = True,
+        capture_processes: bool = True,
+        capture_ports: bool = True,
     ):
-        self.watch_paths = [Path(p).resolve() for p in (watch_paths or [Path.cwd()])]
+        paths = watch_paths or [str(Path.cwd())]
+        self.watch_paths: list[Path] = [Path(path).resolve() for path in paths]
         self.ignore_patterns = ignore_patterns or [
             "**/__pycache__/**",
             "**/.git/**",
+            "**/.agentdiff/**",
             "**/node_modules/**",
             "**/.venv/**",
             "**/venv/**",
@@ -191,14 +205,21 @@ class DiffEngine:
         ]
         self.max_file_size = max_file_size_mb * 1024 * 1024
         self.hash_workers = hash_workers
+        self.capture_env_vars = capture_env_vars
+        self.capture_processes = capture_processes
+        self.capture_ports = capture_ports
+        self.env_denylist = env_denylist or [
+            "*API_KEY*",
+            "*CREDENTIAL*",
+            "*PASSWORD*",
+            "*PRIVATE_KEY*",
+            "*SECRET*",
+            "*TOKEN*",
+        ]
 
     def _should_ignore(self, path: Path) -> bool:
         """Check if path matches any ignore pattern."""
-        path_str = str(path)
-        for pattern in self.ignore_patterns:
-            if path.match(pattern):
-                return True
-        return False
+        return any(path.match(pattern) for pattern in self.ignore_patterns)
 
     def _hash_file(self, path: Path) -> str | None:
         """Compute SHA256 hash of file content."""
@@ -231,11 +252,10 @@ class DiffEngine:
 
                 try:
                     stat = item.stat()
-                    rel_path = str(item.relative_to(watch_path))
                     abs_path = str(item)
 
                     if item.is_file():
-                        file_hashes[abs_path] = self._hash_file(item)
+                        file_hashes[abs_path] = self._hash_file(item) or ""
                         file_sizes[abs_path] = stat.st_size
                         file_mtimes[abs_path] = stat.st_mtime
                         file_modes[abs_path] = stat.st_mode
@@ -253,27 +273,38 @@ class DiffEngine:
         )
 
     def _collect_environment(self) -> EnvironmentSnapshot:
-        """Collect environment snapshot."""
-        env_vars = dict(os.environ)
+        """Collect an environment snapshot without serializing likely secrets."""
+        env_vars = {
+            key: value
+            for key, value in os.environ.items()
+            if self.capture_env_vars
+            and not any(
+                fnmatch.fnmatch(key.upper(), pattern.upper()) for pattern in self.env_denylist
+            )
+        }
 
         # Collect open ports (Linux/Unix)
         open_ports = set()
-        try:
-            import psutil
-            for conn in psutil.net_connections(kind="inet"):
-                if conn.status == "LISTEN" and conn.laddr:
-                    open_ports.add(conn.laddr.port)
-        except ImportError:
-            pass
+        if self.capture_ports:
+            try:
+                import psutil
+
+                for conn in psutil.net_connections(kind="inet"):
+                    if conn.status == "LISTEN" and conn.laddr:
+                        open_ports.add(conn.laddr.port)
+            except ImportError:
+                pass
 
         # Collect process PIDs
         process_pids = set()
-        try:
-            import psutil
-            for proc in psutil.process_iter(["pid"]):
-                process_pids.add(proc.info["pid"])
-        except ImportError:
-            pass
+        if self.capture_processes:
+            try:
+                import psutil
+
+                for proc in psutil.process_iter(["pid"]):
+                    process_pids.add(proc.info["pid"])
+            except ImportError:
+                pass
 
         return EnvironmentSnapshot(
             env_vars=env_vars,
@@ -311,57 +342,69 @@ class DiffEngine:
 
             if pre_hash is None and post_hash is not None:
                 # File created
-                fs_diffs.append(DiffEntry(
-                    diff_type=DiffType.FILE_CREATED,
-                    path=path,
-                    new_value=post_hash,
-                    metadata={"size": post_fs.file_sizes.get(path)},
-                ))
+                fs_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.FILE_CREATED,
+                        path=path,
+                        new_value=post_hash,
+                        metadata={"size": post_fs.file_sizes.get(path)},
+                    )
+                )
             elif pre_hash is not None and post_hash is None:
                 # File deleted
-                fs_diffs.append(DiffEntry(
-                    diff_type=DiffType.FILE_DELETED,
-                    path=path,
-                    old_value=pre_hash,
-                    metadata={"size": pre_fs.file_sizes.get(path)},
-                ))
+                fs_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.FILE_DELETED,
+                        path=path,
+                        old_value=pre_hash,
+                        metadata={"size": pre_fs.file_sizes.get(path)},
+                    )
+                )
             elif pre_hash != post_hash:
                 # File modified
-                fs_diffs.append(DiffEntry(
-                    diff_type=DiffType.FILE_MODIFIED,
-                    path=path,
-                    old_value=pre_hash,
-                    new_value=post_hash,
-                    metadata={
-                        "old_size": pre_fs.file_sizes.get(path),
-                        "new_size": post_fs.file_sizes.get(path),
-                    },
-                ))
+                fs_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.FILE_MODIFIED,
+                        path=path,
+                        old_value=pre_hash,
+                        new_value=post_hash,
+                        metadata={
+                            "old_size": pre_fs.file_sizes.get(path),
+                            "new_size": post_fs.file_sizes.get(path),
+                        },
+                    )
+                )
 
         # Directory diffs
         pre_dirs = pre_fs.directories
         post_dirs = post_fs.directories
 
         for d in post_dirs - pre_dirs:
-            fs_diffs.append(DiffEntry(
-                diff_type=DiffType.DIR_CREATED,
-                path=d,
-            ))
+            fs_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.DIR_CREATED,
+                    path=d,
+                )
+            )
         for d in pre_dirs - post_dirs:
-            fs_diffs.append(DiffEntry(
-                diff_type=DiffType.DIR_DELETED,
-                path=d,
-            ))
+            fs_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.DIR_DELETED,
+                    path=d,
+                )
+            )
 
         # Permission diffs
         for path in set(pre_fs.file_modes.keys()) & set(post_fs.file_modes.keys()):
             if pre_fs.file_modes[path] != post_fs.file_modes[path]:
-                fs_diffs.append(DiffEntry(
-                    diff_type=DiffType.FILE_PERMISSIONS,
-                    path=path,
-                    old_value=oct(pre_fs.file_modes[path]),
-                    new_value=oct(post_fs.file_modes[path]),
-                ))
+                fs_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.FILE_PERMISSIONS,
+                        path=path,
+                        old_value=oct(pre_fs.file_modes[path]),
+                        new_value=oct(post_fs.file_modes[path]),
+                    )
+                )
 
         # Environment variable diffs
         all_env_keys = set(pre_env.env_vars.keys()) | set(post_env.env_vars.keys())
@@ -370,52 +413,66 @@ class DiffEngine:
             post_val = post_env.env_vars.get(key)
 
             if pre_val is None and post_val is not None:
-                env_diffs.append(DiffEntry(
-                    diff_type=DiffType.ENV_VAR_ADDED,
-                    path=key,
-                    new_value=post_val,
-                ))
+                env_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.ENV_VAR_ADDED,
+                        path=key,
+                        new_value=post_val,
+                    )
+                )
             elif pre_val is not None and post_val is None:
-                env_diffs.append(DiffEntry(
-                    diff_type=DiffType.ENV_VAR_REMOVED,
-                    path=key,
-                    old_value=pre_val,
-                ))
+                env_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.ENV_VAR_REMOVED,
+                        path=key,
+                        old_value=pre_val,
+                    )
+                )
             elif pre_val != post_val:
-                env_diffs.append(DiffEntry(
-                    diff_type=DiffType.ENV_VAR_MODIFIED,
-                    path=key,
-                    old_value=pre_val,
-                    new_value=post_val,
-                ))
+                env_diffs.append(
+                    DiffEntry(
+                        diff_type=DiffType.ENV_VAR_MODIFIED,
+                        path=key,
+                        old_value=pre_val,
+                        new_value=post_val,
+                    )
+                )
 
         # Process diffs
         spawned = post_env.process_pids - pre_env.process_pids
         terminated = pre_env.process_pids - post_env.process_pids
         for pid in spawned:
-            env_diffs.append(DiffEntry(
-                diff_type=DiffType.PROCESS_SPAWNED,
-                path=str(pid),
-            ))
+            env_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.PROCESS_SPAWNED,
+                    path=str(pid),
+                )
+            )
         for pid in terminated:
-            env_diffs.append(DiffEntry(
-                diff_type=DiffType.PROCESS_TERMINATED,
-                path=str(pid),
-            ))
+            env_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.PROCESS_TERMINATED,
+                    path=str(pid),
+                )
+            )
 
         # Port diffs
         opened = post_env.open_ports - pre_env.open_ports
         closed = pre_env.open_ports - post_env.open_ports
         for port in opened:
-            env_diffs.append(DiffEntry(
-                diff_type=DiffType.PORT_OPENED,
-                path=str(port),
-            ))
+            env_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.PORT_OPENED,
+                    path=str(port),
+                )
+            )
         for port in closed:
-            env_diffs.append(DiffEntry(
-                diff_type=DiffType.PORT_CLOSED,
-                path=str(port),
-            ))
+            env_diffs.append(
+                DiffEntry(
+                    diff_type=DiffType.PORT_CLOSED,
+                    path=str(port),
+                )
+            )
 
         return DiffResult(
             filesystem_diffs=fs_diffs,
@@ -434,6 +491,8 @@ class DiffEngine:
     ) -> DiffResult:
         """Convenience method to diff from snapshot tuples."""
         return self.diff(
-            pre_snapshot[0], post_snapshot[0],
-            pre_snapshot[1], post_snapshot[1],
+            pre_snapshot[0],
+            post_snapshot[0],
+            pre_snapshot[1],
+            post_snapshot[1],
         )
