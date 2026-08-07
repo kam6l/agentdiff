@@ -5,15 +5,14 @@ Captures lightweight snapshots of system state and computes
 deterministic diffs between pre- and post-execution states.
 """
 
-import os
 import hashlib
-import json
+import os
 import time
-from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Set, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
 
 
 class DiffType(Enum):
@@ -38,12 +37,12 @@ class DiffEntry:
     """A single state difference entry."""
     diff_type: DiffType
     path: str
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    old_value: str | None = None
+    new_value: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.diff_type.value,
             "path": self.path,
@@ -54,7 +53,7 @@ class DiffEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DiffEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "DiffEntry":
         return cls(
             diff_type=DiffType(data["type"]),
             path=data["path"],
@@ -68,14 +67,14 @@ class DiffEntry:
 @dataclass
 class FilesystemSnapshot:
     """Lightweight snapshot of filesystem state for a set of paths."""
-    file_hashes: Dict[str, str] = field(default_factory=dict)  # path -> sha256
-    file_sizes: Dict[str, int] = field(default_factory=dict)
-    file_mtimes: Dict[str, float] = field(default_factory=dict)
-    file_modes: Dict[str, int] = field(default_factory=dict)
-    directories: Set[str] = field(default_factory=set)
+    file_hashes: dict[str, str] = field(default_factory=dict)  # path -> sha256
+    file_sizes: dict[str, int] = field(default_factory=dict)
+    file_mtimes: dict[str, float] = field(default_factory=dict)
+    file_modes: dict[str, int] = field(default_factory=dict)
+    directories: set[str] = field(default_factory=set)
     timestamp: float = field(default_factory=time.time)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "file_hashes": self.file_hashes,
             "file_sizes": self.file_sizes,
@@ -86,7 +85,7 @@ class FilesystemSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FilesystemSnapshot":
+    def from_dict(cls, data: dict[str, Any]) -> "FilesystemSnapshot":
         return cls(
             file_hashes=data.get("file_hashes", {}),
             file_sizes=data.get("file_sizes", {}),
@@ -100,12 +99,12 @@ class FilesystemSnapshot:
 @dataclass
 class EnvironmentSnapshot:
     """Snapshot of environment variables and process state."""
-    env_vars: Dict[str, str] = field(default_factory=dict)
-    open_ports: Set[int] = field(default_factory=set)
-    process_pids: Set[int] = field(default_factory=set)
+    env_vars: dict[str, str] = field(default_factory=dict)
+    open_ports: set[int] = field(default_factory=set)
+    process_pids: set[int] = field(default_factory=set)
     timestamp: float = field(default_factory=time.time)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "env_vars": self.env_vars,
             "open_ports": list(self.open_ports),
@@ -114,7 +113,7 @@ class EnvironmentSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "EnvironmentSnapshot":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentSnapshot":
         return cls(
             env_vars=data.get("env_vars", {}),
             open_ports=set(data.get("open_ports", [])),
@@ -126,26 +125,26 @@ class EnvironmentSnapshot:
 @dataclass
 class DiffResult:
     """Complete diff result between two snapshots."""
-    filesystem_diffs: List[DiffEntry] = field(default_factory=list)
-    environment_diffs: List[DiffEntry] = field(default_factory=list)
-    pre_fs_snapshot: Optional[FilesystemSnapshot] = None
-    post_fs_snapshot: Optional[FilesystemSnapshot] = None
-    pre_env_snapshot: Optional[EnvironmentSnapshot] = None
-    post_env_snapshot: Optional[EnvironmentSnapshot] = None
+    filesystem_diffs: list[DiffEntry] = field(default_factory=list)
+    environment_diffs: list[DiffEntry] = field(default_factory=list)
+    pre_fs_snapshot: FilesystemSnapshot | None = None
+    post_fs_snapshot: FilesystemSnapshot | None = None
+    pre_env_snapshot: EnvironmentSnapshot | None = None
+    post_env_snapshot: EnvironmentSnapshot | None = None
     duration_seconds: float = 0.0
 
     @property
-    def all_diffs(self) -> List[DiffEntry]:
+    def all_diffs(self) -> list[DiffEntry]:
         return self.filesystem_diffs + self.environment_diffs
 
     @property
-    def summary(self) -> Dict[str, int]:
+    def summary(self) -> dict[str, int]:
         summary = {}
         for diff in self.all_diffs:
             summary[diff.diff_type.value] = summary.get(diff.diff_type.value, 0) + 1
         return summary
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "filesystem_diffs": [d.to_dict() for d in self.filesystem_diffs],
             "environment_diffs": [d.to_dict() for d in self.environment_diffs],
@@ -173,8 +172,8 @@ class DiffEngine:
 
     def __init__(
         self,
-        watch_paths: Optional[List[str]] = None,
-        ignore_patterns: Optional[List[str]] = None,
+        watch_paths: list[str] | None = None,
+        ignore_patterns: list[str] | None = None,
         max_file_size_mb: int = 100,
         hash_workers: int = 4,
     ):
@@ -201,7 +200,7 @@ class DiffEngine:
                 return True
         return False
 
-    def _hash_file(self, path: Path) -> Optional[str]:
+    def _hash_file(self, path: Path) -> str | None:
         """Compute SHA256 hash of file content."""
         try:
             if path.stat().st_size > self.max_file_size:
@@ -211,7 +210,7 @@ class DiffEngine:
                 for chunk in iter(lambda: f.read(8192), b""):
                     hasher.update(chunk)
             return hasher.hexdigest()
-        except (OSError, IOError):
+        except OSError:
             return None
 
     def _collect_filesystem(self) -> FilesystemSnapshot:
@@ -242,7 +241,7 @@ class DiffEngine:
                         file_modes[abs_path] = stat.st_mode
                     elif item.is_dir():
                         directories.add(abs_path)
-                except (OSError, IOError):
+                except OSError:
                     continue
 
         return FilesystemSnapshot(

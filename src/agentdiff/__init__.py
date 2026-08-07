@@ -6,33 +6,33 @@ environment state changes, tool call sequences, and side effects.
 """
 
 from .diff_engine import (
-    FilesystemSnapshot,
-    EnvironmentSnapshot,
     DiffEngine,
-    DiffResult,
     DiffEntry,
+    DiffResult,
     DiffType,
-)
-from .trajectory import (
-    TrajectoryStep,
-    TrajectoryRecord,
-    TrajectoryTracker,
-    ToolCall,
-    StepResult,
-    AgentFramework,
+    EnvironmentSnapshot,
+    FilesystemSnapshot,
 )
 from .evaluator import (
-    EvaluationResult,
+    AgentDiffEvaluator,
     CleanlinessMetrics,
+    EvaluationResult,
     SideEffect,
     SideEffectSeverity,
-    AgentDiffEvaluator,
     evaluate_agent_run,
 )
 from .integrations import (
     AgentDiffConfig,
     AgentDiffSession,
     BaseAgentDiffAdapter,
+)
+from .trajectory import (
+    AgentFramework,
+    StepResult,
+    ToolCall,
+    TrajectoryRecord,
+    TrajectoryStep,
+    TrajectoryTracker,
 )
 
 __version__ = "0.1.0"

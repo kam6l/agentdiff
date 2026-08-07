@@ -8,11 +8,11 @@ for later evaluation and debugging.
 import json
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable
-from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 
 class AgentFramework(Enum):
@@ -29,12 +29,12 @@ class AgentFramework(Enum):
 class StepResult:
     """Result of a single trajectory step."""
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     tokens_in: int = 0
     tokens_out: int = 0
     duration: float = 0.0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "success": self.success,
             "error": self.error,
@@ -44,7 +44,7 @@ class StepResult:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StepResult":
+    def from_dict(cls, data: dict[str, Any]) -> "StepResult":
         return cls(
             success=data.get("success", True),
             error=data.get("error"),
@@ -58,14 +58,14 @@ class StepResult:
 class ToolCall:
     """A single tool/function call made by the agent."""
     name: str
-    arguments: Dict[str, Any]
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    arguments: dict[str, Any]
+    result: Any | None = None
+    error: str | None = None
     duration_ms: float = 0.0
     timestamp: float = field(default_factory=time.time)
     call_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "call_id": self.call_id,
             "name": self.name,
@@ -85,16 +85,16 @@ class ToolCall:
 class TrajectoryStep:
     """A single step in the agent's trajectory."""
     step_index: int
-    thought: Optional[str] = None
-    tool_calls: List[ToolCall] = field(default_factory=list)
-    observation: Optional[str] = None
+    thought: str | None = None
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    observation: str | None = None
     llm_input_tokens: int = 0
     llm_output_tokens: int = 0
-    llm_model: Optional[str] = None
+    llm_model: str | None = None
     timestamp: float = field(default_factory=time.time)
     duration_ms: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "step_index": self.step_index,
             "thought": self.thought,
@@ -116,7 +116,7 @@ class TrajectoryStep:
         return len(self.tool_calls)
 
     @property
-    def failed_tool_calls(self) -> List[ToolCall]:
+    def failed_tool_calls(self) -> list[ToolCall]:
         return [tc for tc in self.tool_calls if not tc.succeeded]
 
 
@@ -126,14 +126,14 @@ class TrajectoryRecord:
     run_id: str
     task_description: str
     framework: AgentFramework
-    steps: List[TrajectoryStep] = field(default_factory=list)
+    steps: list[TrajectoryStep] = field(default_factory=list)
     start_time: float = field(default_factory=time.time)
-    end_time: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    final_result: Optional[Any] = None
-    final_error: Optional[str] = None
+    end_time: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    final_result: Any | None = None
+    final_error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "task_description": self.task_description,
@@ -212,21 +212,21 @@ class TrajectoryRecord:
         return sum(s.llm_input_tokens + s.llm_output_tokens for s in self.steps)
 
     @property
-    def failed_steps(self) -> List[TrajectoryStep]:
+    def failed_steps(self) -> list[TrajectoryStep]:
         return [s for s in self.steps if s.failed_tool_calls]
 
-    def get_tool_call_sequence(self) -> List[ToolCall]:
+    def get_tool_call_sequence(self) -> list[ToolCall]:
         """Get all tool calls in execution order."""
         calls = []
         for step in self.steps:
             calls.extend(step.tool_calls)
         return calls
 
-    def get_unique_tools_used(self) -> List[str]:
+    def get_unique_tools_used(self) -> list[str]:
         """Get list of unique tool names used."""
         return list(set(tc.name for tc in self.get_tool_call_sequence()))
 
-    def detect_loops(self, min_repeat: int = 3) -> List[Dict[str, Any]]:
+    def detect_loops(self, min_repeat: int = 3) -> list[dict[str, Any]]:
         """
         Detect repeated tool call patterns (potential loops).
         
@@ -270,8 +270,8 @@ class TrajectoryTracker:
         self,
         task_description: str,
         framework: AgentFramework = AgentFramework.CUSTOM,
-        run_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         self.record = TrajectoryRecord(
             run_id=run_id or str(uuid.uuid4())[:12],
@@ -279,10 +279,10 @@ class TrajectoryTracker:
             framework=framework,
             metadata=metadata or {},
         )
-        self._current_step: Optional[TrajectoryStep] = None
-        self._step_start_time: Optional[float] = None
+        self._current_step: TrajectoryStep | None = None
+        self._step_start_time: float | None = None
 
-    def start_step(self, thought: Optional[str] = None, step_index: Optional[int] = None) -> TrajectoryStep:
+    def start_step(self, thought: str | None = None, step_index: int | None = None) -> TrajectoryStep:
         """Begin a new trajectory step."""
         if self._current_step is not None:
             self.end_step()
@@ -295,7 +295,7 @@ class TrajectoryTracker:
         self._step_start_time = time.time()
         return self._current_step
 
-    def end_step(self, observation: Optional[str] = None) -> Optional[TrajectoryStep]:
+    def end_step(self, observation: str | None = None) -> TrajectoryStep | None:
         """End the current step and add to record."""
         if self._current_step is None:
             return None
@@ -315,9 +315,9 @@ class TrajectoryTracker:
     def record_tool_call(
         self,
         name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         result: Any = None,
-        error: Optional[str] = None,
+        error: str | None = None,
         duration_ms: float = 0.0,
     ) -> ToolCall:
         """Record a tool call in the current step."""
@@ -335,7 +335,7 @@ class TrajectoryTracker:
         return tool_call
 
     @contextmanager
-    def track_tool(self, name: str, arguments: Dict[str, Any]):
+    def track_tool(self, name: str, arguments: dict[str, Any]):
         """Context manager to time and record a tool call."""
         start = time.time()
         error = None
@@ -354,7 +354,7 @@ class TrajectoryTracker:
         self,
         input_tokens: int,
         output_tokens: int,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> None:
         """Record LLM token usage for current step."""
         if self._current_step is None:
@@ -366,7 +366,7 @@ class TrajectoryTracker:
     def finish(
         self,
         final_result: Any = None,
-        final_error: Optional[str] = None,
+        final_error: str | None = None,
     ) -> TrajectoryRecord:
         """Finalize the trajectory record."""
         if self._current_step is not None:
@@ -396,11 +396,11 @@ class LangChainCallbackHandler:
     
     def __init__(self, tracker: TrajectoryTracker):
         self.tracker = tracker
-        self._current_tool_start: Optional[float] = None
-        self._current_tool_name: Optional[str] = None
-        self._current_tool_args: Optional[Dict] = None
+        self._current_tool_start: float | None = None
+        self._current_tool_name: str | None = None
+        self._current_tool_args: dict | None = None
 
-    def on_llm_start(self, serialized: Dict, prompts: List[str], **kwargs) -> None:
+    def on_llm_start(self, serialized: dict, prompts: list[str], **kwargs) -> None:
         # Could track LLM calls here
         pass
 
@@ -413,7 +413,7 @@ class LangChainCallbackHandler:
                 usage.get('completion_tokens', 0),
             )
 
-    def on_tool_start(self, serialized: Dict, input_str: str, **kwargs) -> None:
+    def on_tool_start(self, serialized: dict, input_str: str, **kwargs) -> None:
         self._current_tool_start = time.time()
         self._current_tool_name = serialized.get('name', 'unknown')
         self._current_tool_args = {"input": input_str}

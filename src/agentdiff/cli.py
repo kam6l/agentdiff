@@ -14,9 +14,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
-from agentdiff import DiffEngine, TrajectoryTracker, AgentDiffEvaluator, AgentFramework
+from agentdiff import AgentDiffEvaluator, AgentFramework, DiffEngine, TrajectoryTracker
 from agentdiff.diff_engine import EnvironmentSnapshot, FilesystemSnapshot
 
 

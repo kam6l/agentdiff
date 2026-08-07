@@ -11,17 +11,14 @@ Demonstrates the full evaluation pipeline:
 
 import argparse
 import json
-import os
 import tempfile
-import time
 from pathlib import Path
 
 from agentdiff import (
+    AgentDiffEvaluator,
+    AgentFramework,
     DiffEngine,
     TrajectoryTracker,
-    AgentFramework,
-    AgentDiffEvaluator,
-    SideEffectSeverity,
 )
 
 

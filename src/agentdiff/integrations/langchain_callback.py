@@ -16,18 +16,19 @@ Usage:
     print(f"Cleanliness: {eval_result.metrics.cleanliness_score:.1%}")
 """
 
-from typing import Any, Dict, List, Optional, Union
-from uuid import uuid4
+from typing import Any, TYPE_CHECKING
+from uuid import UUID
 
+from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
-from langchain_core.agents import AgentAction, AgentFinish
 
-from agentdiff import DiffEngine, TrajectoryTracker, AgentDiffEvaluator
-from agentdiff.diff_engine import EnvironmentSnapshot
-from agentdiff.trajectory import ToolCall, StepResult
-from agentdiff.evaluator import EvaluationResult
-from agentdiff.integrations import AgentDiffConfig
+if TYPE_CHECKING:
+    from agentdiff import AgentDiffEvaluator, DiffEngine, TrajectoryTracker
+    from agentdiff.diff_engine import EnvironmentSnapshot
+    from agentdiff.evaluator import EvaluationResult
+    from agentdiff.integrations import AgentDiffConfig
+    from agentdiff.trajectory import StepResult, ToolCall
 
 
 class AgentDiffCallbackHandler(BaseCallbackHandler):
@@ -45,15 +46,15 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
     
     def __init__(
         self,
-        target_paths: Optional[List[str]] = None,
+        target_paths: list[str] | None = None,
         cleanliness_threshold: float = 0.8,
         efficiency_threshold: float = 0.7,
         root: str = ".",
-        ignore_patterns: Optional[List[str]] = None,
+        ignore_patterns: list[str] | None = None,
         capture_env_vars: bool = True,
         capture_processes: bool = True,
         capture_ports: bool = True,
-        config: Optional[AgentDiffConfig] = None,
+        config: AgentDiffConfig | None = None,
     ):
         super().__init__()
         
@@ -81,7 +82,7 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
             capture_ports=self.config.capture_ports,
         )
         self.tracker = TrajectoryTracker()
-        self.pre_snapshot: Optional[EnvironmentSnapshot] = None
+        self.pre_snapshot: EnvironmentSnapshot | None = None
         self.evaluator = AgentDiffEvaluator(
             target_paths=self.config.target_paths,
             cleanliness_threshold=self.config.cleanliness_threshold,
@@ -89,7 +90,7 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         
         # State tracking
         self._current_thought: str = ""
-        self._current_tool_call: Optional[ToolCall] = None
+        self._current_tool_call: ToolCall | None = None
         self._tool_start_time: float = 0
         self._llm_start_time: float = 0
         self._step_count: int = 0
@@ -100,13 +101,13 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
     
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Track LLM start - capture the prompt as 'thought'."""
@@ -122,8 +123,8 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         response: LLMResult,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track LLM end - capture token usage."""
@@ -144,13 +145,13 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
     
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Track tool start."""
@@ -175,8 +176,8 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         output: str,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track tool end - record complete step."""
@@ -187,17 +188,16 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         tokens_in, tokens_out = getattr(self, "_last_llm_tokens", (0, 0))
         
         # Record the step
-        self.tracker.record_step(
-            thought=self._current_thought or "Tool execution",
-            tool_call=self._current_tool_call,
-            observation=output[:5000],  # Limit length
-            result=StepResult(
-                success=True,
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-                duration=duration,
-            ),
-        )
+        self.tracker.start_step(thought=self._current_thought or "Tool execution")
+        if self._current_tool_call:
+            self.tracker.record_tool_call(
+                name=self._current_tool_call.name,
+                arguments=self._current_tool_call.arguments,
+                result=self._current_tool_call.result,
+                error=self._current_tool_call.error,
+                duration_ms=duration * 1000,
+            )
+        self.tracker.end_step(observation=output[:5000])
         
         self._step_count += 1
         self._current_thought = ""
@@ -207,8 +207,8 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         error: BaseException,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track tool error."""
@@ -217,18 +217,16 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         
         tokens_in, tokens_out = getattr(self, "_last_llm_tokens", (0, 0))
         
-        self.tracker.record_step(
-            thought=self._current_thought or "Tool execution (failed)",
-            tool_call=self._current_tool_call,
-            observation=f"ERROR: {str(error)}",
-            result=StepResult(
-                success=False,
+        self.tracker.start_step(thought=self._current_thought or "Tool execution (failed)")
+        if self._current_tool_call:
+            self.tracker.record_tool_call(
+                name=self._current_tool_call.name,
+                arguments=self._current_tool_call.arguments,
+                result=None,
                 error=str(error),
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-                duration=duration,
-            ),
-        )
+                duration_ms=duration * 1000,
+            )
+        self.tracker.end_step(observation=f"ERROR: {error!s}")
         
         self._step_count += 1
         self._current_thought = ""
@@ -238,8 +236,8 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         action: AgentAction,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track agent action (for ReAct-style agents)."""
@@ -250,24 +248,16 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         finish: AgentFinish,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track agent finish - record final step."""
         # Record final thought/result
         output = finish.return_values.get("output", "")
         
-        self.tracker.record_step(
-            thought="Agent completed task",
-            tool_call=None,
-            observation=output[:5000],
-            result=StepResult(
-                success=True,
-                tokens_in=0,
-                tokens_out=0,
-            ),
-        )
+        self.tracker.start_step(thought="Agent completed task")
+        self.tracker.end_step(observation=output[:5000])
         
         self._step_count += 1
     
@@ -275,20 +265,13 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
         self,
         error: BaseException,
         *,
-        run_id: uuid4,
-        parent_run_id: Optional[uuid4] = None,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Track chain/agent error."""
-        self.tracker.record_step(
-            thought="Agent execution failed",
-            tool_call=None,
-            observation=f"ERROR: {str(error)}",
-            result=StepResult(
-                success=False,
-                error=str(error),
-            ),
-        )
+        self.tracker.start_step(thought="Agent execution failed")
+        self.tracker.end_step(observation=f"ERROR: {error!s}")
     
     def get_evaluation_result(self) -> EvaluationResult:
         """
@@ -330,7 +313,7 @@ class AgentDiffCallbackHandler(BaseCallbackHandler):
 
 # Convenience function for simple usage
 def create_agentdiff_callback(
-    target_paths: Optional[List[str]] = None,
+    target_paths: list[str] | None = None,
     cleanliness_threshold: float = 0.8,
     **kwargs,
 ) -> AgentDiffCallbackHandler:

@@ -5,25 +5,29 @@ Base classes and implementations for integrating AgentDiff with popular agent fr
 """
 
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, TYPE_CHECKING
 
-from agentdiff import DiffEngine, TrajectoryTracker, AgentDiffEvaluator
-from agentdiff.diff_engine import EnvironmentSnapshot
-from agentdiff.trajectory import ToolCall, StepResult
-from agentdiff.evaluator import EvaluationResult
+if TYPE_CHECKING:
+    from agentdiff import AgentDiffEvaluator, DiffEngine, TrajectoryTracker
+    from agentdiff.diff_engine import EnvironmentSnapshot
+    from agentdiff.evaluator import EvaluationResult
+    from agentdiff.trajectory import StepResult, ToolCall
+else:
+    # Runtime imports for annotations
+    from agentdiff.evaluator import EvaluationResult
+    from agentdiff.trajectory import StepResult, ToolCall
 
 
 @dataclass
 class AgentDiffConfig:
     """Configuration for AgentDiff integration."""
-    target_paths: List[str] = field(default_factory=list)
+    target_paths: list[str] = field(default_factory=list)
     cleanliness_threshold: float = 0.8
     efficiency_threshold: float = 0.7
     root: str = "."
-    ignore_patterns: List[str] = field(default_factory=lambda: [
+    ignore_patterns: list[str] = field(default_factory=lambda: [
         "*.pyc", "__pycache__", ".git", "*.log", ".venv", "node_modules"
     ])
     capture_env_vars: bool = True
@@ -34,7 +38,7 @@ class AgentDiffConfig:
 class BaseAgentDiffAdapter(ABC):
     """Base class for framework-specific adapters."""
     
-    def __init__(self, config: Optional[AgentDiffConfig] = None):
+    def __init__(self, config: AgentDiffConfig | None = None):
         self.config = config or AgentDiffConfig()
         self.engine = DiffEngine(
             root=Path(self.config.root),
@@ -44,7 +48,7 @@ class BaseAgentDiffAdapter(ABC):
             capture_ports=self.config.capture_ports,
         )
         self.tracker = TrajectoryTracker()
-        self.pre_snapshot: Optional[EnvironmentSnapshot] = None
+        self.pre_snapshot: EnvironmentSnapshot | None = None
         self.evaluator = AgentDiffEvaluator(
             target_paths=self.config.target_paths,
             cleanliness_threshold=self.config.cleanliness_threshold,
@@ -57,15 +61,14 @@ class BaseAgentDiffAdapter(ABC):
     def record_step(
         self,
         thought: str,
-        tool_call: Optional[Dict[str, Any]] = None,
-        observation: Optional[str] = None,
-        result: Optional[Dict[str, Any]] = None,
+        tool_call: dict[str, Any] | None = None,
+        observation: str | None = None,
+        result: dict[str, Any] | None = None,
     ) -> None:
         """Record a trajectory step."""
         tc = ToolCall(
             name=tool_call.get("name", "") if tool_call else "",
-            args=tool_call.get("args", {}) if tool_call else {},
-            tool_id=tool_call.get("id") if tool_call else None,
+            arguments=tool_call.get("arguments", {}) if tool_call else {},
         ) if tool_call else None
         
         sr = StepResult(
@@ -96,13 +99,12 @@ class BaseAgentDiffAdapter(ABC):
     @abstractmethod
     def wrap_agent(self, agent: Any) -> Any:
         """Wrap an agent with AgentDiff tracking."""
-        pass
 
 
 class AgentDiffSession:
     """Context manager for easy AgentDiff usage with any framework."""
     
-    def __init__(self, config: Optional[AgentDiffConfig] = None):
+    def __init__(self, config: AgentDiffConfig | None = None):
         self.config = config or AgentDiffConfig()
         self.engine = DiffEngine(
             root=Path(self.config.root),
@@ -112,7 +114,7 @@ class AgentDiffSession:
             capture_ports=self.config.capture_ports,
         )
         self.tracker = TrajectoryTracker()
-        self.pre_snapshot: Optional[EnvironmentSnapshot] = None
+        self.pre_snapshot: EnvironmentSnapshot | None = None
         self.evaluator = AgentDiffEvaluator(
             target_paths=self.config.target_paths,
             cleanliness_threshold=self.config.cleanliness_threshold,
@@ -129,10 +131,10 @@ class AgentDiffSession:
         self,
         thought: str,
         tool_name: str = "",
-        tool_args: Optional[Dict[str, Any]] = None,
+        tool_args: dict[str, Any] | None = None,
         observation: str = "",
         success: bool = True,
-        error: Optional[str] = None,
+        error: str | None = None,
         tokens_in: int = 0,
         tokens_out: int = 0,
     ) -> None:

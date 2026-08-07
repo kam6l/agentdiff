@@ -7,13 +7,14 @@ quantitative evaluation metrics and actionable reports.
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Set, Callable
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
-from .diff_engine import DiffResult, DiffEntry, DiffType
-from .trajectory import TrajectoryRecord, TrajectoryStep, ToolCall
+from .diff_engine import DiffEntry, DiffResult, DiffType
+from .trajectory import TrajectoryRecord
 
 
 class SideEffectSeverity(Enum):
@@ -29,11 +30,11 @@ class SideEffect:
     severity: SideEffectSeverity
     category: str
     description: str
-    diff_entry: Optional[DiffEntry] = None
-    related_steps: List[int] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    diff_entry: DiffEntry | None = None
+    related_steps: list[int] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "severity": self.severity.value,
             "category": self.category,
@@ -71,7 +72,7 @@ class CleanlinessMetrics:
     total_duration_seconds: float = 0.0
     avg_step_duration_ms: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_mutations": self.total_mutations,
             "target_mutations": self.target_mutations,
@@ -99,13 +100,13 @@ class EvaluationResult:
     task_description: str
     passed: bool
     metrics: CleanlinessMetrics
-    side_effects: List[SideEffect]
+    side_effects: list[SideEffect]
     diff_result: DiffResult
     trajectory_record: TrajectoryRecord
     timestamp: float = field(default_factory=time.time)
-    custom_checks: Dict[str, bool] = field(default_factory=dict)
+    custom_checks: dict[str, bool] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "task_description": self.task_description,
@@ -132,8 +133,8 @@ class EvaluationResult:
     def print_summary(self, console=None) -> None:
         """Print human-readable summary."""
         from rich.console import Console
-        from rich.table import Table
         from rich.panel import Panel
+        from rich.table import Table
 
         c = console or Console()
 
@@ -178,8 +179,8 @@ class AgentDiffEvaluator:
 
     def __init__(
         self,
-        target_paths: Optional[List[str]] = None,
-        ignore_patterns: Optional[List[str]] = None,
+        target_paths: list[str] | None = None,
+        ignore_patterns: list[str] | None = None,
         severity_threshold: SideEffectSeverity = SideEffectSeverity.WARNING,
     ):
         from .diff_engine import DiffEngine
@@ -188,10 +189,10 @@ class AgentDiffEvaluator:
             ignore_patterns=ignore_patterns,
         )
         self.severity_threshold = severity_threshold
-        self._target_mutations: Set[str] = set()
+        self._target_mutations: set[str] = set()
         self._targets_explicitly_set: bool = False
 
-    def set_target_mutations(self, paths: List[str]) -> None:
+    def set_target_mutations(self, paths: list[str]) -> None:
         """Define which file/state changes are expected (target mutations)."""
         self._target_mutations = {str(Path(p).resolve()) for p in paths}
         self._targets_explicitly_set = True
@@ -203,7 +204,7 @@ class AgentDiffEvaluator:
         pre_env_snapshot=None,
         post_fs_snapshot=None,
         post_env_snapshot=None,
-        custom_checks: Optional[Dict[str, Callable]] = None,
+        custom_checks: dict[str, Callable] | None = None,
     ) -> EvaluationResult:
         """
         Full evaluation pipeline.
@@ -221,7 +222,7 @@ class AgentDiffEvaluator:
         """
         # Load snapshots if paths provided
         if isinstance(pre_fs_snapshot, (str, Path)):
-            from .diff_engine import FilesystemSnapshot, EnvironmentSnapshot
+            from .diff_engine import EnvironmentSnapshot, FilesystemSnapshot
             pre_fs_snapshot = FilesystemSnapshot.from_dict(json.loads(Path(pre_fs_snapshot).read_text()))
         if isinstance(pre_env_snapshot, (str, Path)):
             from .diff_engine import EnvironmentSnapshot
@@ -253,7 +254,7 @@ class AgentDiffEvaluator:
             for name, check_fn in custom_checks.items():
                 try:
                     custom_results[name] = check_fn(trajectory, diff_result)
-                except Exception as e:
+                except Exception:
                     custom_results[name] = False
 
         # Determine pass/fail
@@ -275,7 +276,7 @@ class AgentDiffEvaluator:
         trajectory: TrajectoryRecord,
         pre_snapshot: tuple,
         post_snapshot: tuple,
-        custom_checks: Optional[Dict[str, Callable]] = None,
+        custom_checks: dict[str, Callable] | None = None,
     ) -> EvaluationResult:
         """Convenience method using snapshot tuples."""
         return self.evaluate(
@@ -290,7 +291,7 @@ class AgentDiffEvaluator:
     def _compute_metrics(
         self,
         trajectory: TrajectoryRecord,
-        diff_result: Optional[DiffResult],
+        diff_result: DiffResult | None,
     ) -> CleanlinessMetrics:
         """Compute all quantitative metrics."""
         m = CleanlinessMetrics()
@@ -356,8 +357,8 @@ class AgentDiffEvaluator:
     def _detect_side_effects(
         self,
         trajectory: TrajectoryRecord,
-        diff_result: Optional[DiffResult],
-    ) -> List[SideEffect]:
+        diff_result: DiffResult | None,
+    ) -> list[SideEffect]:
         """Detect and classify side effects from diffs and trajectory."""
         effects = []
 
@@ -458,7 +459,7 @@ class AgentDiffEvaluator:
         self,
         trajectory: TrajectoryRecord,
         diff: DiffEntry,
-    ) -> List[int]:
+    ) -> list[int]:
         """Find trajectory steps likely related to a diff entry."""
         # Simple heuristic: steps that used tools affecting similar paths
         related = []
@@ -476,8 +477,8 @@ class AgentDiffEvaluator:
     def _determine_pass(
         self,
         metrics: CleanlinessMetrics,
-        side_effects: List[SideEffect],
-        custom_checks: Dict[str, bool],
+        side_effects: list[SideEffect],
+        custom_checks: dict[str, bool],
     ) -> bool:
         """Determine overall pass/fail based on metrics and effects."""
         # Fail on critical side effects
@@ -503,8 +504,8 @@ def evaluate_agent_run(
     trajectory: TrajectoryRecord,
     pre_snapshot: tuple,
     post_snapshot: tuple,
-    target_paths: Optional[List[str]] = None,
-    custom_checks: Optional[Dict[str, Callable]] = None,
+    target_paths: list[str] | None = None,
+    custom_checks: dict[str, Callable] | None = None,
 ) -> EvaluationResult:
     """
     Convenience function for one-shot evaluation.
