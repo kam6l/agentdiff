@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from agentdiff import DiffEngine, TrajectoryTracker, AgentDiffEvaluator
-from agentdiff.diff_engine import EnvironmentSnapshot
+from agentdiff import DiffEngine, TrajectoryTracker, AgentDiffEvaluator, AgentFramework
+from agentdiff.diff_engine import EnvironmentSnapshot, FilesystemSnapshot
 
 
 def cmd_snapshot(args):
@@ -48,48 +48,71 @@ def cmd_snapshot(args):
 
 def cmd_diff(args):
     """Diff two snapshots."""
-    pre = EnvironmentSnapshot.model_validate_json(Path(args.pre).read_text())
-    post = EnvironmentSnapshot.model_validate_json(Path(args.post).read_text())
+    pre_data = json.loads(Path(args.pre).read_text())
+    post_data = json.loads(Path(args.post).read_text())
+    
+    pre_fs = FilesystemSnapshot(**pre_data["filesystem"])
+    pre_env = EnvironmentSnapshot(**pre_data["environment"])
+    post_fs = FilesystemSnapshot(**post_data["filesystem"])
+    post_env = EnvironmentSnapshot(**post_data["environment"])
     
     engine = DiffEngine(
         watch_paths=[args.root] if args.root else None,
     )
-    diff = engine.diff(pre, post)
+    diff = engine.diff(pre_fs, post_fs, pre_env, post_env)
     
     if args.format == "json":
         print(diff.model_dump_json(indent=2))
     else:
-        print(f"Files: +{len(diff.added_files)} ~{len(diff.modified_files)} -{len(diff.deleted_files)}")
-        print(f"Dirs:  +{len(diff.added_dirs)} ~{len(diff.modified_dirs)} -{len(diff.deleted_dirs)}")
-        print(f"Env:   +{len(diff.added_env_vars)} -{len(diff.removed_env_vars)}")
-        print(f"Procs: +{len(diff.added_processes)} -{len(diff.removed_processes)}")
-        print(f"Ports: +{len(diff.added_ports)} -{len(diff.removed_ports)}")
+        # Use summary property
+        summary = diff.summary
+        print(f"Files: +{summary.get('file_created', 0)} ~{summary.get('file_modified', 0)} -{summary.get('file_deleted', 0)}")
+        print(f"Dirs:  +{summary.get('dir_created', 0)} -{summary.get('dir_deleted', 0)}")
+        print(f"Env:   +{summary.get('env_var_added', 0)} ~{summary.get('env_var_modified', 0)} -{summary.get('env_var_removed', 0)}")
+        print(f"Procs: +{summary.get('process_spawned', 0)} -{summary.get('process_terminated', 0)}")
+        print(f"Ports: +{summary.get('port_opened', 0)} -{summary.get('port_closed', 0)}")
 
 
 def cmd_eval(args):
     """Evaluate a trajectory file."""
     # Load trajectory
     trajectory_data = json.loads(Path(args.trajectory).read_text())
-    tracker = TrajectoryTracker()
+    tracker = TrajectoryTracker(
+        task_description=trajectory_data.get("task_description", ""),
+        framework=AgentFramework(trajectory_data.get("framework", "custom")),
+    )
     # Reconstruct trajectory from saved data
     for step_data in trajectory_data.get("steps", []):
-        tracker.record_step(
-            thought=step_data["thought"],
-            tool_call=step_data.get("tool_call"),
-            observation=step_data.get("observation"),
-            result=step_data.get("result"),
-        )
-    trajectory = tracker.get_trajectory()
+        tracker.start_step(thought=step_data.get("thought"))
+        for tc_data in step_data.get("tool_calls", []):
+            tracker.record_tool_call(
+                name=tc_data.get("name", ""),
+                arguments=tc_data.get("arguments", {}),
+                result=tc_data.get("result"),
+                error=tc_data.get("error"),
+                duration_ms=tc_data.get("duration_ms", 0),
+            )
+        tracker.end_step(observation=step_data.get("observation"))
+    trajectory = tracker.finish(
+        final_result=trajectory_data.get("final_result"),
+        final_error=trajectory_data.get("final_error"),
+    )
     
     # Load snapshots if provided
     diff = None
     if args.pre and args.post:
-        pre = EnvironmentSnapshot.model_validate_json(Path(args.pre).read_text())
-        post = EnvironmentSnapshot.model_validate_json(Path(args.post).read_text())
+        pre_data = json.loads(Path(args.pre).read_text())
+        post_data = json.loads(Path(args.post).read_text())
+        
+        pre_fs = FilesystemSnapshot(**pre_data["filesystem"])
+        pre_env = EnvironmentSnapshot(**pre_data["environment"])
+        post_fs = FilesystemSnapshot(**post_data["filesystem"])
+        post_env = EnvironmentSnapshot(**post_data["environment"])
+        
         engine = DiffEngine(
             watch_paths=[args.root] if args.root else None,
         )
-        diff = engine.diff(pre, post)
+        diff = engine.diff(pre_fs, post_fs, pre_env, post_env)
     
     # Evaluate
     evaluator = AgentDiffEvaluator(
