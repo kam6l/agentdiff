@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from ..diff_engine import DiffEngine, EnvironmentSnapshot, FilesystemSnapshot
 from ..evaluator import AgentDiffEvaluator, EvaluationResult
 from ..trajectory import AgentFramework, TrajectoryTracker
+from .mcp_policy import MCPPolicyHook, ToolCallBlockedError, ToolCallDecision
 
 Snapshot: TypeAlias = tuple[FilesystemSnapshot, EnvironmentSnapshot]
 
@@ -171,4 +172,11 @@ class AgentDiffSession(_EvaluationLifecycle):
         self.tracker.end_step(observation=observation)
 
 
-__all__ = ["AgentDiffConfig", "AgentDiffSession", "BaseAgentDiffAdapter"]
+__all__ = [
+    "AgentDiffConfig",
+    "AgentDiffSession",
+    "BaseAgentDiffAdapter",
+    "MCPPolicyHook",
+    "ToolCallBlockedError",
+    "ToolCallDecision",
+]

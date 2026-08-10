@@ -1,22 +1,42 @@
-# CI quality gate
+# CI runtime gate
 
-AgentDiff can return a nonzero exit status when a saved run falls below its cleanliness threshold or triggers another evaluation failure.
+AgentDiff can wrap the same agent command used in CI and return a nonzero status when policy resolves to `deny` or, optionally, `review`.
+
+The local backend is still not a sandbox. Use an ephemeral runner or external sandbox for untrusted code.
+
+## Commit a policy
+
+Store an explicit `agentdiff.yaml` beside the workflow. A CI policy should normally:
+
+- deny credentials, VCS internals, and deployment keys;
+- allow only the task's expected output paths;
+- review dependency and workflow files;
+- bound changed files, deletions, descendants, duration, and backup size; and
+- disable machine-wide port observation when it is not a useful signal.
+
+Validate it before running the agent:
+
+```bash
+agentdiff policy validate --policy agentdiff.yaml
+```
 
 ## GitHub Actions example
 
-Until a package is released, pin installation to a Git commit instead of assuming PyPI availability.
+AgentDiff is not published on PyPI yet. Pin the repository to a reviewed full commit SHA instead of tracking `main`.
 
 ```yaml
-name: Agent quality
+name: Agent runtime gate
 
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  evaluate:
+  agent-runtime:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -25,80 +45,83 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install pinned AgentDiff source
+      - name: Install reviewed AgentDiff source
+        env:
+          AGENTDIFF_SHA: <full-reviewed-commit-sha>
         run: |
-          uv venv
-          uv pip install "agentdiff @ git+https://github.com/kam6l/agentdiff.git@<commit-sha>"
+          git clone --filter=blob:none https://github.com/kam6l/agentdiff.git "$RUNNER_TEMP/agentdiff"
+          git -C "$RUNNER_TEMP/agentdiff" checkout --detach "$AGENTDIFF_SHA"
+          uv venv "$RUNNER_TEMP/agentdiff-venv"
+          uv pip install --python "$RUNNER_TEMP/agentdiff-venv/bin/python" "$RUNNER_TEMP/agentdiff"
+          echo "AGENTDIFF=$RUNNER_TEMP/agentdiff-venv/bin/agentdiff" >> "$GITHUB_ENV"
 
-      - name: Capture baseline
-        run: uv run agentdiff snapshot --root "$GITHUB_WORKSPACE" -o before.json
+      - name: Validate mutation policy
+        run: "$AGENTDIFF" policy validate --policy agentdiff.yaml
 
-      - name: Run the agent
-        run: uv run python scripts/run_agent.py
-        # The runner must save trajectory.json.
-
-      - name: Capture final state
-        run: uv run agentdiff snapshot --root "$GITHUB_WORKSPACE" -o after.json
-
-      - name: Gate the run
+      - name: Run agent transaction
+        id: agentdiff
+        shell: bash
         run: |
-          uv run agentdiff eval trajectory.json \
-            --pre before.json \
-            --post after.json \
+          set +e
+          "$AGENTDIFF" run \
             --root "$GITHUB_WORKSPACE" \
-            --target src/evaluator.py,tests/test_evaluator.py \
-            --threshold 0.80 \
+            --policy agentdiff.yaml \
+            --task "Apply requested change" \
             --format json \
-            --fail-on-failure > agentdiff-result.json
+            --fail-on review \
+            -- python3 scripts/run_agent.py > agentdiff-result.json
+          status=$?
+          set -e
+          "$AGENTDIFF" runs --root "$GITHUB_WORKSPACE" --format json > agentdiff-runs.json
+          exit "$status"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload redacted summaries
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: agentdiff-evaluation
+          name: agentdiff-runtime-summary
           path: |
-            before.json
-            after.json
-            trajectory.json
             agentdiff-result.json
+            agentdiff-runs.json
           if-no-files-found: warn
+          retention-days: 7
 ```
 
-Replace `<commit-sha>` with a reviewed AgentDiff commit. Avoid tracking `main` in a security-sensitive pipeline.
+For a security-sensitive repository, replace action tags with organization-reviewed full action commit SHAs. The AgentDiff repository itself pins workflow actions.
 
-## Evaluating inside this repository
+## Exit behavior
 
-The AgentDiff repository itself uses its lockfile:
-
-```yaml
-- uses: astral-sh/setup-uv@v7
-- run: uv sync --locked --group dev --group docs --group build
-- run: uv run pytest tests/ --cov=agentdiff
-- run: uv run ruff check src tests
-- run: uv run mypy src/agentdiff
-```
-
-## Other CI systems
-
-The quality gate is not GitHub-specific. The portable sequence is:
+`agentdiff run` supports:
 
 ```bash
-agentdiff snapshot --root "$WORKSPACE" -o before.json
-python run_agent.py
-agentdiff snapshot --root "$WORKSPACE" -o after.json
-agentdiff eval trajectory.json \
-  --pre before.json --post after.json \
-  --root "$WORKSPACE" --target src/expected.py \
-  --threshold 0.8 --fail-on-failure
+--fail-on never   # report only
+--fail-on deny    # default; fail denied process/path decisions
+--fail-on review  # fail review or deny
 ```
 
-## Make runs reproducible
+Child failures and launch errors are also nonzero. See the [CLI reference](../cli.md#exit-status) for exact statuses.
+
+A denied filesystem decision is a post-condition finding in local mode: the write may already have occurred. On an ephemeral CI runner, fail the job and discard the workspace. Do not describe the gate as syscall blocking.
+
+## Artifacts and secrets
+
+Run capsules can contain paths, task text, executable metadata, platform details, fingerprints, policy decisions, and redacted event fields. Redaction is defense in depth, not proof that all domain-specific secrets are absent.
+
+- Upload summary JSON only unless the full capsule is required.
+- Review artifacts before broadening access or retention.
+- Never upload before-state backups from a private workspace by default.
+- Use synthetic credentials in tests.
+- Keep `.agentdiff/` out of caches and source-control commits.
+
+## Legacy evaluator gate
+
+Existing users can continue to capture `before.json` and `after.json`, save a trajectory, then invoke `agentdiff eval --fail-on-failure`. That path gates the legacy cleanliness metric; it does not apply runtime policy or prepare rollback.
+
+## Reproducibility
 
 - Start from a clean checkout or disposable workspace.
-- Pin the agent, model configuration, and AgentDiff revision.
-- Disable process and port capture when unrelated runner services create noise.
-- Wait for intended child processes to exit before the final snapshot.
-- Keep secrets out of trajectory tool arguments and results.
-- Upload raw artifacts when a gate fails.
-- Establish thresholds from repeated baseline runs rather than choosing one arbitrarily.
-
-`--format json` writes the same evaluation data used for the exit decision; no separate JUnit or hosted dashboard feature is implied.
+- Pin AgentDiff, the agent, model configuration, tools, and dependencies.
+- Keep policy and collector settings identical between variants.
+- Run stochastic agents repeatedly and report distributions.
+- Pair mutation safety with task-correctness tests.
+- Treat process and port observations as noisy on shared runners.

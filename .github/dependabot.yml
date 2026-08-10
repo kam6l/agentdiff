@@ -11,3 +11,18 @@ updates:
     labels:
       - dependencies
       - ci
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      python-runtime:
+        dependency-type: production
+      python-development:
+        dependency-type: development

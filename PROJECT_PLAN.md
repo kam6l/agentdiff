@@ -1,135 +1,128 @@
-# AgentDiff - Project Plan
+# AgentDiff project plan
 
-## Vision
-**The open-source standard for full-state trajectory evaluation of AI agents** — detecting not just *what the agent said*, but *what the agent did to the world*.
+## Product direction
 
-## Unique Differentiators (What We Have That Nobody Else Does)
+AgentDiff is becoming a framework-neutral runtime evidence and recovery layer for autonomous agents. Its first production-shaped wedge is deliberately local and narrow:
 
-| Feature | AgentDiff | Promptfoo | DeepEval | agentbranch | LangSmith |
-|---------|-----------|-----------|----------|-------------|-----------|
-| Filesystem diff (content hashes) | ✅ | ❌ | ❌ | ❌ | ⚠️ traces only |
-| Environment variable diff | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Process tree diff | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Open port diff | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Cleanliness Score (target vs unintended) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Side effect classification (CRITICAL/WARNING/INFO) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Framework-agnostic (no SDK lock-in) | ✅ | ⚠️ | ⚠️ | ❌ | ❌ |
-| Record & replay trajectories | ✅ | ⚠️ traces | ❌ | ❌ | ✅ |
-| CI/CD friendly (exit codes, JSON) | ✅ | ✅ | ✅ | ❌ | ⚠️ |
-| Pure Python, zero heavy deps | ✅ | ❌ Node | ❌ heavy | ❌ Next.js | ❌ |
+> Wrap an arbitrary command, record what it changed, apply deterministic mutation policy, explain the blast radius, preserve evidence, and selectively recover eligible collateral file changes.
 
-## Core Features (Implemented)
+AgentDiff remains an evaluator as well: the original snapshot, trajectory, cleanliness, and side-effect APIs stay available for compatibility.
 
-### 1. DiffEngine (`diff_engine.py`)
-- **Filesystem snapshots**: SHA256 content hashes, metadata (mode, size, mtime), directory trees
-- **Environment snapshots**: Full env var capture with filtering
-- **Process snapshots**: PID, PPID, cmdline, memory, CPU
-- **Network snapshots**: Open ports (TCP/UDP), listening processes
-- **Diff computation**: Added/Modified/Deleted with type classification
+## Product principles
 
-### 2. TrajectoryTracker (`trajectory.py`)
-- **StepRecorder**: thought → tool_call → observation → result
-- **Loop detection**: Detects repeated tool calls, circular reasoning
-- **Token tracking**: Input/output tokens per step
-- **Save/Load**: JSON serialization for regression testing
+1. **Evidence before claims.** “Observed,” “intercepted,” “blocked,” “sandboxed,” and “rolled back” are distinct capabilities.
+2. **Deterministic enforcement core.** Versioned policy and scoring do not depend on an LLM.
+3. **Fail closed on destructive ambiguity.** Recovery preserves a current path when identity, backup integrity, or post-run equality cannot be established.
+4. **Preserve intended work.** Safe-only rollback targets `review` and `deny` mutations rather than resetting the whole workspace.
+5. **Local-first, backend-neutral.** The initial backend is an honest local subprocess runner, not a pretend sandbox.
+6. **Private evidence by default.** Redaction, restrictive permissions, bounded capture, and terminal-safe display are part of correctness.
+7. **Integrate rather than clone.** Isolation, observability, agent protocols, and external-state benchmarks should use maintained ecosystem boundaries.
 
-### 3. AgentDiffEvaluator (`evaluator.py`)
-- **Cleanliness Score** = Target Mutations / Total Mutations
-- **Efficiency Score** = Penalizes loops, failures, redundant steps
-- **Side Effect Classification**: 
-  - CRITICAL: File deletions, process kills, port closes, env var removal
-  - WARNING: Unexpected file modifications, creations, env additions
-  - INFO: Expected changes, read operations
-- **Pass/Fail**: Configurable thresholds
+## Current implementation
 
-## Missing Features (To Implement)
+### Legacy evaluation core
 
-### High Priority (Community Requested)
-1. **Framework Adapters** - LangChain, CrewAI, AutoGen, LangGraph, OpenAI Assistants callbacks
-2. **Database/API Diffing** - SQL state, REST/GraphQL response diffing
-3. **CLI Enhancement** - `agentdiff eval`, `agentdiff diff`, `agentdiff replay`
-4. **GitHub Action** - Ready-to-use workflow
-5. **Pre-commit Hook** - Local trajectory validation
+- SHA-256 filesystem snapshots and semantic diffs.
+- Fingerprinted environment observations with secret-like names excluded.
+- Machine-wide PID and listening-port set observations.
+- Trajectory steps, tool calls, failures, durations, loops, and token accounting.
+- Cleanliness and efficiency metrics with side-effect classification.
+- Framework-neutral sessions and an optional LangChain/LangGraph callback.
+- `snapshot`, `diff`, and `eval` CLI workflows.
 
-### Medium Priority
-6. **Visual Diff Report** - HTML report with side-by-side diffs
-7. **MCP Server** - For Claude Code / Cursor integration
-8. **Web Dashboard** - Optional, for trajectory visualization
-9. **Plugin System** - Custom diff types, custom graders
+### Runtime transaction core (unreleased)
 
-### Lower Priority
-10. **Multi-agent Trajectory** - Cross-agent state correlation
-11. **Time-travel Debugging** - Step back to any snapshot
-12. **Cost Tracking** - API cost per trajectory
+- No-follow filesystem manifests with bounded hashing and backups.
+- Private, versioned `.agentdiff/runs/<run-id>/` capsules.
+- SHA-256 capsule integrity manifests with explicit unauthenticated-tamper caveats.
+- Strict policy schema with `allow`, `review`, and `deny` decisions.
+- Rule provenance and explain commands.
+- Local subprocess execution with timeout and process-identity evidence.
+- Optional external Anthropic Sandbox Runtime delegation; no bundled sandbox implementation.
+- Conservative cleanup using PID plus process creation time.
+- Machine-wide port observation labeled as non-attributed.
+- Explainable, configurable, capped blast-radius scoring.
+- Run listing and inspection.
+- Conflict-aware selective regular-file rollback.
+- Central command, payload, environment, and terminal redaction.
+- Transport-neutral MCP-style policy hook; no MCP proxy/server.
 
-## Open Source Readiness Checklist
+## Explicit non-goals for the local MVP
 
-### Documentation
-- [ ] README.md with quickstart, architecture, examples
-- [ ] CONTRIBUTING.md
-- [ ] CODE_OF_CONDUCT.md
-- [ ] docs/architecture.md
-- [ ] docs/api_reference.md
-- [ ] docs/framework_integration.md
-- [ ] examples/ (LangChain, CrewAI, raw Python)
+- Claiming local subprocesses are sandboxed.
+- Universal network blocking.
+- Complete process-tree provenance.
+- Port ownership or causal attribution.
+- Recovery of arbitrary external APIs, databases, cloud resources, or Git remotes.
+- Recovery of symlinks, hardlinks, special files, or uncaptured oversized files.
+- LLM decisions in the trusted enforcement path.
+- A hosted dashboard or telemetry service.
+- Broad first-class framework adapters without executable integration tests.
 
-### CI/CD
-- [ ] GitHub Actions: test, lint, typecheck, build
-- [ ] Release workflow (semantic versioning)
-- [ ] PyPI publishing
-- [ ] Dependabot / Renovate config
+## Delivery roadmap
 
-### Community
-- [ ] Issue templates (bug, feature, question)
-- [ ] PR template
-- [ ] Discussion categories (Ideas, Q&A, Show and Tell)
-- [ ] Discord/Slack link
-- [ ] Badge: PyPI version, license, tests, coverage
+### v0.1 — evaluation core
 
-### Quality
-- [ ] Type hints throughout (pyright/strict)
-- [ ] Test coverage > 85%
-- [ ] Pre-commit: ruff, mypy, pytest
-- [ ] Security: bandit, pip-audit
+- Snapshot/diff engine.
+- Trajectory tracker.
+- Cleanliness evaluator.
+- CLI and Python API.
+- LangChain callback.
 
-## Target Users & Use Cases
+### v0.2 — local runtime evidence and recovery
 
-| User | Use Case | Entry Point |
-|------|----------|-------------|
-| Agent Framework Dev | Regress agent behavior across versions | `agentdiff eval` in CI |
-| AI Engineer | Debug why agent broke production | `agentdiff replay trajectory.json` |
-| Researcher | Measure "collateral damage" of agents | Cleanliness Score metric |
-| QA/Platform Team | Gate agent deployments | GitHub Action + threshold |
-| Open Source Maintainer | Verify PR doesn't break agent behavior | Pre-commit + CI |
+- [x] Secure transaction manifests and run capsules.
+- [x] Deterministic policy loading and explanation.
+- [x] Explainable blast-radius scoring.
+- [x] Local command runtime and honest doctor report.
+- [x] Process identity checks and conservative cleanup.
+- [x] Run inspection.
+- [x] Conflict-safe selective rollback.
+- [x] CLI vertical slice and Python API.
+- [x] Generic MCP-style pre-dispatch policy hook.
+- [x] Optional Anthropic Sandbox Runtime adapter with tested argv/CLI contract.
+- [ ] Cross-platform CI evidence on Linux, macOS, and Windows.
+- [ ] Security/static/dependency quality gates.
+- [x] Deterministic five-case Local SafetyBench scenario suite and JSON baseline.
+- [ ] Final documentation, package, and release validation.
 
-## Roadmap
+### Later — isolated backends and ecosystem seams
 
-### v0.1 (Current) - Core Engine ✅
-- DiffEngine, TrajectoryTracker, Evaluator
-- Basic demo, 10 passing tests
+Candidates must be implemented and tested before they are advertised:
 
-### v0.2 - Developer Experience
-- CLI commands (`eval`, `diff`, `replay`, `init`)
-- Framework adapters (LangChain, CrewAI, AutoGen)
-- GitHub Action template
-- HTML report generator
+- one maintained sandbox backend (for example, E2B or another provider selected after evaluation);
+- OpenTelemetry/OpenInference evidence export;
+- an agent protocol integration such as ACP/OpenHands;
+- external-state scenarios compatible with Agent Diff Bench;
+- policy-aware interception adapters at tool transport boundaries;
+- reproduction capsules with declared portability and provenance;
+- richer causal attribution where the backend can actually supply it.
 
-### v0.3 - Ecosystem
-- MCP server for Claude Code
-- Pre-commit hook
-- Plugin system for custom diffs
-- Web dashboard (optional, separate repo)
+### Stable release criteria
 
-### v1.0 - Production Ready
-- Database/API diffing
-- Multi-agent support
-- Stability guarantees
-- 1.0 release, semantic versioning
+- Versioned policy and artifact migration strategy.
+- Tested Linux, macOS, and native Windows behavior.
+- Documented compatibility and deprecation policy.
+- Independent security review of scanning, persistence, process handling, and rollback.
+- Published package ownership and provenance.
+- Measured performance bounds on representative repositories.
+- No known documentation claims that exceed tested behavior.
 
-## Success Metrics
+## Naming decision
 
-- **GitHub Stars**: 500+ in 6 months
-- **PyPI Downloads**: 10k+/month
-- **Framework Adapters**: 5+ community contributed
-- **CI Integration**: Used in 3+ major agent frameworks
-- **Academic Citations**: Referenced in agent evaluation papers
+“AgentDiff” has material project and search collisions. The exact PyPI and npm package endpoints were unoccupied when checked on 2026-08-10, but registry availability is not legal clearance and does not solve discoverability.
+
+The repository will use the descriptor **AgentDiff Runtime** while the v0.2 work is evaluated. A final product/package name should be chosen deliberately before the first stable schema or public package release. See `docs_src/project/naming-analysis.md`.
+
+## Contribution priorities
+
+High-value contributions are:
+
+1. adversarial path, symlink, hardlink, race, redaction, and rollback tests;
+2. native Windows and macOS validation;
+3. additional reproducible SafetyBench scenarios with clear expected side effects;
+4. one deeply tested isolation backend;
+5. artifact migration and schema compatibility tooling;
+6. audited integration hooks at real command/tool dispatch boundaries.
+
+Avoid placeholder adapters, invented comparison claims, or roadmap features exposed as empty CLI commands.

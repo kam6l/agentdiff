@@ -1,6 +1,9 @@
 # Side effects
 
-A side effect is an observed mutation that does not match an explicitly declared target. AgentDiff classifies each side effect using a small, deterministic severity map.
+!!! note "Legacy evaluator heuristic"
+    This page documents the original evaluator's fixed severity map. Runtime transactions instead attach path-policy provenance and blast-radius components.
+
+A side effect is an observed mutation that does not match an explicitly declared evaluator target. AgentDiff classifies each side effect using a small, deterministic severity map.
 
 ## Current severity map
 
@@ -10,7 +13,7 @@ A side effect is an observed mutation that does not match an explicitly declared
 | **Warning** | File creation/modification/permission change, directory creation, environment addition/modification, process spawn, port opening |
 | **Info** | Any diff type not covered above |
 
-AgentDiff does not currently inspect file contents, infer whether a process is privileged, or apply configurable path-specific severity rules. A warning therefore means “unexpected mutation,” not “confirmed vulnerability.”
+AgentDiff does not inspect file contents or infer that snapshot changes were caused by the child. PID and port set differences are machine-wide observations without ownership attribution. A warning therefore means “unexpected observed difference,” not “confirmed vulnerability.”
 
 ## Expected mutations are omitted
 

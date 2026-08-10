@@ -1,0 +1,59 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private run capsules, or vulnerability details. Follow SECURITY.md for security reports.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include a synthetic policy, command, and exact steps where possible.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      description: Redact paths, process details, and other sensitive evidence before posting.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: AgentDiff commit or version
+      placeholder: git rev-parse HEAD
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - WSL
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private source, and sensitive run-capsule data.
+          required: true
+        - label: This is not a private vulnerability report.
+          required: true
