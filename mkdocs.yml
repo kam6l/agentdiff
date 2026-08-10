@@ -14,20 +14,37 @@ theme:
   name: material
   language: en
   favicon: assets/images/favicon.svg
-  font: false
+  font:
+    text: Inter
+    code: JetBrains Mono
   palette:
-    scheme: default
-    primary: black
-    accent: deep orange
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
   features:
     - navigation.tabs
     - navigation.sections
     - navigation.top
     - navigation.tracking
+    - navigation.path
     - search.highlight
     - search.share
+    - search.suggest
     - content.code.copy
     - content.tabs.link
+    - content.code.annotate
+    - toc.follow
   icon:
     repo: fontawesome/brands/github
 

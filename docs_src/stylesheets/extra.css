@@ -1684,3 +1684,361 @@ body:has(.ad-home) .md-content__inner::before {
     transition: none;
   }
 }
+
+/* ============================================================
+   e2b.dev-inspired documentation theme
+   Non-root pages only (root landing page untouched)
+   ============================================================ */
+
+/* --- Font imports --- */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+/* --- Non-root page variable overrides --- */
+body:not(:has(.ad-home)) {
+  --ad-doc-sidebar-bg: #0a0a0a;
+  --ad-doc-sidebar-fg: #b0b0b0;
+  --ad-doc-sidebar-hover: #ffffff;
+  --ad-doc-sidebar-active: #ffffff;
+  --ad-doc-sidebar-section: #666;
+  --ad-doc-sidebar-border: #222;
+  --ad-doc-content-max: 860px;
+  --ad-doc-code-bg: #1a1a1a;
+  --ad-doc-code-fg: #e6e6e6;
+  --ad-doc-border: #e5e5e5;
+  --ad-doc-surface: #f7f7f7;
+  --ad-doc-radius: 8px;
+}
+
+[data-md-color-scheme="slate"] body:not(:has(.ad-home)) {
+  --ad-doc-sidebar-bg: #0a0a0a;
+  --ad-doc-sidebar-fg: #888;
+  --ad-doc-sidebar-hover: #fff;
+  --ad-doc-sidebar-active: #fff;
+  --ad-doc-sidebar-section: #666;
+  --ad-doc-sidebar-border: #222;
+  --ad-doc-code-bg: #1a1a1a;
+  --ad-doc-code-fg: #e6e6e6;
+  --ad-doc-border: #2a2a2a;
+  --ad-doc-surface: #1a1a1a;
+}
+
+/* --- Typography --- */
+body:not(:has(.ad-home)) {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Header --- */
+body:not(:has(.ad-home)) .md-header {
+  box-shadow: none;
+  border-bottom: 1px solid var(--ad-doc-border);
+}
+
+body:not(:has(.ad-home)) .md-header__inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+body:not(:has(.ad-home)) .md-header__title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+/* --- Sidebar — dark e2b style --- */
+body:not(:has(.ad-home)) .md-sidebar {
+  background: var(--ad-doc-sidebar-bg);
+  border-right: 1px solid var(--ad-doc-sidebar-border);
+}
+
+body:not(:has(.ad-home)) .md-sidebar__scrollwrap {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+body:not(:has(.ad-home)) .md-sidebar__inner {
+  padding: 16px 0;
+}
+
+body:not(:has(.ad-home)) .md-nav__link {
+  color: var(--ad-doc-sidebar-fg);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 6px 24px;
+  transition: color 0.15s ease;
+  text-decoration: none;
+}
+
+body:not(:has(.ad-home)) .md-nav__link:hover {
+  color: var(--ad-doc-sidebar-hover);
+}
+
+body:not(:has(.ad-home)) .md-nav__link--active {
+  color: var(--ad-doc-sidebar-active);
+  font-weight: 600;
+}
+
+/* Sidebar section headings */
+body:not(:has(.ad-home)) .md-nav__item > .md-nav__link {
+  font-weight: 600;
+  color: var(--ad-doc-sidebar-section);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 16px 24px 6px;
+}
+
+body:not(:has(.ad-home)) .md-nav__item > .md-nav__link:hover {
+  color: var(--ad-doc-sidebar-hover);
+}
+
+/* Sidebar nested items */
+body:not(:has(.ad-home)) .md-nav__nested {
+  border-left: 1px solid var(--ad-doc-sidebar-border);
+  margin-left: 24px;
+  padding-left: 0;
+}
+
+body:not(:has(.ad-home)) .md-nav__nested .md-nav__link {
+  padding: 5px 20px;
+  font-size: 13px;
+}
+
+/* --- Content area --- */
+body:not(:has(.ad-home)) .md-content {
+  max-width: var(--ad-doc-content-max);
+  padding: 32px 48px 80px;
+}
+
+body:not(:has(.ad-home)) .md-content__inner {
+  max-width: var(--ad-doc-content-max);
+}
+
+/* --- Typography --- */
+body:not(:has(.ad-home)) .md-typeset h1 {
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 0 0 16px;
+}
+
+body:not(:has(.ad-home)) .md-typeset h2 {
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  margin: 40px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ad-doc-border);
+}
+
+body:not(:has(.ad-home)) .md-typeset h3 {
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: -0.015em;
+  margin: 32px 0 8px;
+}
+
+body:not(:has(.ad-home)) .md-typeset h4 {
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 24px 0 6px;
+}
+
+body:not(:has(.ad-home)) .md-typeset p {
+  font-size: 15px;
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+
+body:not(:has(.ad-home)) .md-typeset ul,
+body:not(:has(.ad-home)) .md-typeset ol {
+  font-size: 15px;
+  line-height: 1.7;
+  padding-left: 24px;
+  margin: 0 0 16px;
+}
+
+body:not(:has(.ad-home)) .md-typeset li {
+  margin-bottom: 4px;
+}
+
+/* --- Links --- */
+body:not(:has(.ad-home)) .md-typeset a {
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+body:not(:has(.ad-home)) .md-typeset a:hover {
+  border-bottom-color: var(--md-accent-fg-color);
+}
+
+/* --- Code blocks — dark e2b style --- */
+body:not(:has(.ad-home)) .md-typeset code {
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+  font-size: 0.85em;
+  background: var(--ad-doc-surface);
+  border: 1px solid var(--ad-doc-border);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+body:not(:has(.ad-home)) .md-typeset pre {
+  background: var(--ad-doc-code-bg);
+  border: 1px solid var(--ad-doc-border);
+  border-radius: var(--ad-doc-radius);
+  padding: 20px 24px;
+  overflow-x: auto;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+body:not(:has(.ad-home)) .md-typeset pre code {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  color: var(--ad-doc-code-fg);
+  font-size: 13px;
+}
+
+/* --- Tables --- */
+body:not(:has(.ad-home)) .md-typeset table {
+  font-size: 14px;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 24px;
+  border: 1px solid var(--ad-doc-border);
+  border-radius: var(--ad-doc-radius);
+  overflow: hidden;
+}
+
+body:not(:has(.ad-home)) .md-typeset table thead {
+  background: var(--ad-doc-surface);
+}
+
+body:not(:has(.ad-home)) .md-typeset table th {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--ad-doc-border);
+  text-align: left;
+}
+
+body:not(:has(.ad-home)) .md-typeset table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ad-doc-border);
+}
+
+body:not(:has(.ad-home)) .md-typeset table tr:last-child td {
+  border-bottom: none;
+}
+
+body:not(:has(.ad-home)) .md-typeset table tr:hover {
+  background: var(--ad-doc-surface);
+}
+
+/* --- Admonitions --- */
+body:not(:has(.ad-home)) .md-typeset .admonition,
+body:not(:has(.ad-home)) .md-typeset details {
+  border-radius: var(--ad-doc-radius);
+  border: 1px solid var(--ad-doc-border);
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+body:not(:has(.ad-home)) .md-typeset .admonition-title,
+body:not(:has(.ad-home)) .md-typeset details summary {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 16px;
+  background: var(--ad-doc-surface);
+  border-bottom: 1px solid var(--ad-doc-border);
+}
+
+/* --- Tabs (code examples) --- */
+body:not(:has(.ad-home)) .md-typeset .tabbed-labels {
+  border-bottom: 2px solid var(--ad-doc-border);
+  gap: 0;
+}
+
+body:not(:has(.ad-home)) .md-typeset .tabbed-labels > label {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+body:not(:has(.ad-home)) .md-typeset .tabbed-labels > label:hover {
+  color: var(--md-accent-fg-color);
+}
+
+body:not(:has(.ad-home)) .md-typeset .tabbed-labels > label.tabbed-label--active {
+  font-weight: 600;
+  border-bottom-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
+}
+
+/* --- TOC (right sidebar) --- */
+body:not(:has(.ad-home)) .md-sidebar--secondary {
+  border-left: 1px solid var(--ad-doc-border);
+}
+
+body:not(:has(.ad-home)) .md-sidebar--secondary .md-nav__link {
+  font-size: 13px;
+  color: var(--md-default-fg-color--lighter);
+  padding: 4px 16px;
+}
+
+body:not(:has(.ad-home)) .md-sidebar--secondary .md-nav__link--active {
+  color: var(--md-accent-fg-color);
+  font-weight: 500;
+}
+
+/* --- Footer --- */
+body:not(:has(.ad-home)) .md-footer {
+  background: var(--ad-doc-sidebar-bg);
+  border-top: 1px solid var(--ad-doc-sidebar-border);
+}
+
+body:not(:has(.ad-home)) .md-footer__link {
+  color: var(--ad-doc-sidebar-fg);
+}
+
+body:not(:has(.ad-home)) .md-footer__link:hover {
+  color: var(--ad-doc-sidebar-hover);
+}
+
+/* --- Scrollbar --- */
+body:not(:has(.ad-home)) ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+body:not(:has(.ad-home)) ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body:not(:has(.ad-home)) ::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+[data-md-color-scheme="slate"] body:not(:has(.ad-home)) ::-webkit-scrollbar-thumb {
+  background: #444;
+}
+
+/* --- Smooth transitions --- */
+body:not(:has(.ad-home)) .md-sidebar,
+body:not(:has(.ad-home)) .md-content,
+body:not(:has(.ad-home)) .md-header {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
