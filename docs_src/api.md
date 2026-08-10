@@ -1,8 +1,164 @@
 # Python API
 
-AgentDiff can be used as a framework-neutral session or as three explicit components: snapshot engine, trajectory tracker, and evaluator.
+AgentDiff exposes two related surfaces:
 
-## Framework-neutral session
+- the runtime transaction API for policy, evidence, scoring, inspection, and recovery; and
+- the original snapshot/trajectory evaluator API.
+
+## Runtime transaction
+
+```python
+from agentdiff.policy import load_policy_file
+from agentdiff.transaction import AgentRunTransaction
+
+policy = load_policy_file("agentdiff.yaml")
+result = AgentRunTransaction(
+    root=".",
+    policy=policy,
+    task="Fix the parser",
+).run(["python3", "agent.py"], timeout_seconds=300)
+
+print(result.run_id)
+print(result.status)
+print(result.safety_outcome.value)
+for change in result.changes:
+    print(change.path, change.decision.action.value, change.decision.rule)
+```
+
+The runner invokes an argument vector with `shell=False`. Its local backend is not a sandbox.
+
+To delegate execution to a preinstalled Anthropic Sandbox Runtime:
+
+```python
+from agentdiff.runtime import SandboxRuntime
+
+runtime = SandboxRuntime(
+    root=".",
+    settings="/absolute/path/to/srt-settings.json",
+)
+result = AgentRunTransaction(
+    root=".",
+    policy=policy,
+    runtime=runtime,
+).run(["python3", "agent.py"])
+```
+
+The external runtime owns enforcement. AgentDiff preserves transaction evidence but does not validate the effectiveness of SRT settings.
+
+::: agentdiff.runtime.SandboxRuntime
+    options:
+      show_root_heading: true
+      members:
+        - run
+        - cleanup
+
+### Transaction runner
+
+::: agentdiff.transaction.AgentRunTransaction
+    options:
+      show_root_heading: true
+      members:
+        - run
+
+::: agentdiff.transaction.TransactionResult
+    options:
+      show_root_heading: true
+      members:
+        - to_dict
+        - recommended_exit_code
+
+### Inspection and recovery
+
+```python
+from agentdiff.transaction import RollbackEngine, RunInspector, RunStore
+
+inspection = RunInspector(".", result.run_id)
+print(inspection.inspect())
+
+integrity = RunStore.open(".", result.run_id).verify_integrity()
+print(integrity.ok)
+
+report = RollbackEngine.open(".", result.run_id).rollback(safe_only=True)
+print(report.to_dict())
+```
+
+::: agentdiff.transaction.RunInspector
+    options:
+      show_root_heading: true
+      members:
+        - inspect
+        - summary
+        - cleanup
+
+::: agentdiff.transaction.RunStore
+    options:
+      show_root_heading: true
+      members:
+        - open
+        - verify_integrity
+
+::: agentdiff.transaction.list_runs
+
+::: agentdiff.transaction.RollbackEngine
+    options:
+      show_root_heading: true
+      members:
+        - open
+        - rollback
+
+## Policy
+
+```python
+from agentdiff.policy import PolicyEngine, load_policy
+
+policy = load_policy(
+    {
+        "version": 1,
+        "filesystem": {
+            "allow_write": ["src/**"],
+            "deny": [".env"],
+            "default": "review",
+        },
+    }
+)
+decision = PolicyEngine(policy).decide_path(".env")
+print(decision.to_dict())
+```
+
+::: agentdiff.policy.PolicyEngine
+    options:
+      show_root_heading: true
+      members:
+        - decide_path
+        - decide_command
+        - evaluate_limits
+
+## Blast-radius scoring
+
+::: agentdiff.scoring.BlastRadiusScorer
+    options:
+      show_root_heading: true
+      members:
+        - score
+
+::: agentdiff.scoring.BlastRadiusResult
+    options:
+      show_root_heading: true
+      members:
+        - to_dict
+
+## MCP-style dispatch hook
+
+::: agentdiff.integrations.mcp_policy.MCPPolicyHook
+    options:
+      show_root_heading: true
+      members:
+        - evaluate
+        - authorize
+
+This hook does not implement MCP transport. The caller must invoke it at the dispatch boundary.
+
+## Framework-neutral legacy session
 
 ```python
 from agentdiff import AgentDiffConfig, AgentDiffSession
@@ -27,44 +183,9 @@ print(result.metrics.cleanliness_score)
 print(result.passed)
 ```
 
-Relative targets are resolved against `config.root`. Call `evaluate()` after the work finishes; leaving the context does not hide exceptions or auto-publish a report.
+Relative targets are resolved against `config.root`. Call `evaluate()` after work finishes; leaving the context does not auto-publish a report.
 
-## Explicit components
-
-```python
-from pathlib import Path
-
-from agentdiff import AgentDiffEvaluator, DiffEngine, TrajectoryTracker
-
-root = Path(".").resolve()
-engine = DiffEngine(watch_paths=[str(root)])
-before_fs, before_env = engine.snapshot()
-
-tracker = TrajectoryTracker(task_description="Update one file")
-tracker.start_step("Edit target")
-tracker.record_tool_call("write_file", {"path": "target.txt"}, result="ok")
-tracker.end_step("Done")
-Path("target.txt").write_text("updated\n")
-trajectory = tracker.finish()
-
-after_fs, after_env = engine.snapshot()
-evaluator = AgentDiffEvaluator(
-    target_paths=[str(root)],
-    cleanliness_threshold=0.8,
-)
-evaluator.set_target_mutations([str(root / "target.txt")])
-result = evaluator.evaluate_from_snapshots(
-    trajectory,
-    (before_fs, before_env),
-    (after_fs, after_env),
-)
-```
-
-`EvaluationResult.to_json()` returns a JSON string. `EvaluationResult.print_summary()` renders a Rich terminal report.
-
-## API reference
-
-### Diff engine
+## Explicit legacy components
 
 ::: agentdiff.diff_engine.DiffEngine
     options:
@@ -72,8 +193,6 @@ result = evaluator.evaluate_from_snapshots(
       members:
         - snapshot
         - diff
-
-### Trajectory tracker
 
 ::: agentdiff.trajectory.TrajectoryTracker
     options:
@@ -87,8 +206,6 @@ result = evaluator.evaluate_from_snapshots(
         - finish
         - save
 
-### Evaluator
-
 ::: agentdiff.evaluator.AgentDiffEvaluator
     options:
       show_root_heading: true
@@ -97,8 +214,6 @@ result = evaluator.evaluate_from_snapshots(
         - evaluate
         - evaluate_from_snapshots
 
-### Result models
-
 ::: agentdiff.evaluator.EvaluationResult
     options:
       show_root_heading: true
@@ -106,11 +221,3 @@ result = evaluator.evaluate_from_snapshots(
         - to_dict
         - to_json
         - print_summary
-
-::: agentdiff.evaluator.CleanlinessMetrics
-    options:
-      show_root_heading: true
-
-::: agentdiff.evaluator.SideEffect
-    options:
-      show_root_heading: true

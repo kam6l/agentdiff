@@ -5,33 +5,33 @@ document.documentElement.classList.add("js");
 
   const demoStates = {
     messy: {
-      score: "33",
-      meter: "33%",
-      summary: "1 intended / 3 total mutations",
-      verdict: "FAIL · threshold 80%",
+      score: "77",
+      meter: "77%",
+      summary: "2 unexpected / 3 mutations",
+      verdict: "DENY · CRITICAL",
       clean: false,
       mutations: [
-        ["M", "src/calculator.py", "intended", "is-target"],
-        ["M", "config.json", "outside scope", "is-warning"],
-        ["+", "debug.log", "unexpected", "is-warning"],
+        ["M", "src/parser.py", "allow", "is-target"],
+        ["M", "pyproject.toml", "review", "is-warning"],
+        ["+", ".env", "deny", "is-warning"],
       ],
     },
     clean: {
-      score: "100",
-      meter: "100%",
-      summary: "1 intended / 1 total mutation",
-      verdict: "PASS · threshold 80%",
+      score: "0",
+      meter: "0%",
+      summary: "0 unexpected / 1 mutation",
+      verdict: "ALLOW · LOW",
       clean: true,
-      mutations: [["M", "src/calculator.py", "intended", "is-target"]],
+      mutations: [["M", "src/parser.py", "allow", "is-target"]],
     },
   };
 
   const inspectorCounts = {
-    filesystem: "3 changes",
-    environment: "2 changes",
-    processes: "2 changes",
-    network: "1 change",
-    trajectory: "5 steps",
+    manifest: "3 changes",
+    policy: "3 decisions",
+    recovery: "2 selected paths",
+    processes: "identity evidence",
+    ports: "1 observed endpoint",
   };
 
   function buildMutation([type, path, label, className]) {

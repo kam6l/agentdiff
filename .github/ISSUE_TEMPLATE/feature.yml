@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose one focused capability or integration
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What concrete agent-runtime or evaluation problem needs solving?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Required capability boundary
+      description: Is this observation, interception, blocking, sandboxing, or rollback? Explain which.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include inputs, outputs, refusal behavior, and integration seam.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, privacy, and compatibility risks
+      description: Note paths, symlinks, credentials, processes, ports, persistence, platforms, and rollback implications.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification strategy
+      description: What deterministic tests would prove this works without overstating it?

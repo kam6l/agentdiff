@@ -1,5 +1,5 @@
-site_name: AgentDiff
-site_description: Full-state trajectory evaluation for AI agents
+site_name: AgentDiff Runtime
+site_description: Runtime evidence and conflict-safe recovery for autonomous agents
 site_author: kam6l
 site_url: https://kam6l.github.io/agentdiff/
 repo_url: https://github.com/kam6l/agentdiff
@@ -34,20 +34,31 @@ theme:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
-  - Concepts:
-      - Cleanliness Score: concepts/cleanliness.md
-      - Side Effects: concepts/side-effects.md
-      - Trajectory Tracking: concepts/trajectory.md
+  - Runtime Safety:
+      - Runtime Model: concepts/runtime.md
+      - Mutation Policy: concepts/policy.md
+      - Blast-Radius Scoring: concepts/blast-radius.md
+      - Selective Recovery: concepts/recovery.md
   - CLI Reference: cli.md
   - Python API: api.md
   - Integrations:
-      - LangChain / LangGraph: integrations/langchain.md
+      - Anthropic Sandbox Runtime: integrations/sandbox-runtime.md
+      - MCP Policy Hook: integrations/mcp-policy.md
       - Custom Frameworks: integrations/custom.md
-  - Tutorials:
-      - CI/CD Integration: tutorials/ci-cd.md
+      - LangChain / LangGraph: integrations/langchain.md
+  - Legacy Evaluation:
+      - Cleanliness Score: concepts/cleanliness.md
+      - Side Effects: concepts/side-effects.md
+      - Trajectory Tracking: concepts/trajectory.md
       - Regression Testing: tutorials/benchmarking.md
-  - Contributing: contributing.md
-  - Changelog: changelog.md
+      - CI/CD Integration: tutorials/ci-cd.md
+  - Project:
+      - Local SafetyBench: project/safetybench.md
+      - Competitive Analysis: competitive-analysis.md
+      - Naming Analysis: project/naming-analysis.md
+      - Contributing: contributing.md
+      - Changelog: changelog.md
+      - Security: https://github.com/kam6l/agentdiff/blob/main/SECURITY.md
 
 plugins:
   - search

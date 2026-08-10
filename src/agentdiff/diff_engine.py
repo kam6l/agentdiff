@@ -8,12 +8,15 @@ deterministic diffs between pre- and post-execution states.
 import fnmatch
 import hashlib
 import os
+import stat as stat_module
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from .redaction import fingerprint
 
 
 class DiffType(Enum):
@@ -222,14 +225,33 @@ class DiffEngine:
         return any(path.match(pattern) for pattern in self.ignore_patterns)
 
     def _hash_file(self, path: Path) -> str | None:
-        """Compute SHA256 hash of file content."""
+        """Compute SHA256 without following a symlink or replacement race."""
         try:
-            if path.stat().st_size > self.max_file_size:
+            expected = path.lstat()
+            if not stat_module.S_ISREG(expected.st_mode):
                 return None
+            if expected.st_size > self.max_file_size:
+                return None
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
             hasher = hashlib.sha256()
-            with open(path, "rb") as f:
-                for chunk in iter(lambda: f.read(8192), b""):
+            with os.fdopen(descriptor, "rb") as file:
+                opened = os.fstat(file.fileno())
+                if (
+                    not stat_module.S_ISREG(opened.st_mode)
+                    or opened.st_dev != expected.st_dev
+                    or opened.st_ino != expected.st_ino
+                ):
+                    return None
+                for chunk in iter(lambda: file.read(8192), b""):
                     hasher.update(chunk)
+                finished = os.fstat(file.fileno())
+                if (
+                    finished.st_size != expected.st_size
+                    or finished.st_mtime_ns != expected.st_mtime_ns
+                ):
+                    return None
             return hasher.hexdigest()
         except OSError:
             return None
@@ -247,6 +269,8 @@ class DiffEngine:
                 continue
 
             for item in watch_path.rglob("*"):
+                if item.is_symlink():
+                    continue
                 if self._should_ignore(item):
                     continue
 
@@ -273,9 +297,9 @@ class DiffEngine:
         )
 
     def _collect_environment(self) -> EnvironmentSnapshot:
-        """Collect an environment snapshot without serializing likely secrets."""
+        """Collect stable fingerprints without serializing environment values."""
         env_vars = {
-            key: value
+            key: fingerprint(value)
             for key, value in os.environ.items()
             if self.capture_env_vars
             and not any(

@@ -1,6 +1,9 @@
 # LangChain / LangGraph
 
-AgentDiff includes an optional `langchain-core` callback. From a source checkout, install the extra with:
+!!! warning "Evaluation callback, not runtime enforcement"
+    This optional callback feeds LangChain events into the legacy trajectory evaluator. It does not intercept or authorize tool calls, create a sandbox, or make LangChain the runtime backend. Wrap the process with `agentdiff run` or implement a verified pre-dispatch seam when policy enforcement is required.
+
+AgentDiff includes an optional `langchain-core` evaluation callback. From a source checkout, install the extra with:
 
 ```bash
 uv sync --locked --extra langchain --group dev
@@ -49,6 +52,8 @@ result = chain.invoke(inputs, config={"callbacks": [callback]})
 
 Each completed tool call becomes one trajectory step. Token accounting depends on the model provider exposing `llm_output.token_usage`.
 
+Prompt excerpts, tool arguments, observations, results, and provider metadata can be sensitive. The legacy callback is not guaranteed to apply the runtime transaction redactor to every framework value. Configure the framework to avoid secrets and pass pre-redacted values.
+
 ## Explicit context
 
 ```python
@@ -71,5 +76,6 @@ report = callback.get_evaluation_result()
 - Use `capture_env_vars=False`, `capture_processes=False`, or `capture_ports=False` for restricted runners.
 - Call `reset()` before reusing one callback for another run.
 - This integration depends only on `langchain-core`; AgentDiff does not create or configure your agent.
+- Do not treat callback registration as a security boundary; framework code can execute outside callbacks.
 
 For frameworks without LangChain callbacks, use the [framework-neutral integration](custom.md).

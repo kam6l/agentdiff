@@ -1,6 +1,9 @@
 # Trajectory tracking
 
-A trajectory records the execution path that produced a state change: thoughts or step labels, tool calls, observations, timing, token usage, and final status.
+!!! note "Legacy evaluator record"
+    A trajectory is user-supplied evaluation telemetry. It is separate from the runtime run capsule and does not establish causal ownership of state changes.
+
+A trajectory records operational step labels, tool calls, observations, timing, token usage, and final status supplied through the evaluator API.
 
 ## Record steps
 
@@ -68,4 +71,4 @@ Because the detector considers tool names rather than semantic intent, inspect t
 
 The JSON record includes `run_id`, `task_description`, `framework`, timestamps, metadata, steps, final result, and final error. Each step includes its tool calls, observation, optional token counts, and duration.
 
-AgentDiff does not require hidden chain-of-thought. Use concise operational step labels when private reasoning should not be stored.
+AgentDiff does not require hidden chain-of-thought. Trajectory arguments, results, observations, and metadata are durable user-supplied data and are not guaranteed to pass through the runtime redactor. Use synthetic or pre-redacted values and concise operational step labels.
