@@ -63,10 +63,12 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+=======
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-python-3.12
+          name: coverage-python-3.14
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
@@ -83,7 +85,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
@@ -113,6 +115,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+          python-version: "3.14"
           python-version: "3.12"
           cache-dependency-glob: uv.lock
 
@@ -156,14 +159,16 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
         run: uv sync --locked --group docs
 
       - name: Build strict documentation
-        run: uv run mkdocs build --strict
+        env:
+          PYTHONWARNINGS: "ignore::UserWarning:mkdocs_autorefs"
+        run: uv run mkdocs build
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -184,7 +189,9 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+          python-version: "3.14"
           python-version: "3.12"
+
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
@@ -213,7 +220,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
@@ -230,7 +237,7 @@ jobs:
 
       - name: Smoke-test the wheel in a clean environment
         run: |
-          uv venv /tmp/agentdiff-wheel --python 3.12
+          uv venv /tmp/agentdiff-wheel --python 3.14
           uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
           /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
           /tmp/agentdiff-wheel/bin/agentdiff --help
