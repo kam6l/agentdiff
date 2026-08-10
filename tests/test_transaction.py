@@ -311,5 +311,5 @@ def test_run_store_open_rejects_a_symlinked_agentdiff_ancestor(tmp_path: Path) -
     except OSError:
         pytest.skip("directory symlinks are unavailable")
 
-    with pytest.raises((FileNotFoundError, InvalidRunIdError), match="run|unsafe"):
+    with pytest.raises((FileNotFoundError, InvalidRunIdError), match=r"run|unsafe"):
         RunStore.open(root, store.run_id)

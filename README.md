@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/kam6l/agentdiff/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/kam6l/agentdiff/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <a href="https://kam6l.github.io/agentdiff/"><img alt="Docs" src="https://img.shields.io/github/actions/workflow/status/kam6l/agentdiff/deploy.yml?branch=main&style=flat-square&label=docs"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-171916?style=flat-square&logo=python&logoColor=white">
+  <img alt="Python 3.14+" src="https://img.shields.io/badge/Python-3.14%2B-171916?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f06a3c?style=flat-square"></a>
 </p>
 
