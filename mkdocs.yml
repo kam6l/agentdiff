@@ -47,7 +47,6 @@ theme:
     - toc.follow
   icon:
     repo: fontawesome/brands/github
-  custom_dir: docs_src/overrides
 
 nav:
   - Home: index.md
