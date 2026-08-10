@@ -13,6 +13,10 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f06a3c?style=flat-square"></a>
 </p>
 
+<p align="center">
+  <img src="docs_src/assets/images/agentdiff-preview.svg" alt="AgentDiff preview" width="100%">
+</p>
+
 > [!IMPORTANT]
 > AgentDiff is alpha software. Its local backend is **not a sandbox**, does not block network access, and currently recovers only eligible regular files below one project root. Read the [trust model](SECURITY.md) before using it around sensitive work.
 
@@ -31,16 +35,19 @@
 
 AgentDiff preserves its original snapshot, trajectory, and cleanliness evaluator APIs. The transaction runtime extends them; it does not silently replace them.
 
-## Run it
+## Quick start
 
-AgentDiff is installed from source; there is no published PyPI package yet.
+AgentDiff requires Python 3.14+ and is installed from source:
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
 uv sync --locked --all-groups
 
+# Create a strict starter policy
 uv run agentdiff policy init
+
+# Run your coding agent inside an evidence transaction
 uv run agentdiff run --task "Run my coding agent" -- python3 agent.py
 ```
 
@@ -60,18 +67,20 @@ uv run agentdiff rollback <run-id> --safe-only
 
 Rollback changes a path only when its current state still equals the state AgentDiff recorded immediately after the run. A later human edit becomes a conflict and is preserved.
 
-### Optional external enforcement
+## CLI commands
 
-The default local backend is observation-only. If [Anthropic Sandbox Runtime](https://github.com/anthropic-experimental/sandbox-runtime) is installed and configured, AgentDiff can retain the same evidence transaction while delegating execution to `srt`:
-
-```bash
-uv run agentdiff run \
-  --runtime srt \
-  --srt-settings /absolute/path/to/srt-settings.json \
-  -- python3 agent.py
-```
-
-SRT owns the operating-system enforcement. AgentDiff does not derive SRT restrictions from its mutation policy or certify the supplied settings.
+| Command | Description |
+|---|---|
+| `agentdiff run -- <cmd>` | Wrap a command in an evidence transaction |
+| `agentdiff runs` | List all run capsules |
+| `agentdiff inspect <id>` | Show full capsule evidence |
+| `agentdiff verify <id>` | Check integrity manifest |
+| `agentdiff rollback <id> --safe-only` | Selectively undo collateral changes |
+| `agentdiff cleanup <id>` | Signal leftover processes |
+| `agentdiff doctor` | Report local runtime capabilities |
+| `agentdiff policy init` | Generate a starter policy YAML |
+| `agentdiff policy validate` | Check a policy file for errors |
+| `agentdiff policy explain <path>` | Explain a path decision |
 
 ## Policy
 

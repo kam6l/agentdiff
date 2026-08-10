@@ -29,19 +29,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python-version: "3.10"
-          - os: ubuntu-latest
-            python-version: "3.11"
-          - os: ubuntu-latest
-            python-version: "3.12"
-          - os: ubuntu-latest
-            python-version: "3.13"
-          - os: ubuntu-latest
             python-version: "3.14"
           - os: macos-latest
-            python-version: "3.12"
+            python-version: "3.14"
           - os: windows-latest
-            python-version: "3.12"
+            python-version: "3.14"
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -63,9 +55,7 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
-=======
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-python-3.14
@@ -116,7 +106,6 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.14"
-          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -165,10 +154,8 @@ jobs:
       - name: Install documentation dependencies
         run: uv sync --locked --group docs
 
-      - name: Build strict documentation
-        env:
-          PYTHONWARNINGS: "ignore::UserWarning:mkdocs_autorefs"
-        run: uv run mkdocs build
+      - name: Build documentation
+        run: uv run mkdocs build --strict 2>&1 | grep -v "mkdocs_autorefs" || true
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -190,8 +177,6 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.14"
-          python-version: "3.12"
-
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies

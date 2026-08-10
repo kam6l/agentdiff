@@ -7,7 +7,7 @@ name = "agentdiff"
 version = "0.1.0"
 description = "Runtime evidence, mutation policy, and conflict-safe recovery for AI agents"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "kam6l"}]
@@ -16,10 +16,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
@@ -87,3 +83,23 @@ python_version = "3.14"
 files = ["src/agentdiff"]
 show_error_codes = true
 warn_unused_ignores = true
+
+[tool.ruff.lint.per-file-ignores]
+"src/agentdiff/evaluator.py" = ["TC001", "TC003"]
+"src/agentdiff/trajectory.py" = ["TC001", "TC003"]
+"tests/test_evaluator.py" = ["TC003"]
+"tests/test_integrations.py" = ["TC003"]
+"tests/test_policy.py" = ["TC003"]
+"tests/test_snapshot_security.py" = ["TC003"]
+
+[tool.ruff.format]
+# Exclude files where ruff format incorrectly removes parentheses from except clauses
+exclude = [
+    "src/agentdiff/diff_engine.py",
+    "src/agentdiff/integrations/langchain_callback.py",
+    "src/agentdiff/runtime/local.py",
+    "src/agentdiff/state/filesystem.py",
+    "src/agentdiff/transaction/inspection.py",
+    "src/agentdiff/transaction/runner.py",
+    "src/agentdiff/transaction/store.py",
+]
