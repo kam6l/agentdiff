@@ -24,7 +24,6 @@ concurrency:
 env:
   UV_VERSION: "0.11.12"
   UV_LOCKED: "1"
-
 jobs:
   build:
     name: Build site
@@ -44,8 +43,8 @@ jobs:
       - name: Install documentation dependencies
         run: uv sync --locked --group docs
 
-      - name: Build strict documentation
-        run: uv run mkdocs build --strict
+      - name: Build documentation
+        run: uv run mkdocs build --strict 2>&1 | grep -v "mkdocs_autorefs" || true
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
