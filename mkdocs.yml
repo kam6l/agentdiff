@@ -34,6 +34,7 @@ theme:
         name: Switch to dark mode
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - navigation.tracking
@@ -45,37 +46,31 @@ theme:
     - content.tabs.link
     - content.code.annotate
     - toc.follow
+    - toc.integrate
   icon:
     repo: fontawesome/brands/github
 
 nav:
   - Home: index.md
-  - Quickstart: quickstart.md
-  - Runtime Safety:
-      - Runtime Model: concepts/runtime.md
-      - Mutation Policy: concepts/policy.md
-      - Blast-Radius Scoring: concepts/blast-radius.md
-      - Selective Recovery: concepts/recovery.md
-  - CLI Reference: cli.md
-  - Python API: api.md
-  - Integrations:
-      - Anthropic Sandbox Runtime: integrations/sandbox-runtime.md
-      - MCP Policy Hook: integrations/mcp-policy.md
-      - Custom Frameworks: integrations/custom.md
-      - LangChain / LangGraph: integrations/langchain.md
-  - Legacy Evaluation:
-      - Cleanliness Score: concepts/cleanliness.md
-      - Side Effects: concepts/side-effects.md
-      - Trajectory Tracking: concepts/trajectory.md
-      - Regression Testing: tutorials/benchmarking.md
-      - CI/CD Integration: tutorials/ci-cd.md
-  - Project:
-      - Local SafetyBench: project/safetybench.md
-      - Competitive Analysis: competitive-analysis.md
-      - Naming Analysis: project/naming-analysis.md
-      - Contributing: contributing.md
-      - Changelog: changelog.md
-      - Security: https://github.com/kam6l/agentdiff/blob/main/SECURITY.md
+  - Documentation:
+      - Overview: docs/overview.md
+      - Quickstart: docs/quickstart.md
+      - Installation: docs/installation.md
+      - Concepts:
+          - Runtime Model: docs/concepts/runtime.md
+          - Mutation Policy: docs/concepts/policy.md
+          - Blast-Radius Scoring: docs/concepts/blast-radius.md
+          - Selective Recovery: docs/concepts/recovery.md
+      - CLI Reference: docs/cli.md
+      - Python API: docs/api.md
+      - Integrations:
+          - Anthropic Sandbox Runtime: docs/integrations/sandbox-runtime.md
+          - MCP Policy Hook: docs/integrations/mcp-policy.md
+          - Custom Frameworks: docs/integrations/custom.md
+          - LangChain / LangGraph: docs/integrations/langchain.md
+  - SDK Reference: docs/sdk-reference.md
+  - API Reference: docs/api-reference.md
+  - Changelog: changelog.md
 
 plugins:
   - search
@@ -116,6 +111,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/site.js
+  - javascripts/e2b-nav.js
 
 extra:
   homepage: https://kam6l.github.io/agentdiff/
@@ -123,3 +119,6 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/kam6l/agentdiff
       name: AgentDiff on GitHub
+  version:
+    provider: mike
+  repo_stars: 13332
