@@ -53,7 +53,7 @@ theme:
 nav:
   - Home: home.md
   - Documentation:
-      - Overview: docs/index.md
+      - Overview: index.md
       - Getting started:
           - Quickstart: docs/quickstart.md
           - Installation: docs/installation.md
