@@ -51,6 +51,7 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
+  - Home: home.md
   - Documentation:
       - Overview: docs/index.md
       - Getting started:
