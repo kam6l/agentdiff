@@ -33,12 +33,12 @@ theme:
         icon: material/brightness-4
         name: Switch to dark mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.expand
     - navigation.top
     - navigation.tracking
     - navigation.path
+    - navigation.indexes
     - search.highlight
     - search.share
     - search.suggest
@@ -51,11 +51,11 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
-  - Home: index.md
   - Documentation:
-      - Overview: docs/overview.md
-      - Quickstart: docs/quickstart.md
-      - Installation: docs/installation.md
+      - Overview: docs/index.md
+      - Getting started:
+          - Quickstart: docs/quickstart.md
+          - Installation: docs/installation.md
       - Concepts:
           - Runtime Model: docs/concepts/runtime.md
           - Mutation Policy: docs/concepts/policy.md
