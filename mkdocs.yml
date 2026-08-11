@@ -36,9 +36,11 @@ theme:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
+    - navigation.expand
     - navigation.top
     - navigation.tracking
     - navigation.path
+    - navigation.indexes
     - search.highlight
     - search.share
     - search.suggest
@@ -56,6 +58,12 @@ nav:
       - Overview: docs/overview.md
       - Quickstart: docs/quickstart.md
       - Installation: docs/installation.md
+  - Home: home.md
+  - Documentation:
+      - Overview: index.md
+      - Getting started:
+          - Quickstart: docs/quickstart.md
+          - Installation: docs/installation.md
       - Concepts:
           - Runtime Model: docs/concepts/runtime.md
           - Mutation Policy: docs/concepts/policy.md
