@@ -15,8 +15,8 @@ hide:
     </a>
     <div class="ad-nav__links">
       <a href="#how-it-works">How it works</a>
-      <a href="quickstart/">Docs</a>
-      <a href="cli/">CLI</a>
+      <a href="docs/overview/">Docs</a>
+      <a href="docs/cli/">CLI</a>
       <a class="ad-nav__github" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener">GitHub <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.5h7.3v7.3h-1.4V5.9l-7.6 7.6-1-1 7.6-7.6H5.2V3.5Z"></path></svg></a>
     </div>
   </nav>
@@ -28,7 +28,7 @@ hide:
         <h1 id="hero-title">See what the agent changed.<br><em>Undo only the collateral.</em></h1>
         <p class="ad-hero__lede">AgentDiff wraps a command with secure state capture, deterministic mutation policy, explainable blast radius, durable evidence, and conflict-safe selective recovery.</p>
         <div class="ad-actions">
-          <a class="ad-button ad-button--primary" href="quickstart/">Run the quickstart <span aria-hidden="true">→</span></a>
+          <a class="ad-button ad-button--primary" href="docs/overview/">Read the docs <span aria-hidden="true">→</span></a>
           <a class="ad-button ad-button--secondary" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener">View source</a>
         </div>
         <div class="ad-install" aria-label="Install from source">
@@ -82,7 +82,7 @@ hide:
           <header><span>Task evaluation</span><span class="ad-status ad-status--pass">PASS</span></header>
           <div class="ad-compare__body">
             <p class="ad-micro">Agent response</p>
-            <blockquote>“Parser fixed. All tests pass.”</blockquote>
+            <blockquote>"Parser fixed. All tests pass."</blockquote>
             <div class="ad-test-line"><span>✓</span><code>18 passed</code></div>
           </div>
           <footer>The requested outcome succeeded.</footer>
@@ -157,7 +157,7 @@ hide:
         <p class="ad-kicker">03 / Explainable blast radius</p>
         <h2 id="metric-title">One score. Every point accounted for.</h2>
         <p>AgentDiff adds deterministic weights for protected paths, deletions, dependency files, mode changes, process residue, observed ports, and budget violations. The raw components remain visible.</p>
-        <a class="ad-text-link" href="concepts/blast-radius/">Read the scoring model <span aria-hidden="true">→</span></a>
+        <a class="ad-text-link" href="docs/concepts/blast-radius/">Read the scoring model <span aria-hidden="true">→</span></a>
       </div>
       <div class="ad-equation ad-reveal" style="--reveal-delay: 100ms">
         <div class="ad-equation__formula"><span>blast radius</span><strong>=</strong><div><b>Σ evidence weights</b><hr><b>capped at 100</b></div></div>
@@ -189,8 +189,8 @@ agentdiff run \
   -- python3 agent.py
 
 <span class="c-comment"># Inspect and recover collateral files</span>
-agentdiff inspect &lt;run-id&gt;
-agentdiff rollback &lt;run-id&gt; --safe-only</code></pre>
+agentdiff inspect <run-id>
+agentdiff rollback <run-id> --safe-only</code></pre>
           <footer><span>No-follow manifest</span><span>Versioned evidence</span><span>Conflict-safe recovery</span></footer>
         </div>
       </div>
@@ -200,14 +200,14 @@ agentdiff rollback &lt;run-id&gt; --safe-only</code></pre>
       <p class="ad-kicker">Alpha, by design</p>
       <h2 id="cta-title">Evidence is useful only when its limits are visible.</h2>
       <p>The local backend is not a sandbox and does not block networking. Start in a disposable workspace, inspect the doctor report, and pair AgentDiff with real isolation for untrusted code.</p>
-      <div class="ad-actions ad-actions--center"><a class="ad-button ad-button--light" href="quickstart/">Start with the docs <span aria-hidden="true">→</span></a><a class="ad-button ad-button--outline-light" href="https://github.com/kam6l/agentdiff/issues" target="_blank" rel="noopener">Open an issue</a></div>
+      <div class="ad-actions ad-actions--center"><a class="ad-button ad-button--light" href="docs/overview/">Start with the docs <span aria-hidden="true">→</span></a><a class="ad-button ad-button--outline-light" href="https://github.com/kam6l/agentdiff/issues" target="_blank" rel="noopener">Open an issue</a></div>
     </section>
   </main>
 
   <footer class="ad-footer">
     <a class="ad-brand ad-brand--footer" href="./"><svg class="ad-brand__mark" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 7h15v6h-9v14h9v6H7V7Z"></path><path d="M33 7v26H18v-6h9V13h-9V7h15Z"></path></svg><span>AgentDiff</span></a>
     <p>Runtime evidence and conflict-safe recovery for autonomous agents.</p>
-    <div><a href="quickstart/">Documentation</a><a href="https://github.com/kam6l/agentdiff">GitHub</a><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md">Security</a></div>
+    <div><a href="docs/overview/">Documentation</a><a href="https://github.com/kam6l/agentdiff">GitHub</a><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md">Security</a></div>
     <span>© 2026 AgentDiff contributors</span>
   </footer>
 </div>
