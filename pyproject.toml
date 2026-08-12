@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
     "psutil>=5.9",
     "pyyaml>=6.0",
-    "rich>=13.0",
+    "rich>=15.0.0",
     "typing-extensions>=4.10",
 ]
 
