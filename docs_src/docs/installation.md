@@ -1,143 +1,109 @@
+---
+title: Installation
+description: Install the AgentDiff alpha from source with Python 3.14 and uv.
+---
+
+<span class="ad-doc-eyebrow">Getting started</span>
+
 # Installation
 
-Multiple ways to get AgentDiff running.
+<div class="ad-doc-lede">AgentDiff is currently a source-distributed technical alpha. The repository is the authoritative installation source; packaged binaries and container images are not published yet.</div>
 
-## From Source (Recommended)
+## Requirements
+
+| Requirement | Current support |
+| --- | --- |
+| Python | 3.14 or newer |
+| Package workflow | `uv` recommended |
+| Linux | Primary supported environment |
+| macOS | Supported for local observation; platform evidence varies |
+| WSL2 | Suitable for Linux-mode evaluation |
+| Native Windows | Alpha; filesystem parity work remains |
+
+## Install as a CLI tool
+
+`uv tool install` creates an isolated environment and places `agentdiff` on your path:
+
+```bash
+uv python install 3.14
+git clone https://github.com/kam6l/agentdiff.git
+cd agentdiff
+uv tool install .
+
+agentdiff --help
+agentdiff doctor
+```
+
+If `~/.local/bin` is not on your path, follow the instruction printed by `uv tool ensurepath`, then open a new shell.
+
+## Contributor installation
+
+Use the locked development environment when changing AgentDiff itself:
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
-pip install -e .
+uv sync --all-groups
+
+uv run agentdiff --help
+uv run pytest
+uv run ruff check src tests
+uv run mypy
 ```
 
-### Development Install
+## Run without installing globally
+
+Inside a cloned checkout, every command can be invoked through `uv`:
 
 ```bash
-pip install -e ".[dev]"
-pre-commit install
+uv run agentdiff doctor
+uv run agentdiff policy init --output /path/to/project/agentdiff.yaml
+uv run agentdiff run --root /path/to/project -- python3 /path/to/project/task.py
 ```
 
-Run tests:
-```bash
-pytest -v
-```
-
----
-
-## Docker
+## Verify runtime capabilities
 
 ```bash
-# Latest stable
-docker pull ghcr.io/kam6l/agentdiff:latest
-
-# Specific version
-docker pull ghcr.io/kam6l/agentdiff:v0.1.0
-
-# Run with workspace mounted
-docker run --rm -it \
-  -v $(pwd):/workspace \
-  -w /workspace \
-  ghcr.io/kam6l/agentdiff:latest \
-  agentdiff run -- python3 agent.py
-```
-
-### Docker Build from Source
-
-```bash
-docker build -t agentdiff:local .
-docker run --rm -it -v $(pwd):/workspace -w /workspace agentdiff:local agentdiff --help
-```
-
----
-
-## Binary Releases (Coming Soon)
-
-Pre-built binaries for Linux, macOS (Intel & Apple Silicon), and Windows will be available on [GitHub Releases](https://github.com/kam6l/agentdiff/releases).
-
-```bash
-# Linux x86_64
-curl -fsSL https://github.com/kam6l/agentdiff/releases/download/v0.1.0/agentdiff-linux-x86_64.tar.gz | tar xz
-sudo mv agentdiff /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -fsSL https://github.com/kam6l/agentdiff/releases/download/v0.1.0/agentdiff-darwin-arm64.tar.gz | tar xz
-sudo mv agentdiff /usr/local/bin/
-
-# Windows (via Scoop - coming)
-scoop bucket add agentdiff https://github.com/kam6l/scoop-bucket
-scoop install agentdiff
-```
-
----
-
-## Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Python | 3.11 | 3.12+ |
-| OS | Linux, macOS, WSL2 | Linux (kernel 5.10+) |
-| Filesystem | ext4, APFS, NTFS | ext4 with `CAP_DAC_READ_SEARCH` |
-| Memory | 256 MB | 512 MB+ |
-| Disk | 50 MB | 200 MB+ (for run capsules) |
-
-### Linux Capabilities
-
-For full process observation, AgentDiff benefits from:
-
-```bash
-# Allow reading /proc/<pid>/stat for any process
-sudo setcap cap_dac_read_search=+ep $(which python3)
-```
-
-Without this, process ancestry verification falls back to best-effort polling.
-
----
-
-## Shell Completion
-
-```bash tab="bash"
-agentdiff completion bash > /etc/bash_completion.d/agentdiff
-```
-
-```bash tab="zsh"
-agentdiff completion zsh > "${fpath[1]}/_agentdiff"
-```
-
-```bash tab="fish"
-agentdiff completion fish > ~/.config/fish/completions/agentdiff.fish
-```
-
----
-
-## Verify Installation
-
-```bash
-agentdiff --version
 agentdiff doctor
 ```
 
-`agentdiff doctor` runs a self-check:
-- Manifest scanner integrity
-- Policy parser validation
-- Blast-radius weight sanity
-- Backup/restore round-trip
-- Process observation capability
+The doctor report distinguishes implemented behavior from capability boundaries, including:
 
----
+- local subprocess observation;
+- filesystem mutation capture;
+- owned-descendant process observation;
+- machine-wide port observation;
+- optional Anthropic Sandbox Runtime availability;
+- policy and rollback behavior.
 
-## Troubleshooting
+Use JSON when integrating the report into automation:
 
-| Issue | Solution |
-|-------|----------|
-| `PermissionError` on `/proc` | Run with `CAP_DAC_READ_SEARCH` or as root |
-| `zstd` not found | `pip install zstandard` or `apt install zstd` |
-| Slow manifest scan | Exclude `node_modules`, `.git`, `target/` in policy |
-| Docker: `Operation not permitted` | Run with `--cap-add=CAP_DAC_READ_SEARCH --security-opt apparmor=unconfined` |
+```bash
+agentdiff doctor --format json
+```
 
----
+## Upgrade or remove
 
-## Next Steps
+From a fresh checkout of the revision you trust:
 
-- [Quickstart](quickstart.md) — Run your first transaction
-- [Mutation Policy](concepts/policy.md) — Customize allow/review/deny rules
-- [CLI Reference](cli.md) — All commands and flags
+```bash
+uv tool install --force .
+```
+
+Remove the isolated tool environment with:
+
+```bash
+uv tool uninstall agentdiff
+```
+
+## Distribution status
+
+<div class="ad-doc-notice ad-doc-notice--neutral" markdown>
+**Not currently published:** PyPI releases, standalone binaries, Docker images, Homebrew formulae, and Scoop packages. Avoid install commands from third-party pages that imply otherwise. Track release work on [GitHub](https://github.com/kam6l/agentdiff/releases).
+</div>
+
+## Next steps
+
+- [Run the quickstart](quickstart.md)
+- [Read the runtime capability model](concepts/runtime.md)
+- [Review the CLI](cli/index.md)

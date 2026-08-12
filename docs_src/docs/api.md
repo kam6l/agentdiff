@@ -344,7 +344,7 @@ mypy --strict your_script.py  # Passes
 
 ## Next Steps
 
-- [CLI Reference](cli.md) — Command-line interface
+- [CLI Reference](cli/index.md) — Command-line interface
 - [Runtime Model](concepts/runtime.md) — Underlying model
 - [Mutation Policy](concepts/policy.md) — Policy configuration
 - [Integrations](integrations/sandbox-runtime.md) — Sandbox adapter

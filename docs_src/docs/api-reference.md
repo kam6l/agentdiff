@@ -345,5 +345,5 @@ curl http://localhost:8080/openapi.json | jq .
 ## Next Steps
 
 - [SDK Reference](sdk-reference.md) — Python SDK
-- [CLI Reference](cli.md) — Command-line interface
+- [CLI Reference](cli/index.md) — Command-line interface
 - [Integrations](integrations/langchain.md) — Framework integrations
