@@ -18,6 +18,7 @@ AgentDiff is pre-release software. APIs and artifact schemas may change before t
 - Corrected integration guides to match the tested Sandbox Runtime adapter, MCP policy hook, LangChain callback, and transaction API.
 - Updated installation, README, project plan, examples, CLI output, and website copy to describe version `0.1.0` consistently.
 - Expanded CI across Linux, macOS, and Windows on the supported Python range.
+- Upgraded artifact and GitHub Pages actions to their Node 24-capable releases.
 
 ### Security
 
