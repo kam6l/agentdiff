@@ -301,11 +301,12 @@ class LocalRuntime:
     ) -> None:
         """Find reparented POSIX children that remain in the dedicated session."""
 
-        if os.name != "posix":
+        get_session_id = getattr(os, "getsid", None)
+        if get_session_id is None:
             return
         for process in psutil.process_iter():
             try:
-                if os.getsid(process.pid) != session_id:
+                if get_session_id(process.pid) != session_id:
                     continue
                 create_time = process.create_time()
                 parent_pid = process.ppid()

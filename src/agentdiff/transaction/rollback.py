@@ -268,6 +268,10 @@ class RollbackEngine:
         temporary = Path(name)
         try:
             self._copy_backup(backup, descriptor, before.mode)
+            # Windows does not permit replacing an open file. Close the
+            # flushed temporary before the final conflict check and swap.
+            os.close(descriptor)
+            descriptor = -1
             latest = self.scanner.capture_one(path)
             if latest is None or not same_file_state(latest, expected_after):
                 raise RuntimeError("current state differs from recorded after-state")
@@ -283,8 +287,9 @@ class RollbackEngine:
             if os.name != "nt":
                 target.chmod(before.mode)
         finally:
-            with contextlib.suppress(OSError):
-                os.close(descriptor)
+            if descriptor >= 0:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
             temporary.unlink(missing_ok=True)
 
     def _atomic_create(self, target: Path, backup: Path, mode: int) -> None:
@@ -292,6 +297,8 @@ class RollbackEngine:
         temporary = Path(name)
         try:
             self._copy_backup(backup, descriptor, mode)
+            os.close(descriptor)
+            descriptor = -1
             try:
                 os.link(temporary, target, follow_symlinks=False)
             except FileExistsError as exc:
@@ -299,8 +306,9 @@ class RollbackEngine:
             if os.name != "nt":
                 target.chmod(mode)
         finally:
-            with contextlib.suppress(OSError):
-                os.close(descriptor)
+            if descriptor >= 0:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
             temporary.unlink(missing_ok=True)
 
     @staticmethod

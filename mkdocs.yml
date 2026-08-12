@@ -33,9 +33,6 @@ theme:
         icon: material/weather-night
         name: Use dark mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.sections
     - navigation.expand
     - navigation.footer
     - navigation.indexes
@@ -57,12 +54,6 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
-  - Home: index.md
-  - Documentation:
-      - Overview: docs/overview.md
-      - Quickstart: docs/quickstart.md
-      - Installation: docs/installation.md
-  - Home: home.md
   - Documentation:
       - Overview: docs/index.md
       - Getting started:

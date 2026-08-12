@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import psutil
+import pytest
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -419,6 +421,7 @@ def test_cli_run_inspect_list_and_safe_rollback(tmp_path: Path) -> None:
     assert not (workspace / ".env").exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="test shim relies on POSIX shebang execution")
 def test_cli_run_can_select_anthropic_sandbox_runtime(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

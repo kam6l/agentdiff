@@ -269,7 +269,12 @@ class FilesystemScanner:
             path = Path(entry.path)
             try:
                 relative = path.relative_to(self.root).as_posix()
-                info = entry.stat(follow_symlinks=False)
+                # ``DirEntry.stat`` can report zeroed file identities on Windows
+                # (notably with Python 3.14), while a path-level ``lstat`` returns
+                # the stable volume/file IDs also exposed by ``fstat`` below.
+                # Use the same identity source on every platform so the secure
+                # open-and-verify step does not reject unchanged regular files.
+                info = path.lstat()
             except (OSError, ValueError, UnicodeError) as exc:
                 unsupported[entry.name] = f"entry unreadable: {type(exc).__name__}"
                 continue

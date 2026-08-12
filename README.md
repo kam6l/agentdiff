@@ -38,167 +38,76 @@
 
 ## Why AgentDiff?
 
-An autonomous command can exit successfully while leaving behind a protected environment file, an unexpected dependency edit, and one legitimate source change. A process exit code cannot tell those apart.
+A command can exit successfully while leaving one legitimate edit, an unexpected dependency change, and a protected secret file. AgentDiff gives every observed mutation a durable answer:
 
-AgentDiff wraps an explicit command and gives every observed mutation a durable answer:
-
-- **What changed?** A no-follow before/after filesystem manifest and runtime evidence.
-- **Was it expected?** Deterministic `allow`, `review`, or `deny` policy with exact rule provenance.
-- **How risky was the run?** An explainable 0–100 blast-radius score with component weights.
-- **Can I undo the collateral?** Selective recovery that preserves later human edits and allowed work.
-- **Can I trust the stored evidence?** A versioned capsule with an integrity manifest and verification command.
-
-## The transaction loop
-
-| Stage | AgentDiff does | You get |
-|---|---|---|
-| **Capture** | Records a secure baseline below one project root | Before-state manifest and recoverable file backups |
-| **Execute** | Launches your exact argv under local observation or a selected sandbox adapter | Exit status, owned-process evidence, and machine-wide port observations |
-| **Evaluate** | Diffs state, applies policy, and scores the blast radius | Path-level decisions, provenance, warnings, and a durable run capsule |
-| **Recover** | Conflict-checks current state before changing anything | Conservative rollback of eligible collateral only |
+- **What changed?** No-follow before/after filesystem manifests and runtime evidence.
+- **Was it expected?** Deterministic `allow`, `review`, or `deny` policy with rule provenance.
+- **How risky was it?** An explainable 0–100 blast-radius score.
+- **Can I undo only the collateral?** Conflict-safe recovery preserves allowed work and later edits.
 
 ## Quickstart
 
-AgentDiff currently requires **Python 3.14+** and is installed from source:
+AgentDiff requires **Python 3.14+** and is currently installed from source:
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
 uv sync --locked --all-groups
 
-# Generate a versioned starter policy
 uv run agentdiff policy init
-
-# Wrap any explicit command
-uv run agentdiff run \
-  --task "Update the parser" \
-  -- python3 agent_task.py
+uv run agentdiff run --task "Update the parser" -- python3 agent_task.py
 ```
 
-The command prints a run ID. Use it to inspect and verify the durable evidence:
+Inspect the run ID printed by the command, verify its capsule, then recover only eligible collateral:
 
 ```bash
-uv run agentdiff runs
 uv run agentdiff inspect <run-id>
 uv run agentdiff verify <run-id>
-```
-
-A real local demonstration used by the website produced:
-
-```text
-Status: denied (deny)
-Process exit: 0
-Blast radius: 81/100 (critical)
-Mutations: 3
-
-  deny    created  .env
-  review  created  pyproject.toml
-  allow   created  src/parser.py
-```
-
-The command itself succeeded. The **transaction** was denied because its resulting state crossed policy.
-
-Recover only the collateral:
-
-```bash
 uv run agentdiff rollback <run-id> --safe-only
 ```
 
-For the demonstrated capsule, AgentDiff removed `.env` and `pyproject.toml` while preserving the allowed `src/parser.py`. Rollback changes a path only when its current state still matches the post-run state AgentDiff recorded. A later edit becomes a conflict and is preserved.
+The real example used by the website produced a successful process exit but a denied transaction:
 
-[Follow the complete five-minute quickstart →](https://kam6l.github.io/agentdiff/docs/quickstart/)
-
-## Policy with provenance
-
-`agentdiff policy init` writes an explicit, versioned YAML policy:
-
-```yaml
-version: 1
-filesystem:
-  allow_write:
-    - src/**
-    - tests/**
-  review:
-    - docs/**
-  deny:
-    - .env
-    - .env.*
-    - .git/**
-    - "**/*.pem"
-    - "**/*.key"
-  default: review
-process:
-  allow:
-    - python*
-    - node
-  default: review
-network:
-  mode: observe
-rollback:
-  enabled: true
-  max_backup_file_mb: 10
+```text
+Status: denied (deny)          Blast radius: 81/100 (critical)
+deny    created  .env
+review  created  pyproject.toml
+allow   created  src/parser.py
 ```
 
-Rules resolve deterministically with precedence `deny > review > allow > default`. Explain a decision without running an agent:
+Safe rollback removed the first two paths and kept `src/parser.py`. If a path changes after the run, AgentDiff reports a conflict and leaves it untouched.
 
-```bash
-uv run agentdiff policy validate
-uv run agentdiff policy explain .env
-```
+[Follow the five-minute quickstart →](https://kam6l.github.io/agentdiff/docs/quickstart/)
 
-Command policy is enforced before local subprocess launch. Filesystem policy is evaluated from the post-run diff; the local backend does not provide kernel-level interception.
+## How it works
 
-## CLI surface
+| Stage | Result |
+|---|---|
+| **Capture** | Secure baseline plus recoverable file backups |
+| **Execute** | Exact argv, exit status, owned-process evidence, and port observations |
+| **Evaluate** | Path decisions, rule provenance, warnings, score, and integrity manifest |
+| **Recover** | Conservative rollback after an exact post-run conflict check |
+
+## CLI
 
 | Command | Purpose |
 |---|---|
-| `agentdiff run -- <cmd>` | Wrap an explicit argv in an evidence transaction |
-| `agentdiff runs` | List durable run capsules below a project root |
-| `agentdiff inspect <id>` | Read one capsule in summary or JSON form |
-| `agentdiff verify <id>` | Validate the capsule checksum manifest |
-| `agentdiff rollback <id> --safe-only` | Recover eligible `review` and `deny` mutations |
-| `agentdiff cleanup <id>` | Signal owned processes still associated with a run |
-| `agentdiff doctor` | Report implemented local runtime capabilities |
-| `agentdiff policy init` | Generate a starter policy |
-| `agentdiff policy validate` | Validate policy syntax and semantics |
-| `agentdiff policy explain <path>` | Show the winning rule and provenance |
+| `agentdiff run -- <cmd>` | Wrap an explicit command in a transaction |
+| `agentdiff runs` | List durable run capsules |
+| `agentdiff inspect <id>` | Read capsule evidence |
+| `agentdiff verify <id>` | Validate capsule checksums |
+| `agentdiff rollback <id> --safe-only` | Recover `review` and `deny` mutations |
+| `agentdiff cleanup <id>` | Signal verified leftover processes |
+| `agentdiff doctor` | Report local runtime capabilities |
+| `agentdiff policy init/validate/explain` | Create and inspect versioned policy |
 
-The package also preserves its original snapshot, diff, trajectory, and cleanliness evaluator commands. See the [implemented CLI reference](https://kam6l.github.io/agentdiff/docs/cli/) for exact options and exit behavior.
+Python integrations include `AgentRunTransaction`, `MCPPolicyHook`, an optional Anthropic Sandbox Runtime adapter, and a LangChain/LangGraph callback. See the [CLI reference](https://kam6l.github.io/agentdiff/docs/cli/) and [SDK reference](https://kam6l.github.io/agentdiff/docs/sdk-reference/) for the complete surface.
 
-## Evidence and recovery boundaries
+## Trust boundary
 
-AgentDiff deliberately prefers conservative refusal over broad, unverifiable claims:
+AgentDiff is deliberately conservative: it records symlinks without traversing them, redacts common secrets, verifies backups and capsule checksums, and identifies processes by PID plus creation time. It does **not** make local execution a sandbox, attribute machine-wide port changes to a run, or undo APIs, databases, network effects, hardlinks, or unbacked files.
 
-- Filesystem capture uses `lstat` and no-follow opens where available. Symlinks are recorded but never traversed.
-- Capsules live at `.agentdiff/runs/<run-id>/` with versioned schemas, atomic JSON writes, redacted metadata, and restrictive POSIX permissions.
-- Integrity verification detects ordinary artifact tampering; it is not authentication if an attacker can replace the entire capsule.
-- Environment observations use stable fingerprints instead of raw values, and common credential-bearing arguments/events are redacted before persistence.
-- Process cleanup checks PID plus creation time and refuses ambiguous PID-reuse cases.
-- Port changes are machine-wide observations; AgentDiff does not claim run ownership for them.
-- Recovery covers eligible regular files with verified backups. It does not roll back symlinks, hardlinks, oversized or unbacked files, APIs, databases, network effects, or arbitrary process side effects.
-
-Read the precise [runtime model](https://kam6l.github.io/agentdiff/docs/concepts/runtime/), [recovery guarantees](https://kam6l.github.io/agentdiff/docs/concepts/recovery/), and [trust model](https://kam6l.github.io/agentdiff/docs/trust/).
-
-## Where it fits
-
-AgentDiff complements rather than replaces the surrounding stack:
-
-| Existing tool | What it is strong at | AgentDiff adds |
-|---|---|---|
-| LLM tracing platforms | Prompts, generations, spans, and evaluations | Local filesystem/process evidence and mutation recovery |
-| E2B, Modal, or Daytona | Isolation and hosted execution | Deterministic policy, durable evidence, and selective rollback inside or outside a sandbox |
-| Datadog or Honeycomb | General application observability | Agent-specific mutation semantics and recovery decisions |
-| Agent frameworks | Planning and task execution | A framework-neutral transaction boundary around arbitrary argv |
-| Git | Versioned source history | Runtime context, non-repository files, policy provenance, and conflict-safe collateral recovery |
-
-## Integration seams
-
-- **Arbitrary commands:** `agentdiff run -- <command>`
-- **Python:** `AgentRunTransaction`
-- **External enforcement:** optional Anthropic `SandboxRuntime` / `--runtime srt` adapter
-- **MCP-style dispatch:** `MCPPolicyHook`, a transport-neutral pre-dispatch hook—not an MCP proxy or server
-- **LangChain / LangGraph:** optional callback integration through the `langchain` extra
-- **Legacy evaluation:** `AgentDiffSession`, `DiffEngine`, `TrajectoryTracker`, and `AgentDiffEvaluator`
+Read the [runtime model](https://kam6l.github.io/agentdiff/docs/concepts/runtime/), [recovery guarantees](https://kam6l.github.io/agentdiff/docs/concepts/recovery/), and [trust model](https://kam6l.github.io/agentdiff/docs/trust/).
 
 <p align="center">
   <a href="https://kam6l.github.io/agentdiff/docs/cli/">
@@ -208,16 +117,6 @@ AgentDiff complements rather than replaces the surrounding stack:
 
 <p align="center"><sub>The documentation site is built from this repository with MkDocs Material and deployed through GitHub Pages.</sub></p>
 
-## Project status
-
-AgentDiff is **alpha software**. The runtime format, policy schema, command surface, and recovery behavior may change before a stable package release. There is currently no claimed PyPI, Docker, Homebrew, Scoop, or standalone binary distribution; the verified path is installation from source.
-
-- [Documentation](https://kam6l.github.io/agentdiff/docs/)
-- [CLI reference](https://kam6l.github.io/agentdiff/docs/cli/)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-- [Report an issue](https://github.com/kam6l/agentdiff/issues)
-
-## License
+AgentDiff is alpha software; its schemas and command surface may change before a stable release. [Documentation](https://kam6l.github.io/agentdiff/docs/) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/kam6l/agentdiff/issues)
 
 MIT licensed. Built by [kam6l](https://github.com/kam6l) and contributors.

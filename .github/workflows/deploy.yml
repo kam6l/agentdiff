@@ -43,8 +43,10 @@ jobs:
       - name: Install documentation dependencies
         run: uv sync --locked --group docs
 
-      - name: Build documentation
-        run: uv run mkdocs build --strict 2>&1 | grep -v "mkdocs_autorefs" || true
+      - name: Build strict documentation
+        env:
+          PYTHONWARNINGS: "ignore::UserWarning:mkdocs_autorefs"
+        run: uv run mkdocs build --strict
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
