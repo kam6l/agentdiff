@@ -89,4 +89,4 @@ agentdiff
 ```
 
 !!! tip "Trust the installed help"
-    The command surface is alpha and may evolve. `agentdiff <command> --help` is generated directly from the installed implementation.
+    The command surface is beta and may evolve. `agentdiff <command> --help` is generated directly from the installed implementation.

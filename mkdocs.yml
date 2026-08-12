@@ -72,13 +72,13 @@ nav:
           - Policy commands: docs/cli/policy.md
           - Operations: docs/cli/operations.md
       - Integrations:
-          - Anthropic Sandbox Runtime: docs/integrations/sandbox-runtime.md
-          - MCP policy hook: docs/integrations/mcp-policy.md
-          - LangChain / LangGraph: docs/integrations/langchain.md
+          - Anthropic Sandbox Runtime (Experimental): docs/integrations/sandbox-runtime.md
+          - MCP policy hook (Experimental): docs/integrations/mcp-policy.md
+          - LangChain / LangGraph (Experimental): docs/integrations/langchain.md
           - Custom frameworks: docs/integrations/custom.md
       - Security & capability limits: docs/trust.md
-  - SDK Reference: docs/sdk-reference.md
-  - API Reference: docs/api-reference.md
+  - Python API: docs/sdk-reference.md
+  - Capsule Reference: docs/api-reference.md
   - Changelog: changelog.md
 
 plugins:

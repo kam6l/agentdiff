@@ -1,436 +1,105 @@
-# SDK Reference
-
-Complete SDK reference for AgentDiff.
-
-## `agentdiff.runtime`
-
-### `AgentDiffRuntime`
-
-```python
-class AgentDiffRuntime:
-    def __init__(
-        self,
-        policy: Policy,
-        root: str | Path = ".",
-        observe_processes: bool = True,
-        observe_ports: bool = True,
-        backup_enabled: bool = True,
-    ) -> None: ...
-
-    def run(
-        self,
-        argv: list[str],
-        task_description: str,
-        timeout: float = 300,
-        dry_run: bool = False,
-    ) -> TransactionResult: ...
-
-    def rollback(
-        self,
-        run_id: str,
-        safe_only: bool = True,
-        decisions: set[PolicyAction] | None = None,
-        paths: list[str] | None = None,
-        dry_run: bool = False,
-    ) -> RollbackResult: ...
-
-    def inspect(self, run_id: str) -> RunCapsule: ...
-
-    def list_runs(self, limit: int = 20, since: datetime | None = None) -> list[RunSummary]: ...
-```
-
-### `TransactionResult`
-
-```python
-@dataclass(frozen=True, slots=True)
-class TransactionResult:
-    run_id: str
-    task_description: str
-    argv: list[str]
-    status: TransactionStatus
-    blast_radius: BlastRadiusResult
-    mutations: tuple[MutationRecord, ...]
-    processes: tuple[OwnedProcess, ...]
-    ports: PortDiff
-    start_time: float
-    end_time: float
-    capsule_path: Path
-```
-
-### `TransactionStatus`
-
-```python
-class TransactionStatus(str, Enum):
-    PASS = "pass"
-    REVIEW = "review"
-    DENY = "deny"
-```
-
+---
+title: Python API
+description: Implemented Python interfaces for AgentDiff 0.1.0.
 ---
 
-## `agentdiff.policy`
+# Python API
 
-### `Policy`
+This page lists the implemented `0.1.0` interfaces. The transaction API is **Beta**; the MCP hook and evaluator integrations are **Experimental**.
 
-```python
-class Policy:
-    def __init__(self, data: dict) -> None: ...
-
-    @classmethod
-    def from_file(cls, path: str | Path) -> "Policy": ...
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Policy": ...
-
-    def decide_path(self, path: str, *, phase: str = "post_run") -> PolicyDecision: ...
-
-    def decide_tool_call(self, tool: str, arguments: dict) -> PolicyDecision: ...
-
-    def validate(self) -> None: ...
-
-    def to_dict(self) -> dict: ...
-
-    def to_yaml(self) -> str: ...
-```
-
-### `PolicyDecision`
+## Run a transaction
 
 ```python
-@dataclass(frozen=True, slots=True)
-class PolicyDecision:
-    action: PolicyAction
-    subject: str
-    rule: str
-    pattern: str | None
-    reason: str
-    policy_version: int
-    phase: str
+import sys
+from pathlib import Path
+
+from agentdiff import AgentRunTransaction, load_policy_file
+
+root = Path("/workspace/project")
+policy = load_policy_file(root / "agentdiff.yaml")
+result = AgentRunTransaction(
+    root=root,
+    policy=policy,
+    task="Fix authentication",
+).run([sys.executable, "agent_task.py"], timeout_seconds=300)
+
+print(result.run_id, result.status)
+print(result.blast_radius.score, result.blast_radius.level.value)
+for change in result.changes:
+    print(change.path, change.change_type, change.decision.action.value, change.reversible)
 ```
 
-### `PolicyAction`
+`TransactionResult.to_dict()` returns the schema-versioned JSON shape used by `agentdiff run --format json`. `recommended_exit_code("never" | "review" | "deny")` applies the CLI exit policy.
+
+## Inspect and recover
 
 ```python
-class PolicyAction(str, Enum):
-    ALLOW = "allow"
-    REVIEW = "review"
-    DENY = "deny"
+from agentdiff import RollbackEngine, RunInspector
+
+summary = RunInspector(root, result.run_id).summary()
+report = RollbackEngine.open(root, result.run_id).rollback(safe_only=True)
+
+print(summary.safety_outcome)
+print(report.ok, report.actions, report.conflicts)
 ```
 
----
+Recovery requires exactly one of `safe_only=True` or `all_changes=True`. An optional `paths=[...]` list narrows the selected relative paths.
 
-## `agentdiff.scoring`
-
-### `BlastRadiusScorer`
+## Load and explain policy
 
 ```python
-class BlastRadiusScorer:
-    def __init__(self, weights: BlastRadiusWeights | None = None) -> None: ...
+from agentdiff import PolicyEngine, load_policy
 
-    def score(
-        self,
-        mutations: Iterable[MutationRisk],
-        *,
-        orphan_processes: int = 0,
-        opened_ports: int = 0,
-        budget_violations: int = 0,
-    ) -> BlastRadiusResult: ...
-
-    @staticmethod
-    def level_for(score: int) -> RiskLevel: ...
+policy = load_policy(
+    {
+        "version": 1,
+        "filesystem": {
+            "allow_write": ["src/**", "tests/**"],
+            "deny": [".env", ".env.*", ".git/**"],
+            "default": "review",
+        },
+        "process": {"allow": ["python*"], "default": "review"},
+    }
+)
+decision = PolicyEngine(policy).decide_path(".env")
+print(decision.action.value, decision.rule, decision.reason)
 ```
 
-### `BlastRadiusWeights`
+Use `load_policy_file(path)` for YAML or JSON-compatible YAML files. Unknown keys and unsupported values raise `PolicyValidationError`.
+
+## Score evidence
 
 ```python
-@dataclass(frozen=True, slots=True)
-class BlastRadiusWeights:
-    review_created: int = 8
-    review_modified: int = 4
-    review_deleted: int = 12
-    denied_mutation: int = 30
-    denied_deletion: int = 40
-    sensitive_path: int = 35
-    dependency_change: int = 8
-    mode_change: int = 8
-    orphan_process: int = 10
-    opened_port: int = 5
-    budget_violation: int = 12
-    scope_drift: int = 2
+from agentdiff import BlastRadiusScorer, MutationRisk, PolicyAction
 
-    @classmethod
-    def from_mapping(cls, overrides: Mapping[str, int]) -> "BlastRadiusWeights": ...
+score = BlastRadiusScorer().score(
+    [MutationRisk(".env", "created", PolicyAction.DENY)]
+)
+print(score.score, score.level.value, score.components)
 ```
 
-### `BlastRadiusResult`
+## Pre-dispatch tool policy
+
+`MCPPolicyHook` is transport-neutral. It does not run an MCP client, server, or proxy.
 
 ```python
-@dataclass(frozen=True, slots=True)
-class BlastRadiusResult:
-    score: int
-    raw_score: int
-    level: RiskLevel
-    counts: dict[str, int]
-    components: tuple[RiskComponent, ...]
+from agentdiff import MCPPolicyHook
 
-    def to_dict(self) -> dict: ...
+hook = MCPPolicyHook(policy)
+decision = hook.authorize("filesystem.write_file", {"path": "src/app.py"})
 ```
 
-### `RiskComponent`
+`authorize()` raises `ToolCallBlockedError` for `deny` and, by default, `review`. Pass `allow_review=True` only when the caller has an explicit review workflow.
 
-```python
-@dataclass(frozen=True, slots=True)
-class RiskComponent:
-    name: str
-    count: int
-    weight: int
-    points: int
-    detail: str
-```
+## Public modules
 
-### `MutationRisk`
+| Module | Implemented surface |
+|---|---|
+| `agentdiff.transaction` | Transactions, assessments, capsules, inspection, integrity, rollback |
+| `agentdiff.policy` | Version-1 schema, strict loaders, deterministic decisions |
+| `agentdiff.scoring` | Weights, mutation risks, components, risk levels |
+| `agentdiff.state` | Secure manifests and deterministic filesystem diffs |
+| `agentdiff.runtime` | Local observer and optional external `SandboxRuntime` adapter |
+| `agentdiff.integrations` | MCP hook plus legacy evaluator session helpers |
 
-```python
-@dataclass(frozen=True, slots=True)
-class MutationRisk:
-    path: str
-    change_type: str  # created | modified | deleted
-    decision: PolicyAction
-    mode_changed: bool = False
-```
-
-### `RiskLevel`
-
-```python
-class RiskLevel(str, Enum):
-    LOW = "low"
-    MODERATE = "moderate"
-    HIGH = "high"
-    CRITICAL = "critical"
-```
-
----
-
-## `agentdiff.state`
-
-### `ManifestScanner`
-
-```python
-class ManifestScanner:
-    def __init__(
-        self,
-        root: str | Path,
-        ignores: Iterable[str] | None = None,
-        follow_symlinks: bool = False,
-    ) -> None: ...
-
-    def scan(self) -> FilesystemSnapshot: ...
-```
-
-### `FilesystemSnapshot`
-
-```python
-@dataclass(frozen=True, slots=True)
-class FilesystemSnapshot:
-    files: tuple[FileRecord, ...]
-    timestamp: float
-    schema_version: int = 1
-```
-
-### `FileRecord`
-
-```python
-@dataclass(frozen=True, slots=True)
-class FileRecord:
-    path: str
-    kind: str  # file | dir | symlink | fifo | socket | device
-    sha256: str | None
-    size: int
-    mode: int
-    mtime_ns: int
-    device: int | None
-    inode: int | None
-    link_count: int
-    symlink_target: str | None
-```
-
-### `DiffEngine`
-
-```python
-class DiffEngine:
-    def diff(self, pre: FilesystemSnapshot, post: FilesystemSnapshot) -> DiffResult: ...
-```
-
-### `DiffResult`
-
-```python
-@dataclass(frozen=True, slots=True)
-class DiffResult:
-    created: tuple[FileRecord, ...]
-    modified: tuple[FileRecord, ...]
-    deleted: tuple[FileRecord, ...]
-    replaced: tuple[FileRecord, ...]
-    permissions: tuple[FileRecord, ...]
-    summary: dict[str, int]
-```
-
-### `PortSnapshot`
-
-```python
-@dataclass(frozen=True, slots=True)
-class PortSnapshot:
-    ports: frozenset[PortRecord]
-    timestamp: float
-```
-
-### `PortRecord`
-
-```python
-@dataclass(frozen=True, slots=True)
-class PortRecord:
-    proto: str  # tcp | udp
-    addr: str
-    port: int
-    pid: int | None
-    process_name: str | None
-```
-
-### `PortDiff`
-
-```python
-@dataclass(frozen=True, slots=True)
-class PortDiff:
-    opened: tuple[PortRecord, ...]
-    closed: tuple[PortRecord, ...]
-```
-
----
-
-## `agentdiff.recovery`
-
-### `RecoveryEngine`
-
-```python
-class RecoveryEngine:
-    def __init__(self, capsule_path: Path) -> None: ...
-
-    def rollback(self, options: RecoveryOptions) -> RollbackResult: ...
-
-    def restore_file(self, path: str) -> None: ...
-
-    def list_backups(self) -> list[BackupInfo]: ...
-```
-
-### `RecoveryOptions`
-
-```python
-@dataclass(frozen=True, slots=True)
-class RecoveryOptions:
-    safe_only: bool = True
-    decisions: frozenset[PolicyAction] = frozenset({PolicyAction.DENY, PolicyAction.REVIEW})
-    paths: tuple[str, ...] = ()
-    dry_run: bool = False
-```
-
-### `RollbackResult`
-
-```python
-@dataclass(frozen=True, slots=True)
-class RollbackResult:
-    reverted: tuple[str, ...]
-    conflicts: tuple[str, ...]
-    allowed: tuple[str, ...>
-    errors: tuple[str, ...]
-```
-
----
-
-## `agentdiff.integrations`
-
-### `AgentDiffCallbackHandler`
-
-```python
-class AgentDiffCallbackHandler(BaseCallbackHandler):
-    def __init__(
-        self,
-        policy_path: str,
-        task_description: str,
-        root: str | Path = ".",
-        observe_processes: bool = True,
-        observe_ports: bool = True,
-        backup_enabled: bool = True,
-    ) -> None: ...
-
-    # Properties available after run
-    run_id: str
-    status: TransactionStatus
-    blast_radius: BlastRadiusResult
-    mutations: tuple[MutationRecord, ...]
-
-    def rollback(self, safe_only: bool = True) -> RollbackResult: ...
-    def restore_file(self, path: str) -> None: ...
-    def get_capsule(self) -> RunCapsule: ...
-```
-
-### `SandboxRuntimeAdapter`
-
-```python
-class SandboxRuntimeAdapter:
-    def __init__(
-        self,
-        executable: str = "srt",
-        settings: str | Path | None = None,
-        observe_ports: bool = True,
-        poll_interval_seconds: float = 0.05,
-    ) -> None: ...
-
-    def run(
-        self,
-        argv: Sequence[str],
-        task_description: str,
-        timeout_seconds: float | None = None,
-    ) -> RuntimeResult: ...
-```
-
-### `MCPolicyHook`
-
-```python
-class MCPolicyHook:
-    @classmethod
-    def from_file(cls, path: str | Path) -> "MCPolicyHook": ...
-
-    def evaluate_tool_call(self, tool: str, arguments: dict) -> PolicyDecision: ...
-
-    def evaluate_batch(self, calls: list[dict]) -> list[PolicyDecision]: ...
-```
-
----
-
-## `agentdiff.exceptions`
-
-```python
-class AgentDiffError(Exception): ...
-
-class PolicyValidationError(AgentDiffError): ...
-
-class ManifestScanError(AgentDiffError): ...
-
-class RecoveryError(AgentDiffError): ...
-
-class BlastRadiusThresholdExceeded(AgentDiffError):
-    def __init__(self, score: int, threshold: int): ...
-
-class RunNotFoundError(AgentDiffError): ...
-
-class BackupError(AgentDiffError): ...
-```
-
----
-
-## Version Info
-
-```python
-import agentdiff
-
-agentdiff.__version__        # "0.1.0"
-agentdiff.__version_info__   # (0, 1, 0)
-```
+There is no `AgentDiffRuntime`, async runtime, HTTP server, `serve` command, or `__version_info__` attribute in `0.1.0`.

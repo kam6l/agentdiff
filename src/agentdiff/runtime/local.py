@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import socket
-import subprocess
+
+# Exact argv execution is this runtime's explicit purpose.
+import subprocess  # nosec B404
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -65,7 +67,8 @@ class LocalRuntime:
 
         before_ports, before_port_error = self._snapshot_ports()
         started = time.monotonic()
-        process = subprocess.Popen(
+        # The argv sequence is passed without shell interpretation.
+        process = subprocess.Popen(  # nosec B603
             command,
             cwd=self.root,
             shell=False,

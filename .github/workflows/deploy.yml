@@ -9,6 +9,7 @@ on:
       - "mkdocs.yml"
       - "pyproject.toml"
       - "uv.lock"
+      - "scripts/check_docs_links.py"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -37,7 +38,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
@@ -47,6 +48,9 @@ jobs:
         env:
           PYTHONWARNINGS: "ignore::UserWarning:mkdocs_autorefs"
         run: uv run mkdocs build --strict
+
+      - name: Check built-site links and assets
+        run: uv run python scripts/check_docs_links.py site
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 

@@ -214,15 +214,11 @@ class RunStore:
         discovered_names = {relative for relative, _ in discovered}
         missing_principal = sorted(_REQUIRED_SEALED_ARTIFACTS - discovered_names)
         if missing_principal:
-            raise RuntimeError(
-                "missing required sealed artifacts: " + ", ".join(missing_principal)
-            )
+            raise RuntimeError("missing required sealed artifacts: " + ", ".join(missing_principal))
         required = self._required_sealed_paths()
         missing = sorted(required - discovered_names)
         if missing:
-            raise RuntimeError(
-                "missing required sealed artifacts: " + ", ".join(missing)
-            )
+            raise RuntimeError("missing required sealed artifacts: " + ", ".join(missing))
         files: dict[str, dict[str, int | str]] = {}
         for relative, path in discovered:
             digest, size = self._hash_regular_artifact(path)
@@ -417,8 +413,9 @@ class RunStore:
         )
         temporary = Path(temporary_name)
         try:
-            if os.name != "nt":
-                os.fchmod(descriptor, 0o600)
+            fchmod = getattr(os, "fchmod", None)
+            if fchmod is not None:
+                fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(payload)
                 stream.flush()

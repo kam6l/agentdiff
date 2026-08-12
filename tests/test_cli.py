@@ -47,6 +47,70 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     assert "init" not in result.stdout
 
 
+def test_package_module_runs_the_cli(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "agentdiff", "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "Observe, govern, score, and recover" in result.stdout
+
+
+def test_run_summary_leads_with_outcome_counts_and_recovery(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "filesystem": {
+                    "allow_write": ["src/**"],
+                    "deny": [".env"],
+                    "default": "review",
+                },
+                "process": {"allow": ["python*"], "default": "deny"},
+                "network": {"mode": "off"},
+                "rollback": {"enabled": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    script = (
+        "from pathlib import Path; "
+        "Path('src').mkdir(); "
+        "Path('src/result.py').write_text('ok'); "
+        "Path('notes.txt').write_text('review'); "
+        "Path('.env').write_text('protected')"
+    )
+
+    result = run_cli(
+        "run",
+        "--root",
+        str(workspace),
+        "--policy",
+        str(policy_path),
+        "--",
+        sys.executable,
+        "-c",
+        script,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 3
+    assert result.stdout.startswith("Task completed\n\n")
+    assert "Expected changes:   1" in result.stdout
+    assert "Unexpected changes: 1" in result.stdout
+    assert "Protected changes:  1" in result.stdout
+    assert "Blast Radius: CRITICAL" in result.stdout
+    assert "Recovery available: YES" in result.stdout
+    assert "Policy outcome: DENY" in result.stdout
+
+
 def test_demo_json_output_is_machine_readable(capsys) -> None:
     run_demo(show_json=True)
 

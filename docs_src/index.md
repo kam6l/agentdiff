@@ -39,19 +39,19 @@ description: See exactly what an AI agent changed and selectively undo only the 
     <section class="ad-hero" aria-labelledby="ad-hero-title">
       <div class="ad-hero__texture" aria-hidden="true"></div>
       <div class="ad-hero__copy">
-        <p class="ad-pill"><span></span> Open source · alpha · local-first</p>
+        <p class="ad-pill"><span></span> Open source · beta · local-first</p>
         <h1 id="ad-hero-title">See what the agent changed.<br><em>Undo only the collateral.</em></h1>
         <p class="ad-hero__lede">AgentDiff wraps any command with secure state capture, deterministic mutation policy, explainable blast-radius scoring, durable evidence, and conflict-safe selective recovery.</p>
         <div class="ad-hero__actions">
           <a class="ad-button ad-button--light" href="docs/quickstart/">Run your first transaction <span aria-hidden="true">→</span></a>
           <a class="ad-button ad-button--ghost" href="https://github.com/kam6l/agentdiff">View source <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="ad-command" aria-label="Install from source">
+        <div class="ad-command" aria-label="Run AgentDiff">
           <span class="ad-command__prompt" aria-hidden="true">$</span>
-          <code id="ad-install-command">git clone https://github.com/kam6l/agentdiff.git</code>
+          <code id="ad-install-command">agentdiff run --task "Fix authentication" -- codex</code>
           <button type="button" data-copy-target="ad-install-command"><span data-copy-label>Copy</span></button>
         </div>
-        <p class="ad-hero__note">Observation by default. External sandbox enforcement when you explicitly choose it.</p>
+        <p class="ad-hero__note">Observation by default. External enforcement only through a separately configured runtime.</p>
       </div>
 
       <div class="ad-proof-stage" aria-label="Real AgentDiff transaction example">
@@ -94,7 +94,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
             </div>
           </div>
           <footer class="ad-run-card__footer">
-            <code data-run-summary>3 mutations · exit code 0</code>
+            <code data-run-summary>1 expected · 1 unexpected · 1 protected</code>
             <span data-run-action>inspect evidence →</span>
           </footer>
         </article>

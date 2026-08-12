@@ -356,7 +356,8 @@ class FilesystemScanner:
 
         destination: Path | None = None
         if should_backup:
-            assert self.backup_dir is not None
+            if self.backup_dir is None:
+                raise RuntimeError("backup capture requested without a backup directory")
             try:
                 safe = _safe_relative(relative)
             except ValueError:
@@ -487,7 +488,8 @@ def diff_manifests(
         if old is not None and new is None:
             changes.append(FileChange(path, "deleted", True, False))
             continue
-        assert old is not None and new is not None
+        if old is None or new is None:
+            raise RuntimeError("manifest diff invariant violated")
         content_changed = (
             old.kind != new.kind
             or old.sha256 != new.sha256

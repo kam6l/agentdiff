@@ -237,7 +237,8 @@ class RollbackEngine:
             raise RuntimeError(record.backup_error or "file has no recovery backup")
 
     def _verified_backup(self, record: FileRecord) -> Path:
-        assert record.backup_path is not None
+        if record.backup_path is None:
+            raise RuntimeError(record.backup_error or "file has no recovery backup")
         relative = _safe_relative(record.backup_path)
         backup_root = self.store.backup_dir.resolve(strict=True)
         backup = self.store.backup_dir.joinpath(*relative.parts)
@@ -318,8 +319,9 @@ class RollbackEngine:
                 output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
-        if os.name != "nt":
-            os.fchmod(descriptor, mode)
+        fchmod = getattr(os, "fchmod", None)
+        if fchmod is not None:
+            fchmod(descriptor, mode)
 
     @staticmethod
     def _hash_path(path: Path) -> str:

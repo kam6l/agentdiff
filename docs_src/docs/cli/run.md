@@ -1,6 +1,6 @@
 ---
 title: Run a transaction
-description: Wrap an explicit command with AgentDiff local observation or Anthropic Sandbox Runtime enforcement.
+description: Wrap an explicit command with local observation or external Anthropic Sandbox Runtime delegation.
 ---
 
 <span class="ad-doc-eyebrow">CLI · Transactions</span>
@@ -16,12 +16,12 @@ agentdiff run [options] -- <command> [arguments...]
 ## Minimal example
 
 ```bash
-agentdiff run \
-  --task "Fix the parser" \
-  -- python3 agent_task.py
+agentdiff run --task "Fix authentication" -- codex
 ```
 
 Everything after `--` is treated as the subprocess argv. AgentDiff does not invoke a shell unless the argv explicitly launches one.
+
+The summary starts with expected (`allow`), unexpected (`review`), and protected (`deny`) mutation counts, the blast-radius category, and whether safe collateral recovery has an eligible target. JSON output preserves the complete machine-readable evidence.
 
 ## Options
 
