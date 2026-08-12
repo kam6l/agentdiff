@@ -21,7 +21,7 @@ env:
 
 jobs:
   tests:
-    name: Tests · ${{ matrix.os }} · Python ${{ matrix.python-version }}
+    name: Tests - ${{ matrix.os }} - Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -29,9 +29,17 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: ubuntu-latest
             python-version: "3.14"
           - os: macos-latest
+            python-version: "3.12"
+          - os: macos-latest
             python-version: "3.14"
+          - os: windows-latest
+            python-version: "3.12"
           - os: windows-latest
             python-version: "3.14"
 
@@ -55,16 +63,16 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-python-3.14
+          name: coverage-python-3.12
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
 
   quality:
-    name: Lint · types · optional integration
+    name: Lint - types - optional integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -75,17 +83,17 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
         run: uv sync --locked --group dev --extra langchain
 
       - name: Check formatting
-        run: uv run ruff format --check src tests examples benchmarks
+        run: uv run ruff format --check src tests examples benchmarks scripts
 
       - name: Lint
-        run: uv run ruff check src tests examples benchmarks
+        run: uv run ruff check src tests examples benchmarks scripts
 
       - name: Type-check
         run: uv run mypy src/agentdiff
@@ -94,7 +102,7 @@ jobs:
         run: uv run pytest -p no:cacheprovider tests/test_integrations.py -v
 
   security:
-    name: Security · dependencies and static analysis
+    name: Security - dependencies and static analysis
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -105,7 +113,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -148,7 +156,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
@@ -157,9 +165,11 @@ jobs:
       - name: Build strict documentation
         env:
           PYTHONWARNINGS: "ignore::UserWarning:mkdocs_autorefs"
-        run: uv run mkdocs build
-      - name: Build documentation
-        run: uv run mkdocs build --strict 2>&1 | grep -v "mkdocs_autorefs" || true
+        run: uv run mkdocs build --strict
+
+      - name: Check built-site links and assets
+        run: uv run python scripts/check_docs_links.py site
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mkdocs-site
@@ -179,7 +189,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
@@ -208,7 +218,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
@@ -225,7 +235,7 @@ jobs:
 
       - name: Smoke-test the wheel in a clean environment
         run: |
-          uv venv /tmp/agentdiff-wheel --python 3.14
+          uv venv /tmp/agentdiff-wheel --python 3.12
           uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
           /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
           /tmp/agentdiff-wheel/bin/agentdiff --help

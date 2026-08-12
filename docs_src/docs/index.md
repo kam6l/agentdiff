@@ -51,6 +51,16 @@ description: Learn how AgentDiff records agent mutations, evaluates policy, scor
 <div><span>4</span><strong>Recover</strong><p>Conflict-check current state before restoring or removing eligible collateral.</p></div>
 </div>
 
+## Feature status
+
+| Status | Implemented surface |
+|---|---|
+| **Beta** | Local transactions, policy, capsules, verification, scoring, and regular-file recovery |
+| **Experimental** | `srt` adapter, MCP policy hook, LangChain callback, and legacy evaluator |
+| **Planned** | Published packages, authenticated capsules, telemetry export, and a maintained hosted sandbox integration |
+
+There is no HTTP server, hosted dashboard, Docker backend, bundled sandbox, or claimed PyPI release.
+
 ## A complete local run
 
 The following shape is taken from a real repository run. AgentDiff reported a successful process exit, but denied the transaction because it created a protected environment file.
@@ -64,8 +74,17 @@ The following shape is taken from a real repository run. AgentDiff reported a su
     ```
 
     ```text
+    Task completed
+
+    Expected changes:   1
+    Unexpected changes: 1
+    Protected changes:  1
+
+    Blast Radius: CRITICAL (81/100)
+    Recovery available: YES
+    Policy outcome: DENY
+
     Status: denied (deny)
-    Blast radius: 81/100 (critical)
     Mutations: 3
       deny   created  .env
       review created  pyproject.toml
@@ -104,6 +123,6 @@ The following shape is taken from a real repository run. AgentDiff reported a su
 <div class="ad-doc-link-list" markdown>
 - **Install AgentDiff** — supported source installation and requirements. [Installation →](installation.md)
 - **Use the CLI** — exact commands and flags implemented in `v0.1.0`. [CLI reference →](cli/index.md)
-- **Integrate a framework** — callbacks and hooks around the same transaction model. [Integrations →](integrations/custom.md)
+- **Integrate a command or framework** — use the transaction API, or the separately labeled experimental compatibility hooks. [Integrations →](integrations/custom.md)
 - **Review the security boundary** — explicit guarantees, observations, and non-goals. [Security & limits →](trust.md)
 </div>

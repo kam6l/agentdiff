@@ -82,7 +82,7 @@
           width: "81%",
           color: "var(--ad-orange)",
           verdict: "DENY · CRITICAL",
-          summary: "3 mutations · exit code 0",
+          summary: "1 expected · 1 unexpected · 1 protected",
           action: "inspect evidence →",
         },
         recovered: {
@@ -97,7 +97,7 @@
           width: "66.67%",
           color: "var(--ad-lime)",
           verdict: "SAFE · NO CONFLICTS",
-          summary: "2 removed · 1 allowed change kept",
+          summary: "2 recovered · 1 expected kept",
           action: "recovery recorded ✓",
         },
       };

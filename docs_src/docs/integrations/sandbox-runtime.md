@@ -1,241 +1,59 @@
-# Anthropic Sandbox Runtime Integration
-
-Run AgentDiff transactions inside Anthropic's `srt` sandbox for true isolation.
-
-## Overview
-
-AgentDiff's **local runtime** provides evidence and policy evaluation but **does not enforce** filesystem or network boundaries. For untrusted code, pair it with the [Anthropic Sandbox Runtime](https://github.com/anthropics/sandbox-runtime) (`srt`) which provides kernel-level isolation.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     AGENTDIFF + SRT                              │
-├─────────────────────────────────────────────────────────────────┤
-│  AgentDiff (outside sandbox)                                    │
-│  ├── Manifest capture (pre/post)                                │
-│  ├── Policy evaluation                                          │
-│  ├── Blast-radius scoring                                       │
-│  └── Selective recovery                                         │
-│                              ↑                                  │
-│                              │ wraps                            │
-│                              ↓                                  │
-│  SRT Sandbox (inside)                                          │
-│  ├── Filesystem isolation (deny-by-default)                     │
-│  ├── Network isolation (allowlist)                              │
-│  ├── Process limits (cgroups)                                   │
-│  └── Resource quotas (CPU, memory, disk)                        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
+---
+title: Anthropic Sandbox Runtime adapter
+description: Experimental delegation through an installed srt executable.
 ---
 
-## Installation
+# Anthropic Sandbox Runtime adapter
 
-```bash
-# Install srt (Anthropic Sandbox Runtime)
-# See: https://github.com/anthropics/sandbox-runtime
+**Status: Experimental.** AgentDiff can wrap argv with a separately installed `srt` executable. AgentDiff records that external sandboxing was requested; effective enforcement depends on the installed runtime, operating system, version, and settings.
 
-# Verify srt is available
-srt --version
-```
+The adapter does not bundle `srt`, translate AgentDiff policy into sandbox policy, parse enforcement logs, or prove which controls were applied.
 
-```bash
-# Install AgentDiff with sandbox extras
-pip install "agentdiff[sandbox]"
-```
+## CLI
 
----
-
-## Quickstart
-
-### 1. Configure Sandbox Settings
-
-Create `sandbox-settings.json`:
-
-```json
-{
-  "filesystem": {
-    "allow_read": ["/workspace"],
-    "allow_write": ["/workspace"]
-  },
-  "network": {
-    "allow": ["api.github.com", "pypi.org"]
-  },
-  "resources": {
-    "cpu_limit": 2.0,
-    "memory_limit_mb": 2048,
-    "disk_limit_mb": 4096
-  },
-  "process": {
-    "max_processes": 50
-  }
-}
-```
-
-### 2. Create AgentDiff Policy
-
-```yaml
-# agentdiff-policy.yaml
-schema_version: 1
-filesystem:
-  allow_write:
-    - "src/**"
-    - "tests/**"
-  review:
-    - "pyproject.toml"
-    - "requirements*.txt"
-  deny:
-    - ".env*"
-    - "*.pem"
-    - "*.key"
-  default: review
-limits:
-  max_owned_processes: 5
-  max_observed_ports: 10
-backup:
-  enabled: true
-```
-
-### 3. Run Under SRT + AgentDiff
+Install and configure [`srt`](https://github.com/anthropics/sandbox-runtime) separately, then run:
 
 ```bash
 agentdiff run \
-  --task "Fix parser in sandbox" \
-  --sandbox-executable srt \
-  --sandbox-settings sandbox-settings.json \
-  -- python3 agent.py
+  --runtime srt \
+  --srt-executable srt \
+  --srt-settings /absolute/path/to/settings.json \
+  --task "Fix the parser" \
+  -- python agent_task.py
 ```
 
-### 4. What Happens
+The executed wrapper argv is:
 
-1. AgentDiff captures **pre-run manifest** (host filesystem)
-2. AgentDiff launches `srt --settings sandbox-settings.json -- python3 agent.py`
-3. SRT executes command in **isolated sandbox**
-4. AgentDiff captures **post-run manifest** (host filesystem)
-5. AgentDiff evaluates policy, computes blast radius, creates capsule
-6. Results available via `agentdiff inspect <run-id>`
+```text
+srt --settings /absolute/path/to/settings.json -- python agent_task.py
+```
 
----
+Use the normal `--timeout` option for the overall observed command. There is no `--sandbox-timeout` or `--sandbox-logs` flag.
 
-## Configuration
-
-### CLI Flags
-
-| Flag | Description |
-|------|-------------|
-| `--sandbox-executable PATH` | Path to `srt` binary (default: `srt` in PATH) |
-| `--sandbox-settings PATH` | Sandbox settings JSON file |
-| `--sandbox-timeout SECONDS` | Sandbox timeout (default: 300) |
-
-### Python API
+## Python
 
 ```python
-from agentdiff.integrations import SandboxRuntimeAdapter
+import sys
 
-adapter = SandboxRuntimeAdapter(
+from agentdiff import AgentRunTransaction, load_policy_file
+from agentdiff.runtime import SandboxRuntime
+
+runtime = SandboxRuntime(
+    root="/workspace/project",
     executable="srt",
-    settings="sandbox-settings.json",
-    observe_ports=True,
-    poll_interval_seconds=0.05,
+    settings="/absolute/path/to/settings.json",
 )
+result = AgentRunTransaction(
+    root="/workspace/project",
+    policy=load_policy_file("/workspace/project/agentdiff.yaml"),
+    task="Fix the parser",
+    runtime=runtime,
+).run([sys.executable, "agent_task.py"], timeout_seconds=300)
 
-result = adapter.run(
-    argv=["python3", "agent.py"],
-    task_description="Fix parser in sandbox",
-    timeout_seconds=300,
-)
-
-# Result includes both AgentDiff evidence AND sandbox enforcement logs
-print(f"Sandbox exit code: {result.sandbox_exit_code}")
-print(f"Sandbox logs: {result.sandbox_logs_path}")
+print(result.runtime.backend)      # anthropic-sandbox-runtime
+print(result.runtime.enforcement)  # external_sandbox_requested
 ```
 
----
+## Boundary
 
-## Sandbox Settings Reference
-
-```json
-{
-  "filesystem": {
-    "allow_read": ["/workspace", "/etc/ssl/certs"],
-    "allow_write": ["/workspace"],
-    "deny": ["/workspace/.env*", "/workspace/*.pem"]
-  },
-  "network": {
-    "allow": ["api.github.com:443", "pypi.org:443", "registry.npmjs.org:443"],
-    "deny": ["*:22", "*:3389"]
-  },
-  "resources": {
-    "cpu_limit": 2.0,
-    "memory_limit_mb": 2048,
-    "disk_limit_mb": 4096,
-    "pids_limit": 100
-  },
-  "process": {
-    "max_processes": 50,
-    "default_user": "sandbox"
-  },
-  "timeouts": {
-    "exec": 300,
-    "idle": 60
-  }
-}
-```
-
----
-
-## Evidence Correlation
-
-When using SRT, AgentDiff correlates **host-level observation** with **sandbox enforcement**:
-
-| Layer | What It Sees |
-|-------|--------------|
-| **SRT (enforcement)** | Blocked writes, denied network, killed processes |
-| **AgentDiff (evidence)** | Actual mutations, observed ports, process tree |
-
-### Combined Report
-
-```bash
-agentdiff inspect <run-id> --section all
-```
-
-Output includes:
-```
-Sandbox Enforcement:
-  Filesystem: 3 writes blocked (deny list)
-  Network: 1 connection denied (api.evil.com)
-  Processes: 0 killed
-
-AgentDiff Evidence:
-  Mutations: 2 allowed, 1 review, 0 deny
-  Blast radius: 12/100 (LOW)
-  Processes: 3 owned descendants
-  Ports: 1 new (localhost:8080)
-```
-
----
-
-## Best Practices
-
-1. **Use SRT for untrusted code** — AgentDiff alone is observation, not enforcement
-2. **Align policies** — Sandbox `deny` list should match AgentDiff `filesystem.deny`
-3. **Share workspace** — Mount same `/workspace` in both for consistent paths
-4. **Capture sandbox logs** -- `--sandbox-logs` flag saves SRT output for debugging
-
----
-
-## Limitations
-
-| Limitation | Workaround |
-|------------|------------|
-| SRT must be pre-installed | Bundle in Docker image |
-| Path mapping between host/sandbox | Use same `/workspace` mount |
-| SRT doesn't expose process tree to host | AgentDiff polls host `/proc` (best effort) |
-| Network observation is host-level | Use SRT allowlist for enforcement |
-
----
-
-## Next Steps
-
-- [MCP Policy Hook](mcp-policy.md) — Block tool calls at MCP level
-- [Custom Frameworks](custom.md) — Integrate with your agent framework
-- [Runtime Model](../concepts/runtime.md) — Understand the evidence model
+AgentDiff captures host-visible before/after state around the wrapper. It does not claim that host-visible observations equal all in-sandbox activity. Review the external runtime's own settings and guarantees independently.

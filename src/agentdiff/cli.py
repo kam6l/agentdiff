@@ -14,6 +14,7 @@ from agentdiff.diff_engine import EnvironmentSnapshot, FilesystemSnapshot
 from agentdiff.doctor import doctor_report
 from agentdiff.policy import (
     Policy,
+    PolicyAction,
     PolicyEngine,
     PolicyLoadError,
     PolicyValidationError,
@@ -260,9 +261,34 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.format == "json":
         print(_json(result.to_dict()))
     else:
+        expected = sum(change.decision.action is PolicyAction.ALLOW for change in result.changes)
+        unexpected = sum(change.decision.action is PolicyAction.REVIEW for change in result.changes)
+        protected = sum(change.decision.action is PolicyAction.DENY for change in result.changes)
+        recovery_available = any(
+            change.reversible and change.decision.action in {PolicyAction.REVIEW, PolicyAction.DENY}
+            for change in result.changes
+        )
+        if result.status == "blocked":
+            task_state = "Task blocked"
+        elif result.status in {"error", "failed", "timed_out"}:
+            task_state = "Task failed"
+        else:
+            task_state = "Task completed"
+        print(task_state)
+        print()
+        print(f"Expected changes:   {expected}")
+        print(f"Unexpected changes: {unexpected}")
+        print(f"Protected changes:  {protected}")
+        print()
+        print(
+            f"Blast Radius: {result.blast_radius.level.value.upper()} "
+            f"({result.blast_radius.score}/100)"
+        )
+        print(f"Recovery available: {'YES' if recovery_available else 'NO'}")
+        print(f"Policy outcome: {result.safety_outcome.value.upper()}")
+        print()
         print(f"Run: {result.run_id}")
         print(f"Status: {result.status} ({result.safety_outcome.value})")
-        print(f"Blast radius: {result.blast_radius.score}/100 ({result.blast_radius.level.value})")
         if result.runtime is not None:
             print(f"Runtime: {result.runtime.backend} ({result.runtime.enforcement})")
         print(f"Mutations: {len(result.changes)}")
@@ -416,7 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--runtime",
         choices=["local", "srt"],
         default="local",
-        help="local observation or Anthropic Sandbox Runtime enforcement",
+        help="local observation or external Anthropic Sandbox Runtime delegation",
     )
     p_run.add_argument(
         "--srt-executable",

@@ -8,7 +8,7 @@ AgentDiff is pre-release software. Security fixes are applied to the latest comm
 
 Do not publish credentials, private run capsules, filesystem contents, environment observations, or exploit details in a public issue.
 
-If GitHub offers **Report a vulnerability** on the repository Security tab, use that private channel. Otherwise open a minimal public issue requesting a private contact path and include only a high-level impact summary and affected component.
+Use **Report a vulnerability** on the repository Security tab. Private vulnerability reporting is enabled; do not open a public issue for exploit details.
 
 ## Trust model
 
@@ -115,4 +115,4 @@ Use version control, disposable workspaces, and real sandboxing alongside AgentD
 
 ## Security testing
 
-Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, and post-run divergence. The project also runs static analysis and dependency auditing in its quality pipeline when those checks are configured and available.
+Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, and post-run divergence. Pull requests run CodeQL, Bandit, `pip-audit`, Dependency Review, cross-platform tests, and package validation.
