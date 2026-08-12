@@ -7,15 +7,17 @@ name = "agentdiff"
 version = "0.1.0"
 description = "Runtime evidence, mutation policy, and conflict-safe recovery for AI agents"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "kam6l"}]
 keywords = ["ai-agents", "runtime-safety", "policy", "rollback", "evaluation", "observability"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
@@ -27,7 +29,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://kam6l.github.io/agentdiff/"
-Documentation = "https://kam6l.github.io/agentdiff/quickstart/"
+Documentation = "https://kam6l.github.io/agentdiff/docs/"
 Repository = "https://github.com/kam6l/agentdiff"
 Issues = "https://github.com/kam6l/agentdiff/issues"
 
@@ -73,13 +75,13 @@ python_functions = ["test_*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["B", "BLE", "C4", "E", "F", "I", "PYI", "RUF", "SIM", "TC"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.12"
 files = ["src/agentdiff"]
 show_error_codes = true
 warn_unused_ignores = true
@@ -91,15 +93,3 @@ warn_unused_ignores = true
 "tests/test_integrations.py" = ["TC003"]
 "tests/test_policy.py" = ["TC003"]
 "tests/test_snapshot_security.py" = ["TC003"]
-
-[tool.ruff.format]
-# Exclude files where ruff format incorrectly removes parentheses from except clauses
-exclude = [
-    "src/agentdiff/diff_engine.py",
-    "src/agentdiff/integrations/langchain_callback.py",
-    "src/agentdiff/runtime/local.py",
-    "src/agentdiff/state/filesystem.py",
-    "src/agentdiff/transaction/inspection.py",
-    "src/agentdiff/transaction/runner.py",
-    "src/agentdiff/transaction/store.py",
-]

@@ -4,10 +4,21 @@ These examples use synthetic data and explicit local workspaces. The local runti
 
 ## Transaction API
 
+macOS / Linux:
+
 ```bash
 WORKSPACE="$(mktemp -d)"
 uv run python3 examples/run_transaction.py --workspace "$WORKSPACE"
 uv run agentdiff runs --root "$WORKSPACE"
+```
+
+PowerShell:
+
+```powershell
+$workspace = Join-Path $env:TEMP "agentdiff-example"
+New-Item -ItemType Directory -Force $workspace | Out-Null
+uv run python examples/run_transaction.py --workspace $workspace
+uv run agentdiff runs --root $workspace
 ```
 
 The script creates only `src/result.txt` below the supplied workspace and prints the JSON transaction result. Its run capsule remains in `$WORKSPACE/.agentdiff/runs/` for inspection.
@@ -15,7 +26,7 @@ The script creates only `src/result.txt` below the supplied workspace and prints
 ## MCP-style policy hook
 
 ```bash
-uv run python3 examples/mcp_policy_hook.py
+uv run python examples/mcp_policy_hook.py
 ```
 
 This example evaluates three proposed tool calls and prints redacted decisions. It does not connect to or dispatch an MCP server.
@@ -33,7 +44,7 @@ uv run agentdiff run \
   --runtime srt \
   --srt-settings /absolute/path/to/srt-settings.json \
   --policy examples/agentdiff.yaml \
-  -- python3 your_agent.py
+  -- python your_agent.py
 ```
 
 AgentDiff does not translate `examples/agentdiff.yaml` into SRT settings; review both policies independently.

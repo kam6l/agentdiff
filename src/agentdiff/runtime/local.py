@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import socket
-import subprocess
+
+# Exact argv execution is this runtime's explicit purpose.
+import subprocess  # nosec B404
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -65,7 +67,8 @@ class LocalRuntime:
 
         before_ports, before_port_error = self._snapshot_ports()
         started = time.monotonic()
-        process = subprocess.Popen(
+        # The argv sequence is passed without shell interpretation.
+        process = subprocess.Popen(  # nosec B603
             command,
             cwd=self.root,
             shell=False,
@@ -301,11 +304,12 @@ class LocalRuntime:
     ) -> None:
         """Find reparented POSIX children that remain in the dedicated session."""
 
-        if os.name != "posix":
+        get_session_id = getattr(os, "getsid", None)
+        if get_session_id is None:
             return
         for process in psutil.process_iter():
             try:
-                if os.getsid(process.pid) != session_id:
+                if get_session_id(process.pid) != session_id:
                     continue
                 create_time = process.create_time()
                 parent_pid = process.ppid()

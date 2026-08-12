@@ -1,143 +1,70 @@
+---
+title: Installation
+description: Install the AgentDiff 0.1.0 beta from source on Python 3.12 or newer.
+---
+
+<span class="ad-doc-eyebrow">Getting started</span>
+
 # Installation
 
-Multiple ways to get AgentDiff running.
+<div class="ad-doc-lede">AgentDiff is source-distributed beta software. It is not currently published to PyPI, a container registry, Homebrew, Scoop, or a binary release channel.</div>
 
-## From Source (Recommended)
+## Requirements
+
+| Requirement | Current support |
+|---|---|
+| Python | 3.12, 3.13, or 3.14 |
+| Package workflow | `uv` recommended |
+| Linux | Beta local runtime |
+| macOS | Beta local runtime; observation detail depends on OS permissions |
+| Native Windows | Beta local runtime; no dedicated process session |
+
+## Install the CLI
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
-pip install -e .
-```
+uv tool install .
 
-### Development Install
-
-```bash
-pip install -e ".[dev]"
-pre-commit install
-```
-
-Run tests:
-```bash
-pytest -v
-```
-
----
-
-## Docker
-
-```bash
-# Latest stable
-docker pull ghcr.io/kam6l/agentdiff:latest
-
-# Specific version
-docker pull ghcr.io/kam6l/agentdiff:v0.1.0
-
-# Run with workspace mounted
-docker run --rm -it \
-  -v $(pwd):/workspace \
-  -w /workspace \
-  ghcr.io/kam6l/agentdiff:latest \
-  agentdiff run -- python3 agent.py
-```
-
-### Docker Build from Source
-
-```bash
-docker build -t agentdiff:local .
-docker run --rm -it -v $(pwd):/workspace -w /workspace agentdiff:local agentdiff --help
-```
-
----
-
-## Binary Releases (Coming Soon)
-
-Pre-built binaries for Linux, macOS (Intel & Apple Silicon), and Windows will be available on [GitHub Releases](https://github.com/kam6l/agentdiff/releases).
-
-```bash
-# Linux x86_64
-curl -fsSL https://github.com/kam6l/agentdiff/releases/download/v0.1.0/agentdiff-linux-x86_64.tar.gz | tar xz
-sudo mv agentdiff /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -fsSL https://github.com/kam6l/agentdiff/releases/download/v0.1.0/agentdiff-darwin-arm64.tar.gz | tar xz
-sudo mv agentdiff /usr/local/bin/
-
-# Windows (via Scoop - coming)
-scoop bucket add agentdiff https://github.com/kam6l/scoop-bucket
-scoop install agentdiff
-```
-
----
-
-## Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Python | 3.11 | 3.12+ |
-| OS | Linux, macOS, WSL2 | Linux (kernel 5.10+) |
-| Filesystem | ext4, APFS, NTFS | ext4 with `CAP_DAC_READ_SEARCH` |
-| Memory | 256 MB | 512 MB+ |
-| Disk | 50 MB | 200 MB+ (for run capsules) |
-
-### Linux Capabilities
-
-For full process observation, AgentDiff benefits from:
-
-```bash
-# Allow reading /proc/<pid>/stat for any process
-sudo setcap cap_dac_read_search=+ep $(which python3)
-```
-
-Without this, process ancestry verification falls back to best-effort polling.
-
----
-
-## Shell Completion
-
-```bash tab="bash"
-agentdiff completion bash > /etc/bash_completion.d/agentdiff
-```
-
-```bash tab="zsh"
-agentdiff completion zsh > "${fpath[1]}/_agentdiff"
-```
-
-```bash tab="fish"
-agentdiff completion fish > ~/.config/fish/completions/agentdiff.fish
-```
-
----
-
-## Verify Installation
-
-```bash
-agentdiff --version
+agentdiff --help
 agentdiff doctor
 ```
 
-`agentdiff doctor` runs a self-check:
-- Manifest scanner integrity
-- Policy parser validation
-- Blast-radius weight sanity
-- Backup/restore round-trip
-- Process observation capability
+`uv tool install` creates an isolated environment and exposes the `agentdiff` command. If the executable directory is not on `PATH`, run `uv tool ensurepath` and open a new terminal.
 
----
+## Contributor setup
 
-## Troubleshooting
+```bash
+git clone https://github.com/kam6l/agentdiff.git
+cd agentdiff
+uv sync --locked --all-groups
 
-| Issue | Solution |
-|-------|----------|
-| `PermissionError` on `/proc` | Run with `CAP_DAC_READ_SEARCH` or as root |
-| `zstd` not found | `pip install zstandard` or `apt install zstd` |
-| Slow manifest scan | Exclude `node_modules`, `.git`, `target/` in policy |
-| Docker: `Operation not permitted` | Run with `--cap-add=CAP_DAC_READ_SEARCH --security-opt apparmor=unconfined` |
+uv run pytest
+uv run ruff format --check src tests examples benchmarks
+uv run ruff check src tests examples benchmarks
+uv run mypy src/agentdiff
+```
 
----
+## Upgrade or remove
 
-## Next Steps
+From a fresh checkout of the revision you trust:
 
-- [Quickstart](quickstart.md) — Run your first transaction
-- [Mutation Policy](concepts/policy.md) — Customize allow/review/deny rules
-- [CLI Reference](cli.md) — All commands and flags
+```bash
+uv tool install --force .
+```
+
+Remove it with:
+
+```bash
+uv tool uninstall agentdiff
+```
+
+## Verify the boundary
+
+Run `agentdiff doctor --format json` on each target machine. The report distinguishes filesystem observation, best-effort process evidence, machine-wide port observation, local non-enforcement, recovery scope, and optional external-runtime detection.
+
+## Next steps
+
+- [Run the quickstart](quickstart.md)
+- [Read the runtime model](concepts/runtime.md)
+- [Review the CLI](cli/index.md)

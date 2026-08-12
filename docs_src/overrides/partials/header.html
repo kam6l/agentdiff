@@ -1,0 +1,40 @@
+<header class="md-header ad-doc-header" data-md-component="header">
+  <nav class="ad-doc-header__inner" aria-label="Documentation header">
+    <a class="ad-doc-brand" href="{{ config.extra.homepage | url }}" aria-label="AgentDiff home">
+      <span class="ad-doc-brand__mark">{% include "partials/logo.html" %}</span>
+      <span>AgentDiff</span>
+    </a>
+
+    <div class="ad-doc-header__actions">
+      <label class="ad-doc-icon-button md-icon" for="__search" aria-label="Search documentation" title="Search">
+        {% set icon = config.theme.icon.search or "material/magnify" %}
+        {% include ".icons/" ~ icon ~ ".svg" %}
+      </label>
+
+      {% if config.theme.palette %}
+        {% if not config.theme.palette is mapping %}
+          {% include "partials/palette.html" %}
+        {% endif %}
+      {% endif %}
+      {% if not config.theme.palette is mapping %}
+        {% include "partials/javascripts/palette.html" %}
+      {% endif %}
+
+      <a class="ad-doc-icon-button md-icon" href="{{ config.repo_url }}" target="_blank" rel="noopener" aria-label="AgentDiff on GitHub" title="GitHub">
+        {% include ".icons/fontawesome/brands/github.svg" %}
+      </a>
+
+      <label class="ad-doc-icon-button ad-doc-menu-button md-icon" for="__drawer" aria-label="Open documentation navigation">
+        {% set icon = config.theme.icon.menu or "material/menu" %}
+        {% include ".icons/" ~ icon ~ ".svg" %}
+      </label>
+    </div>
+
+    {% if "material/search" in config.plugins %}
+      {% set search = config.plugins["material/search"] | attr("config") %}
+      {% if search.enabled %}
+        {% include "partials/search.html" %}
+      {% endif %}
+    {% endif %}
+  </nav>
+</header>
