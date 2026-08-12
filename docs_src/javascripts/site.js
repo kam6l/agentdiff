@@ -1,187 +1,173 @@
-document.documentElement.classList.add("js");
-
 (() => {
   "use strict";
 
-  const demoStates = {
-    messy: {
-      score: "77",
-      meter: "77%",
-      summary: "2 unexpected / 3 mutations",
-      verdict: "DENY · CRITICAL",
-      clean: false,
-      mutations: [
-        ["M", "src/parser.py", "allow", "is-target"],
-        ["M", "pyproject.toml", "review", "is-warning"],
-        ["+", ".env", "deny", "is-warning"],
-      ],
-    },
-    clean: {
-      score: "0",
-      meter: "0%",
-      summary: "0 unexpected / 1 mutation",
-      verdict: "ALLOW · LOW",
-      clean: true,
-      mutations: [["M", "src/parser.py", "allow", "is-target"]],
-    },
-  };
+  const selectAll = (root, selector) => Array.from(root.querySelectorAll(selector));
 
-  const inspectorCounts = {
-    manifest: "3 changes",
-    policy: "3 decisions",
-    recovery: "2 selected paths",
-    processes: "identity evidence",
-    ports: "1 observed endpoint",
-  };
-
-  function buildMutation([type, path, label, className]) {
-    const row = document.createElement("div");
-    row.className = `ad-mutation ${className}`;
-
-    const typeNode = document.createElement("span");
-    typeNode.className = "ad-mutation__type";
-    typeNode.textContent = type;
-
-    const pathNode = document.createElement("code");
-    pathNode.textContent = path;
-
-    const labelNode = document.createElement("span");
-    labelNode.textContent = label;
-
-    row.append(typeNode, pathNode, labelNode);
-    return row;
+  function labelThemeProgress() {
+    document.querySelectorAll('[role="progressbar"]:not([aria-label])').forEach((progress) => {
+      progress.setAttribute("aria-label", "Page loading progress");
+    });
   }
 
-  function setDemoState(home, name) {
-    const state = demoStates[name];
-    const demo = home.querySelector(".ad-demo");
-    const score = home.querySelector("[data-demo-score]");
-    const meter = home.querySelector("[data-demo-meter]");
-    const summary = home.querySelector("[data-demo-summary]");
-    const verdict = home.querySelector("[data-demo-verdict]");
-    const mutations = home.querySelector("[data-demo-mutations]");
+  function setupLandingPage(root) {
+    if (!root || root.dataset.enhanced === "true") return;
+    root.dataset.enhanced = "true";
+    document.body.classList.add("ad-home-page");
 
-    if (!state || !demo || !score || !meter || !summary || !verdict || !mutations) {
-      return;
+    const menuButton = root.querySelector("[data-menu-toggle]");
+    const menu = root.querySelector("[data-menu]");
+    const closeMenu = () => {
+      if (!menuButton || !menu) return;
+      menu.classList.remove("is-open");
+      menuButton.setAttribute("aria-expanded", "false");
+    };
+
+    if (menuButton && menu) {
+      menuButton.addEventListener("click", () => {
+        const next = menuButton.getAttribute("aria-expanded") !== "true";
+        menuButton.setAttribute("aria-expanded", String(next));
+        menu.classList.toggle("is-open", next);
+      });
+      selectAll(menu, "a").forEach((link) => link.addEventListener("click", closeMenu));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeMenu();
+      });
+      document.addEventListener("click", (event) => {
+        if (!menu.contains(event.target) && !menuButton.contains(event.target)) closeMenu();
+      });
     }
 
-    score.textContent = state.score;
-    meter.style.width = state.meter;
-    summary.textContent = state.summary;
-    verdict.textContent = state.verdict;
-    demo.classList.toggle("is-clean", state.clean);
-    mutations.replaceChildren(...state.mutations.map(buildMutation));
-
-    home.querySelectorAll("[data-demo-state]").forEach((button) => {
-      const active = button.dataset.demoState === name;
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-  }
-
-  async function copyText(button, target) {
-    const label = button.querySelector(".ad-copy__label");
-    const original = label ? label.textContent : "Copy";
-    const value = target.textContent.trim();
-
-    try {
-      await navigator.clipboard.writeText(value);
-      if (label) label.textContent = "Copied";
-    } catch (_error) {
-      const input = document.createElement("textarea");
-      input.value = value;
-      input.setAttribute("readonly", "");
-      input.style.position = "fixed";
-      input.style.opacity = "0";
-      document.body.append(input);
-      input.select();
-      document.execCommand("copy");
-      input.remove();
-      if (label) label.textContent = "Copied";
-    }
-
-    window.setTimeout(() => {
-      if (label) label.textContent = original;
-    }, 1600);
-  }
-
-  function activateInspectorTab(home, selected) {
-    const name = selected.dataset.inspectorTab;
-    if (!name) return;
-
-    home.querySelectorAll("[data-inspector-tab]").forEach((tab) => {
-      const active = tab === selected;
-      tab.classList.toggle("is-active", active);
-      tab.setAttribute("aria-selected", String(active));
-      tab.tabIndex = active ? 0 : -1;
-    });
-
-    home.querySelectorAll("[data-inspector-panel]").forEach((panel) => {
-      panel.hidden = panel.dataset.inspectorPanel !== name;
-    });
-
-    const count = home.querySelector("[data-inspector-count]");
-    if (count) count.textContent = inspectorCounts[name] || "";
-  }
-
-  function initializeHome() {
-    const home = document.querySelector("[data-agentdiff-home]");
-    if (!home || home.dataset.initialized === "true") return;
-    home.dataset.initialized = "true";
-
-    home.querySelectorAll("[data-demo-state]").forEach((button) => {
-      button.addEventListener("click", () => setDemoState(home, button.dataset.demoState));
-    });
-
-    home.querySelectorAll("[data-copy-target]").forEach((button) => {
-      button.addEventListener("click", () => {
+    selectAll(root, "[data-copy-target]").forEach((button) => {
+      button.addEventListener("click", async () => {
         const target = document.getElementById(button.dataset.copyTarget);
-        if (target) copyText(button, target);
-      });
-    });
-
-    const tabs = [...home.querySelectorAll("[data-inspector-tab]")];
-    tabs.forEach((tab, index) => {
-      tab.addEventListener("click", () => activateInspectorTab(home, tab));
-      tab.addEventListener("keydown", (event) => {
-        if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) {
-          return;
+        if (!target) return;
+        try {
+          await navigator.clipboard.writeText(target.textContent.trim());
+          const label = button.querySelector("[data-copy-label]") || button;
+          const original = label.textContent;
+          label.textContent = "Copied";
+          window.setTimeout(() => { label.textContent = original; }, 1600);
+        } catch (_error) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(target);
+          selection.removeAllRanges();
+          selection.addRange(range);
         }
-        event.preventDefault();
-        const direction = ["ArrowDown", "ArrowRight"].includes(event.key) ? 1 : -1;
-        const next = tabs[(index + direction + tabs.length) % tabs.length];
-        activateInspectorTab(home, next);
-        next.focus();
       });
     });
 
-    const reveals = home.querySelectorAll(".ad-reveal");
-    if (!("IntersectionObserver" in window)) {
-      reveals.forEach((element) => element.classList.add("is-visible"));
-      return;
+    const runCard = root.querySelector("[data-run-card]");
+    if (runCard) {
+      const stateButtons = selectAll(runCard, "[data-run-state]");
+      const mutationContainer = runCard.querySelector("[data-run-mutations]");
+      const score = runCard.querySelector("[data-run-score]");
+      const scoreLabel = runCard.querySelector("[data-score-label]");
+      const scoreUnit = score?.parentElement?.querySelector("span");
+      const meter = runCard.querySelector("[data-run-meter]");
+      const verdict = runCard.querySelector("[data-run-verdict]");
+      const summary = runCard.querySelector("[data-run-summary]");
+      const action = runCard.querySelector("[data-run-action]");
+
+      const states = {
+        observed: {
+          rows: [
+            ["is-deny", "+", ".env", "deny"],
+            ["is-review", "+", "pyproject.toml", "review"],
+            ["is-allow", "+", "src/parser.py", "allow"],
+          ],
+          label: "BLAST RADIUS",
+          score: "81",
+          unit: "/100",
+          width: "81%",
+          color: "var(--ad-orange)",
+          verdict: "DENY · CRITICAL",
+          summary: "1 expected · 1 unexpected · 1 protected",
+          action: "inspect evidence →",
+        },
+        recovered: {
+          rows: [
+            ["is-deny", "−", ".env", "removed"],
+            ["is-review", "−", "pyproject.toml", "removed"],
+            ["is-allow", "✓", "src/parser.py", "kept"],
+          ],
+          label: "RECOVERY",
+          score: "2",
+          unit: "/3",
+          width: "66.67%",
+          color: "var(--ad-lime)",
+          verdict: "SAFE · NO CONFLICTS",
+          summary: "2 recovered · 1 expected kept",
+          action: "recovery recorded ✓",
+        },
+      };
+
+      const renderState = (name) => {
+        const state = states[name];
+        if (!state) return;
+        stateButtons.forEach((button) => {
+          const selected = button.dataset.runState === name;
+          button.classList.toggle("is-active", selected);
+          button.setAttribute("aria-pressed", String(selected));
+        });
+        mutationContainer.innerHTML = state.rows.map(([klass, symbol, path, result]) => (
+          `<div class="ad-mutation-row ${klass}"><b>${symbol}</b><code>${path}</code><span>${result}</span></div>`
+        )).join("");
+        scoreLabel.textContent = state.label;
+        score.textContent = state.score;
+        scoreUnit.textContent = state.unit;
+        meter.style.width = state.width;
+        meter.style.background = state.color;
+        verdict.textContent = state.verdict;
+        summary.textContent = state.summary;
+        action.textContent = state.action;
+      };
+
+      stateButtons.forEach((button) => {
+        button.addEventListener("click", () => renderState(button.dataset.runState));
+      });
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
+    const tabs = selectAll(root, "[data-evidence-tab]");
+    const panels = selectAll(root, "[data-evidence-panel]");
+    if (tabs.length && panels.length) {
+      const selectTab = (tab, focus = false) => {
+        const name = tab.dataset.evidenceTab;
+        tabs.forEach((candidate) => {
+          const selected = candidate === tab;
+          candidate.setAttribute("aria-selected", String(selected));
+          candidate.tabIndex = selected ? 0 : -1;
         });
-      },
-      { rootMargin: "0px 0px -8%", threshold: 0.08 },
-    );
-    reveals.forEach((element) => observer.observe(element));
+        panels.forEach((panel) => {
+          panel.hidden = panel.dataset.evidencePanel !== name;
+        });
+        if (focus) tab.focus();
+      };
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => selectTab(tab));
+        tab.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          let nextIndex = index;
+          if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+          if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+          if (event.key === "Home") nextIndex = 0;
+          if (event.key === "End") nextIndex = tabs.length - 1;
+          selectTab(tabs[nextIndex], true);
+        });
+      });
+    }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeHome, { once: true });
-  } else {
-    initializeHome();
+  function boot() {
+    labelThemeProgress();
+    const landing = document.querySelector("[data-agentdiff-home]");
+    if (landing) setupLandingPage(landing);
   }
 
+  document.addEventListener("DOMContentLoaded", boot);
   if (typeof window.document$ !== "undefined") {
-    window.document$.subscribe(initializeHome);
+    window.document$.subscribe(boot);
   }
 })();

@@ -335,9 +335,9 @@ class TrajectoryTracker:
         duration_ms: float = 0.0,
     ) -> ToolCall:
         """Record a tool call in the current step."""
-        if self._current_step is None:
-            self.start_step()
-        assert self._current_step is not None
+        current_step = self._current_step
+        if current_step is None:
+            current_step = self.start_step()
 
         tool_call = ToolCall(
             name=name,
@@ -346,7 +346,7 @@ class TrajectoryTracker:
             error=error,
             duration_ms=duration_ms,
         )
-        self._current_step.tool_calls.append(tool_call)
+        current_step.tool_calls.append(tool_call)
         return tool_call
 
     @contextmanager
@@ -385,12 +385,12 @@ class TrajectoryTracker:
         model: str | None = None,
     ) -> None:
         """Record LLM token usage for current step."""
-        if self._current_step is None:
-            self.start_step()
-        assert self._current_step is not None
-        self._current_step.llm_input_tokens = input_tokens
-        self._current_step.llm_output_tokens = output_tokens
-        self._current_step.llm_model = model
+        current_step = self._current_step
+        if current_step is None:
+            current_step = self.start_step()
+        current_step.llm_input_tokens = input_tokens
+        current_step.llm_output_tokens = output_tokens
+        current_step.llm_model = model
 
     def finish(
         self,

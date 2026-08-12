@@ -269,7 +269,12 @@ class FilesystemScanner:
             path = Path(entry.path)
             try:
                 relative = path.relative_to(self.root).as_posix()
-                info = entry.stat(follow_symlinks=False)
+                # ``DirEntry.stat`` can report zeroed file identities on Windows
+                # (notably with Python 3.14), while a path-level ``lstat`` returns
+                # the stable volume/file IDs also exposed by ``fstat`` below.
+                # Use the same identity source on every platform so the secure
+                # open-and-verify step does not reject unchanged regular files.
+                info = path.lstat()
             except (OSError, ValueError, UnicodeError) as exc:
                 unsupported[entry.name] = f"entry unreadable: {type(exc).__name__}"
                 continue
@@ -351,7 +356,8 @@ class FilesystemScanner:
 
         destination: Path | None = None
         if should_backup:
-            assert self.backup_dir is not None
+            if self.backup_dir is None:
+                raise RuntimeError("backup capture requested without a backup directory")
             try:
                 safe = _safe_relative(relative)
             except ValueError:
@@ -482,7 +488,8 @@ def diff_manifests(
         if old is not None and new is None:
             changes.append(FileChange(path, "deleted", True, False))
             continue
-        assert old is not None and new is not None
+        if old is None or new is None:
+            raise RuntimeError("manifest diff invariant violated")
         content_changed = (
             old.kind != new.kind
             or old.sha256 != new.sha256

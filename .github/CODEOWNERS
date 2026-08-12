@@ -1,1 +1,8 @@
 * @kam6l
+
+# Security-sensitive control planes stay visible to the maintainer.
+/.github/workflows/ @kam6l
+/.github/dependabot.yml @kam6l
+/SECURITY.md @kam6l
+/src/agentdiff/state/ @kam6l
+/src/agentdiff/transaction/ @kam6l

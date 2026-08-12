@@ -1,5 +1,5 @@
-site_name: AgentDiff Runtime
-site_description: Runtime evidence and conflict-safe recovery for autonomous agents
+site_name: AgentDiff
+site_description: See exactly what an AI agent changed and selectively undo only the collateral damage.
 site_author: kam6l
 site_url: https://kam6l.github.io/agentdiff/
 repo_url: https://github.com/kam6l/agentdiff
@@ -12,67 +12,77 @@ copyright: Copyright &copy; 2026 AgentDiff contributors
 
 theme:
   name: material
+  custom_dir: docs_src/overrides
   language: en
+  logo: assets/images/favicon.svg
   favicon: assets/images/favicon.svg
   font:
     text: Inter
     code: JetBrains Mono
   palette:
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
+    - scheme: slate
       primary: black
       accent: deep orange
       toggle:
-        icon: material/brightness-7
-        name: Switch to light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: black
+        icon: material/weather-sunny
+        name: Use light mode
+    - scheme: default
+      primary: white
       accent: deep orange
       toggle:
-        icon: material/brightness-4
-        name: Switch to dark mode
+        icon: material/weather-night
+        name: Use dark mode
   features:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
     - navigation.top
     - navigation.tracking
-    - navigation.path
-    - navigation.indexes
     - search.highlight
     - search.share
     - search.suggest
+    - content.action.edit
+    - content.code.annotate
     - content.code.copy
     - content.tabs.link
-    - content.code.annotate
     - toc.follow
-    - toc.integrate
   icon:
     repo: fontawesome/brands/github
 
 nav:
   - Home: index.md
   - Documentation:
-      - Overview: index.md
+      - Overview: docs/index.md
       - Getting started:
           - Quickstart: docs/quickstart.md
           - Installation: docs/installation.md
-      - Concepts:
-          - Runtime Model: docs/concepts/runtime.md
-          - Mutation Policy: docs/concepts/policy.md
-          - Blast-Radius Scoring: docs/concepts/blast-radius.md
-          - Selective Recovery: docs/concepts/recovery.md
-      - CLI Reference: docs/cli.md
-      - Python API: docs/api.md
+      - Core concepts:
+          - Runtime model: docs/concepts/runtime.md
+          - Mutation policy: docs/concepts/policy.md
+          - Blast-radius scoring: docs/concepts/blast-radius.md
+          - Selective recovery: docs/concepts/recovery.md
+      - CLI:
+          - CLI overview: docs/cli/index.md
+          - Run a transaction: docs/cli/run.md
+          - Inspect evidence: docs/cli/inspect.md
+          - Recover safely: docs/cli/rollback.md
+          - Policy commands: docs/cli/policy.md
+          - Operations: docs/cli/operations.md
       - Integrations:
-          - Anthropic Sandbox Runtime: docs/integrations/sandbox-runtime.md
-          - MCP Policy Hook: docs/integrations/mcp-policy.md
-          - Custom Frameworks: docs/integrations/custom.md
-          - LangChain / LangGraph: docs/integrations/langchain.md
-  - SDK Reference: docs/sdk-reference.md
-  - API Reference: docs/api-reference.md
+          - Anthropic Sandbox Runtime (Experimental): docs/integrations/sandbox-runtime.md
+          - MCP policy hook (Experimental): docs/integrations/mcp-policy.md
+          - LangChain / LangGraph (Experimental): docs/integrations/langchain.md
+          - Custom frameworks: docs/integrations/custom.md
+      - Security & capability limits: docs/trust.md
+  - Python API: docs/sdk-reference.md
+  - Capsule Reference: docs/api-reference.md
   - Changelog: changelog.md
 
 plugins:
@@ -92,6 +102,9 @@ plugins:
 
 markdown_extensions:
   - meta
+  - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -103,25 +116,21 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
-  - admonition
-  - attr_list
-  - md_in_html
   - toc:
       permalink: true
 
 extra_css:
-  - stylesheets/extra.css
+  - stylesheets/landing.css
+  - stylesheets/docs.css
 
 extra_javascript:
   - javascripts/site.js
-  - javascripts/e2b-nav.js
+  - javascripts/docs.js
 
 extra:
   homepage: https://kam6l.github.io/agentdiff/
+  generator: false
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/kam6l/agentdiff
       name: AgentDiff on GitHub
-  version:
-    provider: mike
-  repo_stars: 13332

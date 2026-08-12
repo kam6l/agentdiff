@@ -146,7 +146,9 @@ def test_diff_reports_metadata_change_when_content_was_not_hashed(tmp_path: Path
 
     target.write_bytes(b"bb")
     stat_result = target.stat()
-    os.utime(target, ns=(stat_result.st_atime_ns, stat_result.st_mtime_ns + 1))
+    # Use a full second so the metadata change survives coarse filesystem
+    # timestamp resolution on every supported platform.
+    os.utime(target, ns=(stat_result.st_atime_ns, stat_result.st_mtime_ns + 1_000_000_000))
     after = FilesystemScanner(root, hash_max_file_mb=0).capture()
 
     assert before.files["large.bin"].sha256 is None
@@ -292,7 +294,10 @@ def test_run_store_rejects_replaced_run_directory(tmp_path: Path) -> None:
     store = RunStore.create(tmp_path, task="identity", command=["true"])
     moved = store.run_dir.with_name(f"{store.run_id}-moved")
     store.run_dir.rename(moved)
-    store.run_dir.symlink_to(outside, target_is_directory=True)
+    try:
+        store.run_dir.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable")
 
     with pytest.raises(InvalidRunIdError, match="run directory identity changed"):
         store.write_json("result.json", {"status": "forged"})
@@ -312,5 +317,4 @@ def test_run_store_open_rejects_a_symlinked_agentdiff_ancestor(tmp_path: Path) -
         pytest.skip("directory symlinks are unavailable")
 
     with pytest.raises((FileNotFoundError, InvalidRunIdError), match=r"run|unsafe"):
-    with pytest.raises((FileNotFoundError, InvalidRunIdError), match="run|unsafe"):
         RunStore.open(root, store.run_id)

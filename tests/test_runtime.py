@@ -42,6 +42,7 @@ def test_local_runtime_preserves_argv_and_uses_root_as_cwd(tmp_path: Path) -> No
     assert result.timed_out is False
 
 
+@pytest.mark.skipif(os.name == "nt", reason="test shim relies on POSIX shebang execution")
 def test_sandbox_runtime_wraps_argv_without_shell_parsing(tmp_path: Path) -> None:
     wrapper = tmp_path / "fake-srt"
     wrapper.write_text(
