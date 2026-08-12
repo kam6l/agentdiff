@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload reference coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-python-3.12
           path: coverage.xml
@@ -170,7 +170,7 @@ jobs:
       - name: Check built-site links and assets
         run: uv run python scripts/check_docs_links.py site
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mkdocs-site
           path: site/
@@ -198,7 +198,7 @@ jobs:
       - name: Run adversarial local benchmark
         run: uv run python3 benchmarks/safetybench.py --output safetybench.json
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: local-safetybench
           path: safetybench.json
@@ -244,7 +244,7 @@ jobs:
           /tmp/agentdiff-wheel/bin/agentdiff policy validate --policy /tmp/agentdiff.yaml
           /tmp/agentdiff-wheel/bin/agentdiff-demo --json > /tmp/agentdiff-demo.json
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: distributions
           path: dist/
