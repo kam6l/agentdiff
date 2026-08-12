@@ -106,8 +106,6 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.14"
-          python-version: "3.12"
-
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -182,7 +180,6 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.14"
-          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies

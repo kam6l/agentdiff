@@ -1,185 +1,167 @@
+---
+title: Quickstart
+description: Install AgentDiff, record a real transaction, inspect its evidence, and selectively recover collateral.
+---
+
+<span class="ad-doc-eyebrow">Getting started</span>
+
 # Quickstart
 
-Run your first AgentDiff transaction in under 2 minutes.
+<div class="ad-doc-lede">Run an intentionally risky local command, inspect the durable evidence it produces, and remove only the collateral while preserving the allowed change.</div>
 
 ## Prerequisites
 
-- Python 3.11+
-- Linux or macOS (Windows via WSL2)
-- `git` for installation
+- Python **3.14 or newer**
+- [`uv`](https://docs.astral.sh/uv/) for the recommended installation path
+- Linux or macOS; WSL2 is suitable for evaluation, but native Windows parity is not complete
 
----
+## 1. Install from source
 
-## 1. Install AgentDiff
-
-```bash tab="From source (recommended)"
+```bash
+# Clone and install AgentDiff as an isolated command
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
-pip install -e .
+uv tool install .
+
+# Confirm the implemented command surface
+agentdiff --help
 ```
 
-```bash tab="Binary (coming soon)"
-# Pre-built binaries will be available on GitHub Releases
-curl -fsSL https://agentdiff.dev/install.sh | bash
-```
+For contributor setup instead, use `uv sync --all-groups` and prefix commands with `uv run`.
 
-```bash tab="Docker"
-docker run --rm -it -v $(pwd):/workspace ghcr.io/kam6l/agentdiff:latest \
-  agentdiff run -- python3 /workspace/agent.py
-```
+## 2. Create a policy
 
-Verify installation:
-```bash
-agentdiff --version
-# agentdiff 0.1.0
-```
-
----
-
-## 2. Initialize a Policy
+Move to a disposable project and generate AgentDiff's conservative starter policy:
 
 ```bash
+mkdir agentdiff-quickstart
+cd agentdiff-quickstart
 agentdiff policy init
 ```
 
-This creates `agentdiff-policy.yaml` in your current directory:
+The command writes `agentdiff.yaml`. This shortened example preserves source changes, reviews dependency metadata, and denies environment files:
 
 ```yaml
-schema_version: 1
+version: 1
 filesystem:
   allow_write:
     - "src/**"
-    - "tests/**"
   review:
     - "pyproject.toml"
-    - "requirements*.txt"
-    - "Cargo.toml"
-    - "package.json"
   deny:
-    - ".env*"
-    - "*.pem"
-    - "*.key"
-    - ".ssh/**"
-    - ".aws/**"
+    - ".env"
+    - ".env.*"
+    - ".git/**"
   default: review
-limits:
-  max_owned_processes: 5
-  max_observed_ports: 10
-backup:
+process:
+  allow:
+    - "python*"
+  default: review
+network:
+  # Observation only in the local runtime; traffic is not blocked.
+  mode: observe
+rollback:
   enabled: true
-  compression: zstd
+  max_backup_file_mb: 25
 ```
 
-> **Tip:** Run `agentdiff policy explain <path>` to see which rule matches a specific file.
-
----
-
-## 3. Create a Test Agent
-
-Create a simple script that makes some "mistakes":
-
-```python
-# agent.py
-import os
-import subprocess
-
-# Intended change
-with open("src/main.py", "w") as f:
-    f.write('print("Hello, AgentDiff!")\n')
-
-# Accidental dependency change (review)
-with open("pyproject.toml", "w") as f:
-    f.write('[tool.poetry]\nname = "demo"\n')
-
-# Protected file creation (deny)
-with open(".env", "w") as f:
-    f.write('SECRET_KEY="oops"\n')
-
-# Spawn a subprocess
-subprocess.run(["sleep", "0.1"])
-```
+Validate before using it:
 
 ```bash
-mkdir -p src
+agentdiff policy validate --policy agentdiff.yaml
+agentdiff policy explain .env --policy agentdiff.yaml
 ```
 
----
+## 3. Create an intentionally risky task
 
-## 4. Run Under Observation
+Create `agent_task.py`:
+
+```python
+from pathlib import Path
+
+Path("src").mkdir(exist_ok=True)
+
+# Intended change — allowed by src/**
+Path("src/parser.py").write_text(
+    "def parse(value):\n    return value.strip()\n",
+    encoding="utf-8",
+)
+
+# Collateral changes — review and deny
+Path("pyproject.toml").write_text(
+    '[project]\nname = "demo"\n',
+    encoding="utf-8",
+)
+Path(".env").write_text("API_TOKEN=demo-only\n", encoding="utf-8")
+```
+
+## 4. Run under observation
 
 ```bash
 agentdiff run \
-  --task "Demo: show mutations" \
-  -- python3 agent.py
+  --task "Update the parser" \
+  --format summary \
+  -- python3 agent_task.py
 ```
 
-Output:
-```
-agentdiff: capturing pre-run manifest…
-agentdiff: executing argv…
-agentdiff: capturing post-run manifest…
-agentdiff: evaluating policy…
-agentdiff: computing blast radius…
+A representative output from this exact example:
 
-Run ID: a1b2c3d4
-Task: Demo: show mutations
-Status: DENY (blast radius: 77/100)
-
-Mutations:
-  M  src/main.py           allow      (intended)
-  M  pyproject.toml        review     (dependency manifest)
-  +  .env                  deny       (protected environment file)
-
-Processes: 1 owned descendant observed
-Ports: 0 new listening ports
-
-Evidence capsule: .agentdiff/runs/a1b2c3d4/
+```text
+Run: <run-id>
+Status: denied (deny)
+Blast radius: 81/100 (critical)
+Runtime: local-observe (observation)
+Mutations: 3
+  deny   created  .env
+  review created  pyproject.toml
+  allow  created  src/parser.py
 ```
 
----
+!!! note "A denied transaction still records evidence"
+    The subprocess completed successfully, but AgentDiff returned a non-zero policy status because a deny mutation was observed. Local observation does not retroactively block the write.
 
-## 5. Inspect the Evidence
+## 5. Inspect and verify
+
+Copy the run ID from the output:
 
 ```bash
-# Human-readable summary
-agentdiff inspect a1b2c3d4
-
-# Machine-readable JSON
-agentdiff inspect a1b2c3d4 --format json
-
-# Just the policy decisions
-agentdiff inspect a1b2c3d4 --section policy
+agentdiff inspect <run-id>
+agentdiff verify <run-id>
 ```
 
----
+`inspect` summarizes the durable capsule. `verify` checks the capsule's checksum manifest before you trust or transport it.
 
-## 6. Recover Safely
+## 6. Recover only the collateral
 
 ```bash
-# Dry run - see what would be reverted
-agentdiff rollback a1b2c3d4 --safe-only --dry-run
-
-# Revert only "safe" collateral (unchanged, non-conflicting)
-agentdiff rollback a1b2c3d4 --safe-only
-
-# Full rollback (requires confirmation)
-agentdiff rollback a1b2c3d4
+agentdiff rollback <run-id> --safe-only
 ```
 
-The `--safe-only` flag preserves:
-- Files with **allow** decisions (your intended work)
-- Files that were **modified after the run** (conflicts)
-- Files matching **deny** that were later edited by you
+For this example, the result is:
 
----
+```text
+Actions: 2
+  removed  .env
+  removed  pyproject.toml
+Conflicts: 0
+Skipped: 1
+```
 
-## Next Steps
+`src/parser.py` remains because policy allowed it. If a current path no longer matches the recorded post-run state, AgentDiff reports a conflict instead of overwriting the later edit.
 
-| Goal | Guide |
-|------|-------|
-| Understand the runtime model | [Runtime Model](concepts/runtime.md) |
-| Write custom policies | [Mutation Policy](concepts/policy.md) |
-| Learn blast-radius scoring | [Blast-Radius Scoring](concepts/blast-radius.md) |
-| Use selective recovery | [Selective Recovery](concepts/recovery.md) |
-| Full CLI reference | [CLI Reference](cli.md) |
-| Python API | [Python API](api.md) |
+## What you now have
+
+<div class="ad-doc-checklist" markdown>
+- [x] A no-follow before/after filesystem manifest
+- [x] An allow, review, or deny decision for each mutation
+- [x] An explainable 0–100 blast-radius score
+- [x] A checksum-verified local run capsule
+- [x] A recorded, conflict-checked recovery result
+</div>
+
+## Next steps
+
+- [Understand the runtime and its limits](concepts/runtime.md)
+- [Customize mutation policy](concepts/policy.md)
+- [Learn how the score is calculated](concepts/blast-radius.md)
+- [Review every CLI command](cli/index.md)
