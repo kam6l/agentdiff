@@ -32,6 +32,38 @@
     return Promise.resolve();
   }
 
+  function setupBackToTop() {
+    let topBtn = document.getElementById("ad-back-to-top");
+    if (!topBtn) {
+      topBtn = document.createElement("button");
+      topBtn.id = "ad-back-to-top";
+      topBtn.className = "ad-back-to-top";
+      topBtn.type = "button";
+      topBtn.setAttribute("aria-label", "Back to top");
+      topBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+      `;
+      topBtn.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      document.body.appendChild(topBtn);
+    }
+
+    const onScroll = () => {
+      if (window.scrollY > 280) {
+        topBtn.classList.add("is-visible");
+      } else {
+        topBtn.classList.remove("is-visible");
+      }
+    };
+
+    window.removeEventListener("scroll", onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
+
   function enhanceDocs() {
     labelThemeProgress();
     if (document.querySelector("[data-agentdiff-home]")) return;
@@ -41,7 +73,9 @@
     if (!article || article.dataset.docsEnhanced === "true") return;
     article.dataset.docsEnhanced = "true";
 
-    const editAction = article.querySelector("a.md-content__button[href]");
+    // Remove any default Material edit buttons or stray top anchors in content
+    article.querySelectorAll(".md-content__button, .md-top").forEach((el) => el.remove());
+
     const h1 = article.querySelector("h1");
     if (h1) {
       const actions = document.createElement("div");
@@ -60,16 +94,6 @@
       });
       actions.appendChild(copy);
 
-      if (editAction) {
-        const source = document.createElement("a");
-        source.href = editAction.href;
-        source.target = "_blank";
-        source.rel = "noopener noreferrer";
-        source.innerHTML = '<span aria-hidden="true">↗</span><span>Edit page</span>';
-        actions.appendChild(source);
-        editAction.hidden = true;
-      }
-
       h1.before(actions);
     }
 
@@ -86,14 +110,14 @@
     const feedback = document.createElement("aside");
     feedback.className = "ad-doc-feedback";
     feedback.setAttribute("aria-label", "Documentation feedback");
-    const editLink = editAction?.href || "https://github.com/kam6l/agentdiff/tree/main/docs_src";
     feedback.innerHTML = `
       <div><span>DOCUMENTATION FEEDBACK</span><strong>Was this page useful?</strong></div>
       <div>
-        <a href="${encodeURI(editLink)}" target="_blank" rel="noopener noreferrer">Improve this page ↗</a>
-        <a href="https://github.com/kam6l/agentdiff/issues/new" target="_blank" rel="noopener noreferrer">Report a gap ↗</a>
+        <a href="https://github.com/kam6l/agentdiff/issues/new" target="_blank" rel="noopener noreferrer">Give feedback / Report a gap ↗</a>
       </div>`;
     article.appendChild(feedback);
+
+    setupBackToTop();
   }
 
   function setupSearchShortcut(event) {
