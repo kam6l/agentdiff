@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from agentdiff import AgentDiffEvaluator, AgentFramework, DiffEngine, TrajectoryTracker
+from agentdiff.cortex import (
+    AgentMemoryStore,
+    ContextCompressor,
+    ContextPacker,
+    SelfHealer,
+    SkillSynthesizer,
+)
 from agentdiff.diff_engine import EnvironmentSnapshot, FilesystemSnapshot
 from agentdiff.doctor import doctor_report
 from agentdiff.policy import (
@@ -300,7 +307,103 @@ def cmd_run(args: argparse.Namespace) -> int:
         if result.observation_warnings:
             print(f"Observation warnings: {len(result.observation_warnings)}")
         print(f"Inspect: agentdiff inspect {result.run_id} --root {safe_display(root)}")
+
+    try:
+        memory = AgentMemoryStore(root)
+        card = ContextCompressor.compress_trajectory(
+            task=args.task or "",
+            run_id=result.run_id,
+            mutations=result.to_dict().get("mutations", {}),
+            policy_decision=result.safety_outcome.value,
+            blast_radius=result.blast_radius.score,
+            argv=command,
+        )
+        collateral = [
+            c.path
+            for c in result.changes
+            if c.decision.action in {PolicyAction.REVIEW, PolicyAction.DENY}
+        ]
+        memory.record_episode(card, collateral_paths=collateral)
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+
     return result.recommended_exit_code(args.fail_on)
+
+
+def cmd_skill_list(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    skills = SkillSynthesizer(root).list_skills()
+    if args.format == "json":
+        print(_json([s.to_dict() for s in skills]))
+        return 0
+    if not skills:
+        print("No learned skills found in .agentdiff/skills/")
+        return 0
+    print(f"AgentDiff Learned Skills ({len(skills)} found):")
+    for s in skills:
+        print(f"  • {s.skill_id:24} {safe_display(s.title)}")
+    return 0
+
+
+def cmd_skill_generate(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    inspector = RunInspector(root, args.run_id)
+    summary_dict = inspector.summary().to_dict()
+    synthesizer = SkillSynthesizer(root)
+    skill = synthesizer.synthesize(summary_dict, title=args.title, save=True)
+    if args.format == "json":
+        print(_json(skill.to_dict()))
+    else:
+        print(f"Synthesized skill: {skill.skill_id}")
+        print(f"Title: {safe_display(skill.title)}")
+        print(f"Triggers: {', '.join(skill.triggers)}")
+        print(f"Verification Recipe: {skill.verification_recipe}")
+        print(f"Saved to: .agentdiff/skills/{skill.skill_id}.md")
+    return 0
+
+
+def cmd_context_pack(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    pack = ContextPacker.pack(args.task, root)
+    if args.format == "json":
+        print(_json({"task": args.task, "context_pack": pack}))
+    else:
+        print(pack)
+    return 0
+
+
+def cmd_memory_stats(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    stats = AgentMemoryStore(root).get_stats()
+    if args.format == "json":
+        print(_json(stats))
+    else:
+        print("AgentDiff Trajectory Memory Stats")
+        print(f"  Total episodes recorded: {stats['total_episodes']}")
+        print(f"  Fragile paths tracked:   {stats['fragile_paths_tracked']}")
+        if stats["top_fragile_paths"]:
+            print("  Top Fragile Paths:")
+            for path, score in stats["top_fragile_paths"]:
+                print(f"    - {path} (Risk score: {score})")
+    return 0
+
+
+def cmd_heal(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    inspector = RunInspector(root, args.run_id)
+    payload = SelfHealer.generate_remediation(inspector.summary().to_dict())
+    if args.format == "json":
+        print(_json(payload))
+    else:
+        print(f"Healing Status: {payload['status']}")
+        print(
+            f"Decision: {payload['decision']} (Blast Radius: {payload['blast_radius_score']}/100)"
+        )
+        if payload["collateral_files_to_revert"]:
+            print(f"Collateral to Revert: {', '.join(payload['collateral_files_to_revert'])}")
+        print(f"Recovery Command: {payload['recovery_command']}")
+        print(f"Prompt Directive: {payload['prompt_repair_directive']}")
+    return 0
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
@@ -515,6 +618,54 @@ def build_parser() -> argparse.ArgumentParser:
     p_policy_explain.add_argument("--policy", default="agentdiff.yaml")
     p_policy_explain.add_argument("--format", choices=["json", "summary"], default="summary")
     p_policy_explain.set_defaults(func=cmd_policy_explain)
+
+    p_skill = subparsers.add_parser("skill", help="Manage and synthesize autonomous agent skills")
+    skill_commands = p_skill.add_subparsers(dest="skill_command", required=True)
+    p_skill_list = skill_commands.add_parser(
+        "list", help="List synthesized skills in .agentdiff/skills/"
+    )
+    p_skill_list.add_argument("--root", default=".")
+    p_skill_list.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_skill_list.set_defaults(func=cmd_skill_list)
+    p_skill_gen = skill_commands.add_parser(
+        "generate", help="Synthesize a reusable SKILL.md from a run"
+    )
+    p_skill_gen.add_argument("run_id")
+    p_skill_gen.add_argument("--title", help="Custom title for the synthesized skill")
+    p_skill_gen.add_argument("--root", default=".")
+    p_skill_gen.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_skill_gen.set_defaults(func=cmd_skill_generate)
+
+    p_context = subparsers.add_parser(
+        "context", help="Generate compressed context packs for AI models"
+    )
+    context_commands = p_context.add_subparsers(dest="context_command", required=True)
+    p_context_pack = context_commands.add_parser(
+        "pack", help="Pack learned skills and memory into prompt context"
+    )
+    p_context_pack.add_argument(
+        "--task", required=True, help="Task prompt intent to pack context for"
+    )
+    p_context_pack.add_argument("--root", default=".")
+    p_context_pack.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_context_pack.set_defaults(func=cmd_context_pack)
+
+    p_memory = subparsers.add_parser("memory", help="Inspect trajectory memory and code fragility")
+    memory_commands = p_memory.add_subparsers(dest="memory_command", required=True)
+    p_memory_stats = memory_commands.add_parser(
+        "stats", help="Display memory statistics and fragile paths"
+    )
+    p_memory_stats.add_argument("--root", default=".")
+    p_memory_stats.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_memory_stats.set_defaults(func=cmd_memory_stats)
+
+    p_heal = subparsers.add_parser(
+        "heal", help="Generate autonomous remediation JSON for agent retries"
+    )
+    p_heal.add_argument("run_id", help="Run ID to generate remediation for")
+    p_heal.add_argument("--root", default=".")
+    p_heal.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_heal.set_defaults(func=cmd_heal)
 
     p_snap = subparsers.add_parser("snapshot", help="Capture a legacy environment snapshot")
     p_snap.add_argument("--root", default=".", help="Root directory")

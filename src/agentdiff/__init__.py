@@ -6,6 +6,15 @@ evaluation API remains available for compatibility.
 
 __version__ = "0.1.0"
 
+from .cortex import (
+    AgentMemoryStore,
+    CompressedContextCard,
+    ContextCompressor,
+    ContextPacker,
+    SelfHealer,
+    SkillContract,
+    SkillSynthesizer,
+)
 from .diff_engine import (
     DiffEngine,
     DiffEntry,
@@ -60,12 +69,16 @@ __all__ = [
     "AgentDiffEvaluator",
     "AgentDiffSession",
     "AgentFramework",
+    "AgentMemoryStore",
     "AgentRunTransaction",
     "BaseAgentDiffAdapter",
     "BlastRadiusResult",
     "BlastRadiusScorer",
     "BlastRadiusWeights",
     "CleanlinessMetrics",
+    "CompressedContextCard",
+    "ContextCompressor",
+    "ContextPacker",
     "DiffEngine",
     "DiffEntry",
     "DiffResult",
@@ -82,8 +95,11 @@ __all__ = [
     "RiskLevel",
     "RollbackEngine",
     "RunInspector",
+    "SelfHealer",
     "SideEffect",
     "SideEffectSeverity",
+    "SkillContract",
+    "SkillSynthesizer",
     "StepResult",
     "ToolCall",
     "ToolCallBlockedError",
