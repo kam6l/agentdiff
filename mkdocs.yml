@@ -81,6 +81,9 @@ nav:
   - Capsule Reference: docs/api-reference.md
   - Changelog: changelog.md
 
+not_in_nav: |
+  index.md
+
 plugins:
   - search
   - autorefs

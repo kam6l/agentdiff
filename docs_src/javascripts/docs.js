@@ -7,17 +7,28 @@
     });
   }
 
-  function copyText(value) {
-    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  function fallbackCopy(value) {
     const input = document.createElement("textarea");
     input.value = value;
     input.setAttribute("readonly", "");
     input.style.position = "fixed";
     input.style.opacity = "0";
+    input.style.pointerEvents = "none";
     document.body.appendChild(input);
     input.select();
-    document.execCommand("copy");
+    try {
+      document.execCommand("copy");
+    } catch (_) {}
     input.remove();
+  }
+
+  function copyText(value) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      return navigator.clipboard.writeText(value).catch(() => {
+        fallbackCopy(value);
+      });
+    }
+    fallbackCopy(value);
     return Promise.resolve();
   }
 
@@ -42,8 +53,10 @@
       copy.addEventListener("click", async () => {
         await copyText(window.location.href);
         const label = copy.querySelector("span:last-child");
-        label.textContent = "Copied";
-        window.setTimeout(() => { label.textContent = "Copy link"; }, 1500);
+        if (label) {
+          label.textContent = "Copied";
+          window.setTimeout(() => { label.textContent = "Copy link"; }, 1500);
+        }
       });
       actions.appendChild(copy);
 
@@ -51,7 +64,7 @@
         const source = document.createElement("a");
         source.href = editAction.href;
         source.target = "_blank";
-        source.rel = "noopener";
+        source.rel = "noopener noreferrer";
         source.innerHTML = '<span aria-hidden="true">↗</span><span>Edit page</span>';
         actions.appendChild(source);
         editAction.hidden = true;
@@ -62,7 +75,7 @@
 
     article.querySelectorAll("pre > code[class*='language-']").forEach((code) => {
       const pre = code.parentElement;
-      if (pre.dataset.languageLabel) return;
+      if (!pre || pre.dataset.languageLabel) return;
       const languageClass = Array.from(code.classList).find((name) => name.startsWith("language-"));
       if (!languageClass) return;
       const language = languageClass.replace("language-", "");
@@ -77,8 +90,8 @@
     feedback.innerHTML = `
       <div><span>DOCUMENTATION FEEDBACK</span><strong>Was this page useful?</strong></div>
       <div>
-        <a href="${editLink}" target="_blank" rel="noopener">Improve this page ↗</a>
-        <a href="https://github.com/kam6l/agentdiff/issues/new" target="_blank" rel="noopener">Report a gap ↗</a>
+        <a href="${encodeURI(editLink)}" target="_blank" rel="noopener noreferrer">Improve this page ↗</a>
+        <a href="https://github.com/kam6l/agentdiff/issues/new" target="_blank" rel="noopener noreferrer">Report a gap ↗</a>
       </div>`;
     article.appendChild(feedback);
   }

@@ -41,19 +41,30 @@
       button.addEventListener("click", async () => {
         const target = document.getElementById(button.dataset.copyTarget);
         if (!target) return;
-        try {
-          await navigator.clipboard.writeText(target.textContent.trim());
+        const text = target.textContent.trim();
+        const flashCopied = () => {
           const label = button.querySelector("[data-copy-label]") || button;
           const original = label.textContent;
           label.textContent = "Copied";
           window.setTimeout(() => { label.textContent = original; }, 1600);
-        } catch (_error) {
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(target);
-          selection.removeAllRanges();
-          selection.addRange(range);
+        };
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          try {
+            await navigator.clipboard.writeText(text);
+            flashCopied();
+            return;
+          } catch (_) {}
         }
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        try {
+          if (document.execCommand("copy")) {
+            flashCopied();
+          }
+        } catch (_) {}
       });
     });
 
@@ -110,17 +121,21 @@
           button.classList.toggle("is-active", selected);
           button.setAttribute("aria-pressed", String(selected));
         });
-        mutationContainer.innerHTML = state.rows.map(([klass, symbol, path, result]) => (
-          `<div class="ad-mutation-row ${klass}"><b>${symbol}</b><code>${path}</code><span>${result}</span></div>`
-        )).join("");
-        scoreLabel.textContent = state.label;
-        score.textContent = state.score;
-        scoreUnit.textContent = state.unit;
-        meter.style.width = state.width;
-        meter.style.background = state.color;
-        verdict.textContent = state.verdict;
-        summary.textContent = state.summary;
-        action.textContent = state.action;
+        if (mutationContainer) {
+          mutationContainer.innerHTML = state.rows.map(([klass, symbol, path, result]) => (
+            `<div class="ad-mutation-row ${klass}"><b>${symbol}</b><code>${path}</code><span>${result}</span></div>`
+          )).join("");
+        }
+        if (scoreLabel) scoreLabel.textContent = state.label;
+        if (score) score.textContent = state.score;
+        if (scoreUnit) scoreUnit.textContent = state.unit;
+        if (meter) {
+          meter.style.width = state.width;
+          meter.style.background = state.color;
+        }
+        if (verdict) verdict.textContent = state.verdict;
+        if (summary) summary.textContent = state.summary;
+        if (action) action.textContent = state.action;
       };
 
       stateButtons.forEach((button) => {

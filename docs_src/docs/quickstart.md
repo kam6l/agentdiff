@@ -11,7 +11,7 @@ description: Record a real AgentDiff transaction and selectively recover collate
 
 ## 1. Install from source
 
-You need Python 3.12+ and [`uv`](https://docs.astral.sh/uv/).
+You need Python 3.14 (or 3.12+) and [`uv`](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git

@@ -13,7 +13,7 @@ description: Install the AgentDiff 0.1.0 beta from source on Python 3.12 or newe
 
 | Requirement | Current support |
 |---|---|
-| Python | 3.12, 3.13, or 3.14 |
+| Python | 3.14 (default; 3.12 and 3.13 supported) |
 | Package workflow | `uv` recommended |
 | Linux | Beta local runtime |
 | macOS | Beta local runtime; observation detail depends on OS permissions |

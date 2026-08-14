@@ -63,10 +63,10 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage-python-3.12
+          name: coverage-python-3.14
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
@@ -83,7 +83,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
@@ -113,7 +113,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -156,7 +156,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
@@ -189,7 +189,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
@@ -218,7 +218,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
@@ -235,7 +235,7 @@ jobs:
 
       - name: Smoke-test the wheel in a clean environment
         run: |
-          uv venv /tmp/agentdiff-wheel --python 3.12
+          uv venv /tmp/agentdiff-wheel --python 3.14
           uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
           /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
           /tmp/agentdiff-wheel/bin/agentdiff --help
