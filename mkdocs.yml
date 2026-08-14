@@ -41,7 +41,6 @@ theme:
     - navigation.tracking
     - search.highlight
     - search.share
-    - search.suggest
     - content.code.annotate
     - content.code.copy
     - content.tabs.link

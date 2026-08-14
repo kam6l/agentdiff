@@ -9,6 +9,10 @@ description: Learn how AgentDiff records agent mutations, evaluates policy, scor
 
 <div class="ad-doc-lede">AgentDiff is a local-first runtime transaction system for AI-agent commands. It records what changed, evaluates every mutation against deterministic policy, explains the run's blast radius, and can selectively undo unchanged collateral.</div>
 
+<div class="ad-doc-notice ad-doc-notice--neutral" markdown>
+<strong>Find anything quickly:</strong> press <kbd>Ctrl K</kbd> or <kbd>/</kbd> to open indexed documentation search. Use the arrow keys and Enter to open a result, or Escape to return to the page.
+</div>
+
 <div class="ad-doc-notice" markdown>
 <strong>Capability boundary:</strong> the local runtime observes a subprocess; it is not a kernel sandbox. Use an explicit sandbox runtime when you need isolation or network enforcement. [Read the trust model](trust.md).
 </div>

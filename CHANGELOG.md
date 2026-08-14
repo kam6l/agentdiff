@@ -14,6 +14,8 @@ AgentDiff is pre-release software. APIs and artifact schemas may change before t
 
 ### Changed
 
+- Rebuilt documentation search as a responsive command palette with keyboard navigation, corrected result styling, and reliable index updates.
+- Added an E2B-inspired GitHub repository badge with a current star count and reduced excess spacing before documentation footers.
 - Replaced nonexistent HTTP-server and SDK documentation with implemented Python and capsule references.
 - Corrected integration guides to match the tested Sandbox Runtime adapter, MCP policy hook, LangChain callback, and transaction API.
 - Updated installation, README, project plan, examples, CLI output, and website copy to describe version `0.1.0` consistently.
