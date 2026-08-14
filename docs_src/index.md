@@ -30,7 +30,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
         <a href="#recovery">Recovery</a>
         <a href="#trust">Trust model</a>
         <a href="docs/">Docs</a>
-        <a class="ad-nav-cta" href="https://github.com/kam6l/agentdiff">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="ad-nav-cta" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
       </div>
     </nav>
   </header>
@@ -44,7 +44,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
         <p class="ad-hero__lede">AgentDiff wraps any command with secure state capture, deterministic mutation policy, explainable blast-radius scoring, durable evidence, and conflict-safe selective recovery.</p>
         <div class="ad-hero__actions">
           <a class="ad-button ad-button--light" href="docs/quickstart/">Run your first transaction <span aria-hidden="true">→</span></a>
-          <a class="ad-button ad-button--ghost" href="https://github.com/kam6l/agentdiff">View source <span aria-hidden="true">↗</span></a>
+          <a class="ad-button ad-button--ghost" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>
         </div>
         <div class="ad-command" aria-label="Run AgentDiff">
           <span class="ad-command__prompt" aria-hidden="true">$</span>
@@ -267,7 +267,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
           <li><span>Does not</span> block network access in local observation mode</li>
           <li><span>Does not</span> claim causal ownership of machine-wide port changes</li>
         </ul>
-        <a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md">Read the full trust model <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Read the full trust model <span aria-hidden="true">↗</span></a>
       </div>
     </section>
 
@@ -291,8 +291,8 @@ description: See exactly what an AI agent changed and selectively undo only the 
       <p>Local-first runtime evidence for autonomous agents.</p>
     </div>
     <div><b>Learn</b><a href="docs/">Documentation</a><a href="docs/quickstart/">Quickstart</a><a href="docs/cli/">CLI</a></div>
-    <div><b>Project</b><a href="https://github.com/kam6l/agentdiff">GitHub</a><a href="https://github.com/kam6l/agentdiff/issues">Issues</a><a href="https://github.com/kam6l/agentdiff/blob/main/CONTRIBUTING.md">Contributing</a></div>
-    <div><b>Trust</b><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md">Security</a><a href="docs/concepts/runtime/">Runtime model</a><a href="docs/concepts/recovery/">Recovery</a></div>
+    <div><b>Project</b><a href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/kam6l/agentdiff/issues" target="_blank" rel="noopener noreferrer">Issues</a><a href="https://github.com/kam6l/agentdiff/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></div>
+    <div><b>Trust</b><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Security</a><a href="docs/concepts/runtime/">Runtime model</a><a href="docs/concepts/recovery/">Recovery</a></div>
     <small>MIT licensed · AgentDiff contributors · 2026</small>
   </footer>
 </div>

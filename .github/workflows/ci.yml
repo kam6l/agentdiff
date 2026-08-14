@@ -44,9 +44,9 @@ jobs:
             python-version: "3.14"
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -63,10 +63,10 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+        uses: actions/upload-artifact@v4
         with:
-          name: coverage-python-3.12
+          name: coverage-python-3.14
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
@@ -77,13 +77,13 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
@@ -107,13 +107,13 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -141,8 +141,8 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
 
   docs:
     name: Documentation
@@ -150,13 +150,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
@@ -170,7 +170,7 @@ jobs:
       - name: Check built-site links and assets
         run: uv run python scripts/check_docs_links.py site
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v4
         with:
           name: mkdocs-site
           path: site/
@@ -183,13 +183,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
@@ -198,7 +198,7 @@ jobs:
       - name: Run adversarial local benchmark
         run: uv run python3 benchmarks/safetybench.py --output safetybench.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v4
         with:
           name: local-safetybench
           path: safetybench.json
@@ -212,13 +212,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
@@ -235,7 +235,7 @@ jobs:
 
       - name: Smoke-test the wheel in a clean environment
         run: |
-          uv venv /tmp/agentdiff-wheel --python 3.12
+          uv venv /tmp/agentdiff-wheel --python 3.14
           uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
           /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
           /tmp/agentdiff-wheel/bin/agentdiff --help
@@ -244,7 +244,7 @@ jobs:
           /tmp/agentdiff-wheel/bin/agentdiff policy validate --policy /tmp/agentdiff.yaml
           /tmp/agentdiff-wheel/bin/agentdiff-demo --json > /tmp/agentdiff-demo.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v4
         with:
           name: distributions
           path: dist/

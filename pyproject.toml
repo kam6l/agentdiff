@@ -81,10 +81,14 @@ target-version = "py312"
 select = ["B", "BLE", "C4", "E", "F", "I", "PYI", "RUF", "SIM", "TC"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 files = ["src/agentdiff"]
 show_error_codes = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["langchain_core.*"]
+ignore_missing_imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "src/agentdiff/evaluator.py" = ["TC001", "TC003"]
