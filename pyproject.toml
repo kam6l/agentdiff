@@ -75,7 +75,7 @@ python_functions = ["test_*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["B", "BLE", "C4", "E", "F", "I", "PYI", "RUF", "SIM", "TC"]
