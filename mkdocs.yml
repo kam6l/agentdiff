@@ -40,7 +40,6 @@ theme:
     - navigation.sections
     - navigation.tracking
     - search.highlight
-    - search.share
     - content.code.annotate
     - content.code.copy
     - content.tabs.link

@@ -1,4 +1,4 @@
-"""Tests for AgentDiff Cortex: SkillSynthesizer, ContextCompressor, and SelfHealer."""
+"""Tests for AgentDiff Cortex evidence memory, skill cards, and remediation advice."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from agentdiff.cortex import (
     ContextCompressor,
     ContextPacker,
     CortexRouter,
+    RemediationAdvisor,
     RepositoryMemoryProvider,
-    SelfHealer,
-    SkillSynthesizer,
+    SkillCardGenerator,
 )
 from agentdiff.providers import ProviderResponse
 
@@ -37,11 +37,11 @@ def mock_capsule() -> dict[str, Any]:
     }
 
 
-def test_skill_synthesizer_generates_valid_contract(
+def test_skill_card_generator_generates_valid_contract(
     tmp_path: Path, mock_capsule: dict[str, Any]
 ) -> None:
-    synthesizer = SkillSynthesizer(root=tmp_path)
-    skill = synthesizer.synthesize(mock_capsule, title="Auth Session Refactoring")
+    generator = SkillCardGenerator(root=tmp_path)
+    skill = generator.generate(mock_capsule, title="Auth Session Refactoring")
 
     assert skill.skill_id == "auth-session-refactoring"
     assert skill.title == "Auth Session Refactoring"
@@ -61,13 +61,13 @@ def test_skill_synthesizer_generates_valid_contract(
     assert "name: auth-session-refactoring" in skill_file.read_text(encoding="utf-8")
 
 
-def test_skill_synthesizer_listing(tmp_path: Path, mock_capsule: dict[str, Any]) -> None:
-    synthesizer = SkillSynthesizer(root=tmp_path)
-    synthesizer.synthesize(mock_capsule, title="Skill Alpha")
+def test_skill_card_generator_listing(tmp_path: Path, mock_capsule: dict[str, Any]) -> None:
+    generator = SkillCardGenerator(root=tmp_path)
+    generator.generate(mock_capsule, title="Skill Alpha")
     mock_capsule["task"] = "Update database schema migration"
-    synthesizer.synthesize(mock_capsule, title="Skill Beta")
+    generator.generate(mock_capsule, title="Skill Beta")
 
-    skills = synthesizer.list_skills()
+    skills = generator.list_skills()
     assert len(skills) == 2
     skill_ids = [s.skill_id for s in skills]
     assert "skill-alpha" in skill_ids
@@ -121,8 +121,8 @@ def test_agent_memory_store_recording_and_fragility(
 def test_context_packer_packs_skills_and_fragility(
     tmp_path: Path, mock_capsule: dict[str, Any]
 ) -> None:
-    synthesizer = SkillSynthesizer(root=tmp_path)
-    synthesizer.synthesize(mock_capsule, title="Auth Session Refactoring")
+    generator = SkillCardGenerator(root=tmp_path)
+    generator.generate(mock_capsule, title="Auth Session Refactoring")
 
     store = AgentMemoryStore(root=tmp_path)
     card = ContextCompressor.compress_trajectory(
@@ -233,7 +233,7 @@ def test_cortex_router_prefetches_memory_without_storing_model_output(tmp_path: 
     assert store.get_stats()["total_episodes"] == 1
 
 
-def test_self_healer_remediation_payload() -> None:
+def test_remediation_advisor_payload() -> None:
     capsule_deny = {
         "run_id": "run-deny-999",
         "task": "Fix security vulnerability",
@@ -246,7 +246,7 @@ def test_self_healer_remediation_payload() -> None:
         },
     }
 
-    payload = SelfHealer.generate_remediation(capsule_deny)
+    payload = RemediationAdvisor.generate_remediation(capsule_deny)
 
     assert payload["status"] == "REMEDIATION_REQUIRED"
     assert payload["run_id"] == "run-deny-999"

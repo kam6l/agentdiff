@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: List, verify, clean up, and diagnose AgentDiff runs; plus the legacy snapshot evaluator commands.
+description: List, verify, clean up, and diagnose AgentDiff transaction runs.
 ---
 
 <span class="ad-doc-eyebrow">CLI · Operations</span>
@@ -46,41 +46,4 @@ agentdiff doctor [--format summary|json]
 
 The report is intentionally explicit about observation versus enforcement. Include it in bug reports involving platform behavior.
 
-## Legacy evaluator commands
-
-The transaction workflow above is the primary interface. These commands remain available for the earlier snapshot/trajectory evaluator.
-
-### Capture a snapshot
-
-```bash
-agentdiff snapshot \
-  [--root PATH] \
-  [--ignore GLOBS] \
-  [--max-size BYTES] \
-  [--no-env] [--no-proc] [--no-ports] \
-  [--output FILE]
-```
-
-### Diff two snapshots
-
-```bash
-agentdiff diff pre.json post.json \
-  [--root PATH] \
-  [--format summary|json]
-```
-
-### Evaluate a trajectory
-
-```bash
-agentdiff eval trajectory.json \
-  [--pre pre.json] \
-  [--post post.json] \
-  [--root PATH] \
-  [--target path-a,path-b] \
-  [--threshold NUMBER] \
-  [--format summary|json] \
-  [--fail-on-failure]
-```
-
-!!! note
-    Legacy snapshot evaluation and durable run transactions are separate data paths. Do not assume one command's artifact is accepted by the other without checking the schema.
+The former `snapshot`, `diff`, and `eval` commands are no longer public CLI verbs. The earlier evaluator modules remain internal compatibility imports while the transaction surface stabilizes.

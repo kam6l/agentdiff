@@ -6,7 +6,7 @@ from pathlib import Path
 import psutil
 import pytest
 
-from agentdiff import DiffEngine
+from agentdiff.diff_engine import DiffEngine
 
 
 def test_environment_snapshot_excludes_secret_values_by_default(

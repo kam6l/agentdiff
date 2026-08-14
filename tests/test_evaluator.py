@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-from agentdiff import AgentDiffEvaluator, DiffEngine, TrajectoryTracker
+from agentdiff.diff_engine import DiffEngine
+from agentdiff.evaluator import AgentDiffEvaluator
+from agentdiff.trajectory import TrajectoryTracker
 
 
 def evaluate_half_clean_run(root: Path, threshold: float):

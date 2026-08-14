@@ -6,16 +6,13 @@ import json
 import os
 import subprocess
 import sys
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-import psutil
 import pytest
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-from agentdiff import TrajectoryTracker
 from agentdiff.demo import run_demo
 
 
@@ -34,15 +31,17 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     result = run_cli("--help", cwd=tmp_path)
 
     assert result.returncode == 0
-    assert "snapshot" in result.stdout
-    assert "diff" in result.stdout
-    assert "eval" in result.stdout
+    assert "snapshot" not in result.stdout
+    assert "eval" not in result.stdout
+    assert "{run,inspect,runs,verify,rollback,cleanup,doctor,policy,cortex}" in result.stdout
     assert "run" in result.stdout
     assert "inspect" in result.stdout
     assert "rollback" in result.stdout
     assert "cleanup" in result.stdout
     assert "doctor" in result.stdout
     assert "policy" in result.stdout
+    assert "cortex" in result.stdout
+    assert "heal" not in result.stdout
     assert "replay" not in result.stdout
     assert "init" not in result.stdout
 
@@ -58,6 +57,15 @@ def test_package_module_runs_the_cli(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "Observe, govern, score, and recover" in result.stdout
+
+
+def test_cortex_is_one_explicit_experimental_namespace(tmp_path: Path) -> None:
+    result = run_cli("cortex", "--help", cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert "{skill,context,memory,agent,advise}" in result.stdout
+    assert "autonomous" not in result.stdout.lower()
+    assert "heal" not in result.stdout.lower()
 
 
 def test_run_summary_leads_with_outcome_counts_and_recovery(tmp_path: Path) -> None:
@@ -115,244 +123,33 @@ def test_demo_json_output_is_machine_readable(capsys) -> None:
     run_demo(show_json=True)
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["passed"] is False
-    assert payload["metrics"]["cleanliness_score"] < 1.0
+    assert payload["status"] == "denied"
+    assert payload["safety_outcome"] == "deny"
+    assert payload["runtime"]["returncode"] == 0
+    assert {change["path"] for change in payload["changes"]} == {
+        "calculator.py",
+        "config.json",
+        "debug.log",
+    }
 
 
-def test_demo_json_ignores_live_process_churn(capsys, monkeypatch) -> None:
-    process_snapshots = iter(
-        [
-            [SimpleNamespace(info={"pid": 1})],
-            [SimpleNamespace(info={"pid": 1}), SimpleNamespace(info={"pid": 2})],
-        ]
-    )
-    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter(next(process_snapshots)))
-    monkeypatch.setattr(psutil, "net_connections", lambda **_kwargs: [])
-
+def test_demo_json_uses_primary_transaction_schema(capsys) -> None:
     run_demo(show_json=True)
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["metrics"]["total_mutations"] == 3
+    assert payload["schema_version"] == 1
+    assert payload["command_decision"]["action"] == "allow"
+    assert payload["blast_radius"]["score"] > 0
 
 
-def test_cli_snapshot_files_round_trip_into_diff(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    target = workspace / "target.txt"
-    target.write_text("before\n")
+@pytest.mark.parametrize("command", ["snapshot", "diff", "eval", "heal"])
+def test_legacy_and_overstated_commands_are_not_public_cli_verbs(
+    tmp_path: Path, command: str
+) -> None:
+    result = run_cli(command, cwd=tmp_path)
 
-    before = tmp_path / "before.json"
-    after = tmp_path / "after.json"
-    snapshot_flags = ("--no-env", "--no-proc", "--no-ports")
-
-    first = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *snapshot_flags,
-        "-o",
-        str(before),
-        cwd=tmp_path,
-    )
-    assert first.returncode == 0, first.stderr
-
-    target.write_text("after\n")
-    second = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *snapshot_flags,
-        "-o",
-        str(after),
-        cwd=tmp_path,
-    )
-    assert second.returncode == 0, second.stderr
-
-    result = run_cli(
-        "diff",
-        str(before),
-        str(after),
-        "--root",
-        str(workspace),
-        cwd=tmp_path,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "Files: +0 ~1 -0" in result.stdout
-
-    json_result = run_cli(
-        "diff",
-        str(before),
-        str(after),
-        "--root",
-        str(workspace),
-        "--format",
-        "json",
-        cwd=tmp_path,
-    )
-    assert json_result.returncode == 0, json_result.stderr
-    payload = json.loads(json_result.stdout)
-    assert payload["summary"]["file_modified"] == 1
-
-
-def test_cli_ignores_its_own_snapshot_directory(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    artifacts = workspace / ".agentdiff"
-    artifacts.mkdir(parents=True)
-    target = workspace / "target.txt"
-    target.write_text("before\n")
-
-    before = artifacts / "before.json"
-    after = artifacts / "after.json"
-    flags = ("--no-env", "--no-proc", "--no-ports")
-
-    first = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *flags,
-        "-o",
-        str(before),
-        cwd=tmp_path,
-    )
-    assert first.returncode == 0, first.stderr
-
-    target.write_text("after\n")
-    second = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *flags,
-        "-o",
-        str(after),
-        cwd=tmp_path,
-    )
-    assert second.returncode == 0, second.stderr
-
-    result = run_cli(
-        "diff",
-        str(before),
-        str(after),
-        "--root",
-        str(workspace),
-        "--format",
-        "json",
-        cwd=tmp_path,
-    )
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["summary"] == {"file_modified": 1}
-
-
-def test_cli_snapshot_disable_flags_skip_system_state(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    output = tmp_path / "snapshot.json"
-
-    result = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        "--no-env",
-        "--no-proc",
-        "--no-ports",
-        "-o",
-        str(output),
-        cwd=tmp_path,
-    )
-
-    assert result.returncode == 0, result.stderr
-    snapshot = json.loads(output.read_text())
-    assert snapshot["environment"]["env_vars"] == {}
-    assert snapshot["environment"]["process_pids"] == []
-    assert snapshot["environment"]["open_ports"] == []
-
-
-def test_cli_eval_returns_json_and_applies_threshold(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    target = workspace / "target.txt"
-    target.write_text("before\n")
-
-    before = tmp_path / "before.json"
-    after = tmp_path / "after.json"
-    trajectory_path = tmp_path / "trajectory.json"
-    snapshot_flags = ("--no-env", "--no-proc", "--no-ports")
-
-    first = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *snapshot_flags,
-        "-o",
-        str(before),
-        cwd=tmp_path,
-    )
-    assert first.returncode == 0, first.stderr
-
-    target.write_text("after\n")
-    (workspace / "debug.log").write_text("unexpected\n")
-
-    second = run_cli(
-        "snapshot",
-        "--root",
-        str(workspace),
-        *snapshot_flags,
-        "-o",
-        str(after),
-        cwd=tmp_path,
-    )
-    assert second.returncode == 0, second.stderr
-
-    tracker = TrajectoryTracker(task_description="Modify target.txt")
-    tracker.start_step("Edit the requested file")
-    tracker.record_tool_call("write_file", {"path": str(target)}, result="ok")
-    tracker.end_step("Target updated")
-    tracker.finish().save(trajectory_path)
-
-    result = run_cli(
-        "eval",
-        str(trajectory_path),
-        "--pre",
-        str(before),
-        "--post",
-        str(after),
-        "--root",
-        str(workspace),
-        "--target",
-        str(target),
-        "--threshold",
-        "0.8",
-        "--format",
-        "json",
-        cwd=tmp_path,
-    )
-
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["metrics"]["cleanliness_score"] == 0.5
-    assert payload["passed"] is False
-
-    gated = run_cli(
-        "eval",
-        str(trajectory_path),
-        "--pre",
-        str(before),
-        "--post",
-        str(after),
-        "--root",
-        str(workspace),
-        "--target",
-        str(target),
-        "--threshold",
-        "0.8",
-        "--format",
-        "json",
-        "--fail-on-failure",
-        cwd=tmp_path,
-    )
-    assert gated.returncode == 1
-    assert json.loads(gated.stdout)["passed"] is False
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
 
 
 def test_cli_policy_init_validate_and_explain(tmp_path: Path) -> None:

@@ -53,7 +53,6 @@
     <a href="{{ 'docs/' | url }}"{% if current_url == 'docs/' %} class="is-active" aria-current="page"{% endif %}>Overview</a>
     <a href="{{ 'docs/quickstart/' | url }}"{% if current_url == 'docs/quickstart/' or current_url == 'docs/installation/' %} class="is-active" aria-current="page"{% endif %}>Getting started</a>
     <a href="{{ 'docs/concepts/runtime/' | url }}"{% if current_url.startswith('docs/concepts/') and current_url != 'docs/concepts/cortex/' %} class="is-active" aria-current="page"{% endif %}>Core concepts</a>
-    <a href="{{ 'docs/concepts/cortex/' | url }}"{% if current_url == 'docs/concepts/cortex/' or current_url == 'docs/cli/cortex/' %} class="is-active" aria-current="page"{% endif %}>Cortex</a>
     <a href="{{ 'docs/cli/' | url }}"{% if current_url.startswith('docs/cli/') %} class="is-active" aria-current="page"{% endif %}>CLI</a>
     <a href="{{ 'docs/integrations/custom/' | url }}"{% if current_url.startswith('docs/integrations/') %} class="is-active" aria-current="page"{% endif %}>Integrations</a>
     <a href="{{ 'docs/sdk-reference/' | url }}"{% if current_url == 'docs/sdk-reference/' %} class="is-active" aria-current="page"{% endif %}>Python API</a>

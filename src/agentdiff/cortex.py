@@ -1,11 +1,11 @@
-"""Autonomous Skill Synthesis, Compressed Context Memory, and Multi-Agent Cortex.
+"""Evidence-backed skill cards, compressed context memory, and provider routing.
 
 This module provides the AgentDiff Cortex engine:
-- SkillSynthesizer: Auto-generates reusable SKILL.md files from verified transactions.
+- SkillCardGenerator: Generates reusable SKILL.md files from verified transactions.
 - ContextCompressor: Compresses multi-file diffs and trajectories into dense semantic cards.
 - AgentMemoryStore: Persistent repository trajectory memory and code fragility mapping.
-- ContextPacker: Packages learned skills and constraints into optimal LLM prompts.
-- SelfHealer: Emits machine-actionable remediation payloads for autonomous agent loops.
+- ContextPacker: Packages evidence-backed skill cards and constraints into bounded prompts.
+- RemediationAdvisor: Emits structured recovery advice without executing it.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _slugify(text: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class SkillContract:
-    """A verified, reusable skill document synthesized from an agent transaction."""
+    """A reusable skill card generated from a verified agent transaction."""
 
     skill_id: str
     title: str
@@ -70,7 +70,7 @@ capsule_id: "{self.evidence_capsule_id}"
 ## When to Apply (Triggers)
 {triggers_fmt}
 
-## Hard Invariants & Learned Truths
+## Verified Constraints
 {invariants_fmt}
 
 ## File Boundaries
@@ -90,7 +90,7 @@ capsule_id: "{self.evidence_capsule_id}"
     def from_dict(cls, data: dict[str, Any]) -> SkillContract:
         return cls(
             skill_id=str(data.get("skill_id", "skill")),
-            title=str(data.get("title", "Learned Skill")),
+            title=str(data.get("title", "Evidence Skill Card")),
             task_intent=str(data.get("task_intent", "")),
             triggers=list(data.get("triggers", [])),
             hard_invariants=list(data.get("hard_invariants", [])),
@@ -251,14 +251,14 @@ class ContextCompressor:
         )
 
 
-class SkillSynthesizer:
-    """Extracts architectural invariants from verified runs and synthesizes SKILL.md files."""
+class SkillCardGenerator:
+    """Generate deterministic SKILL.md cards from verified run evidence."""
 
     def __init__(self, root: Path | str | None = None) -> None:
         self.root = Path(root).resolve() if root else Path.cwd()
         self.skills_dir = self.root / ".agentdiff" / "skills"
 
-    def synthesize(
+    def generate(
         self,
         capsule_data: dict[str, Any],
         title: str | None = None,
@@ -543,7 +543,7 @@ class AgentMemoryStore:
 
 
 class ContextPacker:
-    """Assembles learned skills and memory into a dense, optimal LLM context block."""
+    """Assemble evidence-backed skill cards and memory into a bounded context block."""
 
     @staticmethod
     def pack(
@@ -554,10 +554,10 @@ class ContextPacker:
         query_embedding: list[float] | None = None,
     ) -> str:
         root_path = Path(root).resolve() if root else Path.cwd()
-        synthesizer = SkillSynthesizer(root_path)
+        generator = SkillCardGenerator(root_path)
         memory = AgentMemoryStore(root_path)
 
-        skills = synthesizer.list_skills()
+        skills = generator.list_skills()
         stats = memory.get_stats()
         top_fragile = stats.get("top_fragile_paths", [])
         memory_hits = memory.search(
@@ -720,8 +720,8 @@ change was executed unless the surrounding client actually executed and verified
             self.memory.shutdown()
 
 
-class SelfHealer:
-    """Generates machine-actionable repair payloads for autonomous agent retry loops."""
+class RemediationAdvisor:
+    """Generate structured recovery advice without executing recovery or retries."""
 
     @staticmethod
     def generate_remediation(capsule_data: dict[str, Any]) -> dict[str, Any]:

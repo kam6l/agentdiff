@@ -37,8 +37,8 @@ See [policy commands](policy.md) for the exact subcommand surface.
 ## Cortex workflow
 
 ```bash
-agentdiff memory search "authentication regression"
-agentdiff agent ask --provider codex-cli --task "Plan the smallest safe fix"
+agentdiff cortex memory search "authentication regression"
+agentdiff cortex agent ask --provider codex-cli --task "Plan the smallest safe fix"
 ```
 
 See [Cortex, memory, and provider commands](cortex.md) for Claude, Codex/OpenAI, Ollama, and optional local semantic indexing.
@@ -86,16 +86,16 @@ agentdiff
 ├── rollback / cleanup / doctor
 ├── policy
 │   └── init / validate / explain
-├── memory
-│   └── stats / search / index
-├── agent
-│   └── ask
-├── skill
-│   └── list / generate
-├── context
-│   └── pack
-├── heal
-└── snapshot / diff / eval    # legacy evaluator path
+└── cortex                    # experimental, secondary surface
+    ├── memory
+    │   └── stats / search / index
+    ├── agent
+    │   └── ask
+    ├── skill
+    │   └── list / generate
+    ├── context
+    │   └── pack
+    └── advise
 ```
 
 !!! tip "Trust the installed help"

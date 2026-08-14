@@ -1,6 +1,6 @@
 ---
 title: Cortex, memory, and provider commands
-description: CLI reference for memory search, semantic indexing, AI provider routing, skill synthesis, and remediation.
+description: CLI reference for evidence memory, optional semantic indexing, AI provider routing, skill-card generation, and remediation advice.
 ---
 
 <p><span class="ad-doc-eyebrow">CLI reference</span></p>
@@ -15,7 +15,7 @@ description: CLI reference for memory search, semantic indexing, AI provider rou
 Uses your installed Codex authentication. Cortex launches an ephemeral, read-only client run.
 
 ```bash
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider codex-cli \
   --task "Plan the smallest safe parser fix"
 ```
@@ -24,7 +24,7 @@ agentdiff agent ask \
 
 ```bash
 export OPENAI_API_KEY="..."
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider openai-api \
   --model gpt-5.6-terra \
   --task "Review the authentication recovery plan"
@@ -33,7 +33,7 @@ agentdiff agent ask \
 Continue a Responses API chain with:
 
 ```bash
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider openai-api \
   --previous-response-id resp_123 \
   --task "Now minimize the proposed diff"
@@ -44,7 +44,7 @@ agentdiff agent ask \
 Uses your installed Claude Code authentication. Cortex uses non-persistent print mode and plan permissions.
 
 ```bash
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider claude-cli \
   --task "Find the safest recovery boundary"
 ```
@@ -53,7 +53,7 @@ agentdiff agent ask \
 
 ```bash
 export ANTHROPIC_API_KEY="..."
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider anthropic-api \
   --model claude-sonnet-5 \
   --task "Review the evidence capsule design"
@@ -64,12 +64,12 @@ agentdiff agent ask \
 The model is always explicit because installed local models differ by machine.
 
 ```bash
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider ollama-api \
   --model qwen3.6 \
   --task "Plan the parser repair"
 
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider ollama-cli \
   --model qwen3.6 \
   --task "Review the rollback logic"
@@ -80,9 +80,9 @@ Use `--no-memory` for a provider-only request, `--max-memories` to change the de
 ## Search trajectory memory
 
 ```bash
-agentdiff memory stats
-agentdiff memory search "authentication session regression"
-agentdiff memory search "src/auth/session.py" --limit 3 --format json
+agentdiff cortex memory stats
+agentdiff cortex memory search "authentication session regression"
+agentdiff cortex memory search "src/auth/session.py" --limit 3 --format json
 ```
 
 The search command is offline by default. It ranks compressed evidence cards by shared task/path terms, exact paths, recency, and policy risk.
@@ -91,8 +91,8 @@ The search command is offline by default. It ranks compressed evidence cards by 
 
 ```bash
 ollama pull embeddinggemma
-agentdiff memory index --model embeddinggemma
-agentdiff memory search \
+agentdiff cortex memory index --model embeddinggemma
+agentdiff cortex memory search \
   "authentication session regression" \
   --embedding-model embeddinggemma
 ```
@@ -102,7 +102,7 @@ agentdiff memory search \
 To use semantic memory automatically during an AI request:
 
 ```bash
-agentdiff agent ask \
+agentdiff cortex agent ask \
   --provider ollama-api \
   --model qwen3.6 \
   --embedding-model embeddinggemma \
@@ -112,25 +112,25 @@ agentdiff agent ask \
 ## Pack context without calling a provider
 
 ```bash
-agentdiff context pack --task "Fix payment gateway timeout"
+agentdiff cortex context pack --task "Fix payment gateway timeout"
 ```
 
 The output includes matched skills, fragile paths, relevant verified runs, and the rule that rejected runs are warnings rather than successful examples.
 
-## Synthesize a reusable skill
+## Generate a reusable skill card
 
 ```bash
-agentdiff skill list
-agentdiff skill generate <run-id> --title "Postgres Connection Pooling"
+agentdiff cortex skill list
+agentdiff cortex skill generate <run-id> --title "Postgres Connection Pooling"
 ```
 
 The generated `.agentdiff/skills/<skill-slug>.md` remains traceable to its source capsule.
 
-## Generate remediation
+## Generate remediation advice
 
 ```bash
-agentdiff heal <run-id>
-agentdiff heal <run-id> --format json
+agentdiff cortex advise <run-id>
+agentdiff cortex advise <run-id> --format json
 ```
 
-The payload identifies collateral paths and the conflict-safe rollback command for an autonomous retry harness. It does not automatically execute recovery or retry the agent.
+The payload identifies collateral paths and the conflict-safe rollback command. It does not execute recovery, modify files, or retry an agent.

@@ -40,7 +40,7 @@ Cortex treats a previous run according to its recorded outcome:
 
 - `ALLOW` is a verified clean-run example.
 - `REVIEW` and `DENY` are warnings and never successful implementation examples.
-- synthesized skills remain explicit files under `.agentdiff/skills/` and include their originating capsule ID.
+- generated skill cards remain explicit files under `.agentdiff/skills/` and include their originating capsule ID.
 - raw prompts, API keys, and provider responses are not added to trajectory memory.
 
 This keeps useful long-term context without allowing a plausible model answer to become repository truth.
@@ -58,8 +58,8 @@ Optional Ollama embeddings add semantic similarity to the score. They enrich the
 
 ```bash
 ollama pull embeddinggemma
-agentdiff memory index --model embeddinggemma
-agentdiff memory search "authentication session regression" --embedding-model embeddinggemma
+agentdiff cortex memory index --model embeddinggemma
+agentdiff cortex memory search "authentication session regression" --embedding-model embeddinggemma
 ```
 
 The embedding vectors remain in `.agentdiff/memory.json`. The text sent to the local embedding endpoint is the compressed card—not the full evidence capsule or raw file contents.

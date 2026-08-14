@@ -178,7 +178,7 @@ jobs:
           retention-days: 7
 
   safetybench:
-    name: Local SafetyBench
+    name: Local recovery regression suite
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -195,13 +195,13 @@ jobs:
       - name: Install benchmark dependencies
         run: uv sync --locked --group dev
 
-      - name: Run adversarial local benchmark
-        run: uv run python3 benchmarks/safetybench.py --output safetybench.json
+      - name: Run adversarial local regression cases
+        run: uv run python3 benchmarks/safetybench.py --output recovery-regression.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: local-safetybench
-          path: safetybench.json
+          name: local-recovery-regression
+          path: recovery-regression.json
           if-no-files-found: error
           retention-days: 7
 

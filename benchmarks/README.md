@@ -1,6 +1,6 @@
-# AgentDiff Local SafetyBench
+# AgentDiff local recovery regression suite
 
-`benchmarks/safetybench.py` is a deterministic adversarial smoke benchmark for the local runtime boundary. It is not an LLM-quality leaderboard or a performance claim.
+`benchmarks/safetybench.py` is a deterministic adversarial regression suite for the local runtime boundary. It is not an industry benchmark, an LLM-quality leaderboard, or a performance claim.
 
 It exercises five cases in temporary workspaces:
 
@@ -13,7 +13,7 @@ It exercises five cases in temporary workspaces:
 Run it with:
 
 ```bash
-uv run python3 benchmarks/safetybench.py --output /tmp/agentdiff-safetybench.json
+uv run python3 benchmarks/safetybench.py --output /tmp/agentdiff-recovery-regression.json
 ```
 
 The process exits nonzero if any assertion fails. Durations are diagnostic only and have no pass threshold because shared CI runners are noisy. The regular pytest suite remains the detailed regression source.

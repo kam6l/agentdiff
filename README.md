@@ -81,18 +81,6 @@ agentdiff rollback <run-id> --safe-only
 
 [Run the reproducible five-minute example](https://kam6l.github.io/agentdiff/docs/quickstart/)
 
-### Route verified memory to Claude, Codex, or Ollama
-
-Cortex can search completed transaction memory and send a bounded context pack through an API or an installed client. Local Claude and Codex clients default to plan/read-only mode, and unverified model output is never written back into evidence memory.
-
-```bash
-agentdiff memory search "authentication session regression"
-agentdiff agent ask --provider codex-cli --task "Plan the smallest safe fix"
-agentdiff agent ask --provider ollama-api --model qwen3.6 --task "Review the plan"
-```
-
-[Configure providers and optional local semantic memory](https://kam6l.github.io/agentdiff/docs/concepts/cortex/)
-
 ## How it works
 
 | Stage | Result |
@@ -106,8 +94,8 @@ agentdiff agent ask --provider ollama-api --model qwen3.6 --task "Review the pla
 
 | Status | Surface |
 |---|---|
-| **Beta** | Local transactions, policy, capsules, verification, scoring, regular-file recovery, evidence memory, and provider-isolated Cortex routing (tested on Python 3.12-3.14) |
-| **Experimental** | Anthropic `srt` adapter, transport-neutral MCP policy hook, LangChain callback, legacy evaluator |
+| **Beta** | Local transactions, policy, capsules, verification, scoring, and regular-file recovery (tested on Python 3.12-3.14) |
+| **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, and LangChain callback |
 | **Planned** | PyPI/binary releases, authenticated evidence, telemetry export, and a maintained hosted sandbox integration |
 
 There is no HTTP server, hosted dashboard, Docker backend, bundled sandbox, or claimed PyPI release today.
@@ -122,10 +110,22 @@ There is no HTTP server, hosted dashboard, Docker backend, bundled sandbox, or c
 | `agentdiff cleanup <id>` | Signal exact PID/create-time identities recorded for a run |
 | `agentdiff doctor` | Report implemented capabilities and limits |
 | `agentdiff policy init/validate/explain` | Create and inspect versioned policy |
-| `agentdiff memory stats/search/index` | Inspect, retrieve, and optionally embed verified run memory |
-| `agentdiff agent ask` | Route bounded repository context to Claude, Codex/OpenAI, or Ollama |
+| `agentdiff cortex ...` | Open the optional evidence-memory, skill-card, and provider tool namespace |
 
-The compatibility commands `snapshot`, `diff`, and `eval` remain available but are not the primary product path.
+The earlier `snapshot`, `diff`, and `eval` implementation remains importable for compatibility testing but is no longer exposed as a public CLI path.
+
+### Optional Cortex tools
+
+Cortex is an experimental secondary surface. It can search completed transaction memory and send a bounded context pack through an API or installed client. Local Claude and Codex clients default to plan/read-only mode, and unverified model output is never written back into evidence memory.
+
+```bash
+agentdiff cortex memory search "authentication session regression"
+agentdiff cortex agent ask --provider codex-cli --task "Plan the smallest safe fix"
+agentdiff cortex agent ask --provider ollama-api --model qwen3.6 --task "Review the plan"
+agentdiff cortex advise <run-id>
+```
+
+[Configure providers and optional local semantic memory](https://kam6l.github.io/agentdiff/docs/concepts/cortex/)
 
 ## Trust boundary
 

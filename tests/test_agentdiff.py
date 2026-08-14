@@ -11,14 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from agentdiff import (
-    AgentDiffEvaluator,
-    AgentFramework,
-    DiffEngine,
-    SideEffectSeverity,
-    TrajectoryRecord,
-    TrajectoryTracker,
-)
+from agentdiff.diff_engine import DiffEngine
+from agentdiff.evaluator import AgentDiffEvaluator, SideEffectSeverity
+from agentdiff.trajectory import AgentFramework, TrajectoryRecord, TrajectoryTracker
 
 
 def isolated_engine(path: str | Path, *, capture_env_vars: bool = False) -> DiffEngine:
