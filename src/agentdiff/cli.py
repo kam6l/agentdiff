@@ -14,6 +14,8 @@ from agentdiff.cortex import (
     AgentMemoryStore,
     ContextCompressor,
     ContextPacker,
+    CortexRouter,
+    RepositoryMemoryProvider,
     SelfHealer,
     SkillSynthesizer,
 )
@@ -27,6 +29,12 @@ from agentdiff.policy import (
     PolicyValidationError,
     load_policy,
     load_policy_file,
+)
+from agentdiff.providers import (
+    PROVIDER_NAMES,
+    OllamaEmbeddingProvider,
+    ProviderError,
+    create_provider,
 )
 from agentdiff.redaction import safe_display
 from agentdiff.runtime import SandboxRuntime
@@ -388,6 +396,86 @@ def cmd_memory_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_memory_search(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    store = AgentMemoryStore(root)
+    query_embedding = None
+    if args.embedding_model:
+        embedder = OllamaEmbeddingProvider(
+            model=args.embedding_model,
+            endpoint=args.embedding_endpoint,
+            timeout_seconds=args.timeout,
+        )
+        vectors = embedder.embed([args.query])
+        query_embedding = vectors[0] if vectors else None
+    hits = store.search(args.query, limit=args.limit, query_embedding=query_embedding)
+    if args.format == "json":
+        print(_json([hit.to_dict() for hit in hits]))
+        return 0
+    if not hits:
+        print("No trajectory memory found.")
+        return 0
+    print(f"AgentDiff Memory Matches ({len(hits)})")
+    for hit in hits:
+        card = hit.card
+        print(f"  {hit.score:.3f}  {card.outcome:7}  {safe_display(card.task)}")
+        if card.modified_symbols_or_files:
+            paths = ", ".join(safe_display(item) for item in card.modified_symbols_or_files[:4])
+            print(f"           Paths: {paths}")
+    return 0
+
+
+def cmd_memory_index(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    embedder = OllamaEmbeddingProvider(
+        model=args.model,
+        endpoint=args.endpoint,
+        timeout_seconds=args.timeout,
+    )
+    indexed = AgentMemoryStore(root).index_embeddings(embedder, batch_size=args.batch_size)
+    if args.format == "json":
+        print(_json({"indexed": indexed, "provider": embedder.name, "model": embedder.model}))
+    else:
+        print(f"Indexed {indexed} evidence episodes with {embedder.name}:{embedder.model}")
+    return 0
+
+
+def cmd_agent_ask(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    provider = create_provider(
+        args.provider,
+        model=args.model,
+        api_key_env=args.api_key_env,
+        endpoint=args.endpoint,
+        executable=args.executable,
+        timeout_seconds=args.timeout,
+    )
+    embedder = None
+    if args.embedding_model:
+        embedder = OllamaEmbeddingProvider(
+            model=args.embedding_model,
+            endpoint=args.embedding_endpoint,
+            timeout_seconds=args.timeout,
+        )
+    memory = None
+    if not args.no_memory:
+        memory = RepositoryMemoryProvider(
+            root,
+            max_memories=args.max_memories,
+            embedder=embedder,
+        )
+    router = CortexRouter(provider, memory=memory, root=root)
+    try:
+        result = router.ask(args.task, previous_response_id=args.previous_response_id)
+    finally:
+        router.shutdown()
+    if args.format == "json":
+        print(_json(result.to_dict()))
+    else:
+        print(result.response.text)
+    return 0
+
+
 def cmd_heal(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     inspector = RunInspector(root, args.run_id)
@@ -658,6 +746,50 @@ def build_parser() -> argparse.ArgumentParser:
     p_memory_stats.add_argument("--root", default=".")
     p_memory_stats.add_argument("--format", choices=["json", "summary"], default="summary")
     p_memory_stats.set_defaults(func=cmd_memory_stats)
+    p_memory_search = memory_commands.add_parser(
+        "search", help="Search verified trajectory memory by task, path, and optional vectors"
+    )
+    p_memory_search.add_argument("query")
+    p_memory_search.add_argument("--root", default=".")
+    p_memory_search.add_argument("--limit", type=int, default=5)
+    p_memory_search.add_argument("--embedding-model")
+    p_memory_search.add_argument("--embedding-endpoint", default="http://127.0.0.1:11434/api/embed")
+    p_memory_search.add_argument("--timeout", type=float, default=120.0)
+    p_memory_search.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_memory_search.set_defaults(func=cmd_memory_search)
+    p_memory_index = memory_commands.add_parser(
+        "index", help="Build semantic memory vectors with a local Ollama embedding model"
+    )
+    p_memory_index.add_argument("--root", default=".")
+    p_memory_index.add_argument("--model", default="embeddinggemma")
+    p_memory_index.add_argument("--endpoint", default="http://127.0.0.1:11434/api/embed")
+    p_memory_index.add_argument("--batch-size", type=int, default=32)
+    p_memory_index.add_argument("--timeout", type=float, default=120.0)
+    p_memory_index.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_memory_index.set_defaults(func=cmd_memory_index)
+
+    p_agent = subparsers.add_parser(
+        "agent", help="Route a memory-aware request to Claude, Codex/OpenAI, or Ollama"
+    )
+    agent_commands = p_agent.add_subparsers(dest="agent_command", required=True)
+    p_agent_ask = agent_commands.add_parser(
+        "ask", help="Ask one provider with bounded repository evidence context"
+    )
+    p_agent_ask.add_argument("--task", required=True)
+    p_agent_ask.add_argument("--provider", choices=PROVIDER_NAMES, required=True)
+    p_agent_ask.add_argument("--model")
+    p_agent_ask.add_argument("--root", default=".")
+    p_agent_ask.add_argument("--api-key-env")
+    p_agent_ask.add_argument("--endpoint")
+    p_agent_ask.add_argument("--executable")
+    p_agent_ask.add_argument("--previous-response-id")
+    p_agent_ask.add_argument("--no-memory", action="store_true")
+    p_agent_ask.add_argument("--max-memories", type=int, default=4)
+    p_agent_ask.add_argument("--embedding-model")
+    p_agent_ask.add_argument("--embedding-endpoint", default="http://127.0.0.1:11434/api/embed")
+    p_agent_ask.add_argument("--timeout", type=float, default=300.0)
+    p_agent_ask.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_agent_ask.set_defaults(func=cmd_agent_ask)
 
     p_heal = subparsers.add_parser(
         "heal", help="Generate autonomous remediation JSON for agent retries"
@@ -714,6 +846,7 @@ def main(argv: list[str] | None = None) -> int:
         OSError,
         PolicyLoadError,
         PolicyValidationError,
+        ProviderError,
         TypeError,
         ValueError,
         json.JSONDecodeError,

@@ -13,9 +13,12 @@ from agentdiff.cortex import (
     AgentMemoryStore,
     ContextCompressor,
     ContextPacker,
+    CortexRouter,
+    RepositoryMemoryProvider,
     SelfHealer,
     SkillSynthesizer,
 )
+from agentdiff.providers import ProviderResponse
 
 
 @pytest.fixture
@@ -136,6 +139,98 @@ def test_context_packer_packs_skills_and_fragility(
     assert "AGENTDIFF CONTEXT MEMORY PACK" in pack
     assert "Auth Session Refactoring" in pack
     assert "config/secrets.env" in pack
+    assert "RELEVANT VERIFIED RUN MEMORY" in pack
+    assert "policy finding" in pack
+
+
+def test_memory_search_ranks_relevant_verified_evidence(tmp_path: Path) -> None:
+    store = AgentMemoryStore(root=tmp_path)
+    auth = ContextCompressor.compress_trajectory(
+        task="Repair authentication session middleware",
+        run_id="auth-run",
+        mutations={"modified": [{"path": "src/auth/session.py"}]},
+        policy_decision="ALLOW",
+        blast_radius=12,
+    )
+    docs = ContextCompressor.compress_trajectory(
+        task="Update documentation sidebar",
+        run_id="docs-run",
+        mutations={"modified": [{"path": "docs/styles.css"}]},
+        policy_decision="ALLOW",
+        blast_radius=4,
+    )
+    store.record_episode(auth)
+    store.record_episode(docs)
+
+    hits = store.search("fix auth session in src/auth/session.py", limit=2)
+
+    assert hits[0].card.run_id == "auth-run"
+    assert "shared terms" in " ".join(hits[0].reasons)
+
+
+def test_memory_index_adds_optional_semantic_vectors(tmp_path: Path) -> None:
+    class FakeEmbedder:
+        name = "fake"
+        model = "tiny"
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, float(index + 1)] for index, _ in enumerate(texts)]
+
+    store = AgentMemoryStore(root=tmp_path)
+    card = ContextCompressor.compress_trajectory(
+        task="Update parser",
+        run_id="parser-run",
+        mutations={},
+        policy_decision="ALLOW",
+        blast_radius=5,
+    )
+    store.record_episode(card)
+
+    assert store.index_embeddings(FakeEmbedder()) == 1
+    raw = store._load_raw()
+    assert raw["embedding_model"] == "fake:tiny"
+    assert raw["episodes"][0]["embedding"] == [1.0, 1.0]
+
+
+def test_cortex_router_prefetches_memory_without_storing_model_output(tmp_path: Path) -> None:
+    class FakeProvider:
+        name = "fake-provider"
+        model = "fake-model"
+        system_prompt = ""
+
+        def complete(
+            self,
+            prompt: str,
+            *,
+            system_prompt: str = "",
+            previous_response_id: str | None = None,
+            cwd: Path | None = None,
+        ) -> ProviderResponse:
+            del prompt, previous_response_id, cwd
+            self.system_prompt = system_prompt
+            return ProviderResponse("answer", self.name, self.model)
+
+    store = AgentMemoryStore(tmp_path)
+    card = ContextCompressor.compress_trajectory(
+        task="Fix authentication",
+        run_id="auth-run",
+        mutations={},
+        policy_decision="ALLOW",
+        blast_radius=8,
+    )
+    store.record_episode(card)
+    provider = FakeProvider()
+    router = CortexRouter(
+        provider,
+        memory=RepositoryMemoryProvider(tmp_path),
+        root=tmp_path,
+    )
+
+    result = router.ask("Fix authentication again")
+
+    assert result.memory_enabled is True
+    assert "Fix authentication" in provider.system_prompt
+    assert store.get_stats()["total_episodes"] == 1
 
 
 def test_self_healer_remediation_payload() -> None:

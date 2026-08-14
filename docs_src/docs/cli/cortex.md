@@ -1,88 +1,136 @@
 ---
-title: Cortex CLI Commands
-description: CLI reference for skill synthesis, context packing, memory inspection, and self-healing.
+title: Cortex, memory, and provider commands
+description: CLI reference for memory search, semantic indexing, AI provider routing, skill synthesis, and remediation.
 ---
 
 <p><span class="ad-doc-eyebrow">CLI reference</span></p>
-# Cortex & Memory Commands
+# Cortex, memory, and provider commands
 
-<div class="ad-doc-lede">CLI commands for autonomous skill synthesis, prompt context packing, memory analytics, and self-healing.</div>
+<div class="ad-doc-lede">Search verified repository memory and route a bounded context pack through Claude, Codex/OpenAI, or Ollama.</div>
 
-## 1. `agentdiff skill`
+## Ask an AI provider
 
-Manage and synthesize reusable skills from verified transaction runs.
+### Codex client
 
-### List Learned Skills
+Uses your installed Codex authentication. Cortex launches an ephemeral, read-only client run.
+
 ```bash
-agentdiff skill list
-agentdiff skill list --format json
+agentdiff agent ask \
+  --provider codex-cli \
+  --task "Plan the smallest safe parser fix"
 ```
 
-### Synthesize a Reusable Skill
-Extract a verified `SKILL.md` from a specific transaction capsule:
+### OpenAI / Codex API
+
 ```bash
-agentdiff skill generate <run-id>
-agentdiff skill generate <run-id> --title "Postgres Connection Pooling"
+export OPENAI_API_KEY="..."
+agentdiff agent ask \
+  --provider openai-api \
+  --model gpt-5.6-terra \
+  --task "Review the authentication recovery plan"
 ```
 
-The resulting skill document is saved into `.agentdiff/skills/<skill-slug>.md`.
+Continue a Responses API chain with:
 
----
+```bash
+agentdiff agent ask \
+  --provider openai-api \
+  --previous-response-id resp_123 \
+  --task "Now minimize the proposed diff"
+```
 
-## 2. `agentdiff context pack`
+### Claude Code client
 
-Package relevant architectural skills, fragility warnings, and safety constraints into a dense prompt context block:
+Uses your installed Claude Code authentication. Cortex uses non-persistent print mode and plan permissions.
+
+```bash
+agentdiff agent ask \
+  --provider claude-cli \
+  --task "Find the safest recovery boundary"
+```
+
+### Anthropic API
+
+```bash
+export ANTHROPIC_API_KEY="..."
+agentdiff agent ask \
+  --provider anthropic-api \
+  --model claude-sonnet-5 \
+  --task "Review the evidence capsule design"
+```
+
+### Ollama API or client
+
+The model is always explicit because installed local models differ by machine.
+
+```bash
+agentdiff agent ask \
+  --provider ollama-api \
+  --model qwen3.6 \
+  --task "Plan the parser repair"
+
+agentdiff agent ask \
+  --provider ollama-cli \
+  --model qwen3.6 \
+  --task "Review the rollback logic"
+```
+
+Use `--no-memory` for a provider-only request, `--max-memories` to change the default limit of four evidence cards, and `--format json` for the normalized provider response and usage fields. `--endpoint`, `--executable`, and `--api-key-env` support self-hosted or non-default configurations without putting a secret value on the command line.
+
+## Search trajectory memory
+
+```bash
+agentdiff memory stats
+agentdiff memory search "authentication session regression"
+agentdiff memory search "src/auth/session.py" --limit 3 --format json
+```
+
+The search command is offline by default. It ranks compressed evidence cards by shared task/path terms, exact paths, recency, and policy risk.
+
+## Add local semantic vectors
+
+```bash
+ollama pull embeddinggemma
+agentdiff memory index --model embeddinggemma
+agentdiff memory search \
+  "authentication session regression" \
+  --embedding-model embeddinggemma
+```
+
+`memory index` sends compressed memory cards to the configured Ollama embedding endpoint and stores the returned vectors locally. Re-run it after adding episodes or changing the embedding model.
+
+To use semantic memory automatically during an AI request:
+
+```bash
+agentdiff agent ask \
+  --provider ollama-api \
+  --model qwen3.6 \
+  --embedding-model embeddinggemma \
+  --task "Plan a safe session middleware refactor"
+```
+
+## Pack context without calling a provider
 
 ```bash
 agentdiff context pack --task "Fix payment gateway timeout"
 ```
 
-Pass the output directly into Claude Code, Codex, Cursor, or Aider prompt context.
+The output includes matched skills, fragile paths, relevant verified runs, and the rule that rejected runs are warnings rather than successful examples.
 
----
-
-## 3. `agentdiff memory stats`
-
-Inspect repository trajectory memory and identify high-risk fragile paths:
+## Synthesize a reusable skill
 
 ```bash
-agentdiff memory stats
-agentdiff memory stats --format json
+agentdiff skill list
+agentdiff skill generate <run-id> --title "Postgres Connection Pooling"
 ```
 
-Example output:
-```text
-AgentDiff Trajectory Memory Stats
-  Total episodes recorded: 14
-  Fragile paths tracked:   3
-  Top Fragile Paths:
-    - config/secrets.env (Risk score: 4.0)
-    - src/auth/jwt.py (Risk score: 2.0)
-```
+The generated `.agentdiff/skills/<skill-slug>.md` remains traceable to its source capsule.
 
----
-
-## 4. `agentdiff heal`
-
-Generate a machine-actionable remediation payload for autonomous agent retry loops:
+## Generate remediation
 
 ```bash
 agentdiff heal <run-id>
 agentdiff heal <run-id> --format json
 ```
 
-Example JSON response:
-```json
-{
-  "run_id": "run-e45c0d69",
-  "status": "REMEDIATION_REQUIRED",
-  "decision": "DENY",
-  "blast_radius_score": 72,
-  "collateral_files_to_revert": [
-    ".env",
-    "config/keys.py"
-  ],
-  "recovery_command": "agentdiff rollback run-e45c0d69 --safe-only",
-  "prompt_repair_directive": "Your previous attempt triggered a DENY verdict with blast-radius 72/100. Revert collateral in ['.env', 'config/keys.py'] and constrain edits."
-}
-```
+The payload identifies collateral paths and the conflict-safe rollback command for an autonomous retry harness. It does not automatically execute recovery or retry the agent.

@@ -59,14 +59,14 @@ nav:
       - Mutation policy: docs/concepts/policy.md
       - Blast-radius scoring: docs/concepts/blast-radius.md
       - Selective recovery: docs/concepts/recovery.md
-      - Cortex & Skill Memory: docs/concepts/cortex.md
+      - Cortex memory & AI providers: docs/concepts/cortex.md
   - CLI:
       - CLI overview: docs/cli/index.md
       - Run a transaction: docs/cli/run.md
       - Inspect evidence: docs/cli/inspect.md
       - Recover safely: docs/cli/rollback.md
       - Policy commands: docs/cli/policy.md
-      - Cortex & Memory: docs/cli/cortex.md
+      - Cortex, memory & providers: docs/cli/cortex.md
       - Operations: docs/cli/operations.md
   - Integrations:
       - Anthropic Sandbox Runtime (Experimental): docs/integrations/sandbox-runtime.md
