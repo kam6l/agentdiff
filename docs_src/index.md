@@ -13,10 +13,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
   <header class="ad-site-header" data-site-header>
     <nav class="ad-site-nav" aria-label="Main navigation">
       <a class="ad-wordmark" href="./" aria-label="AgentDiff home">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M10 5H5v22h5M22 5h5v22h-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-          <path d="M13 12h6M13 20h6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        </svg>
+        <img src="assets/images/favicon.svg" alt="AgentDiff logo" class="ad-wordmark__logo" width="28" height="28">
         <span>AgentDiff</span>
       </a>
 
@@ -285,7 +282,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
   <footer class="ad-site-footer">
     <div class="ad-site-footer__brand">
       <a class="ad-wordmark" href="./" aria-label="AgentDiff home">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M10 5H5v22h5M22 5h5v22h-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M13 12h6M13 20h6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        <img src="assets/images/favicon.svg" alt="AgentDiff logo" class="ad-wordmark__logo" width="28" height="28">
         <span>AgentDiff</span>
       </a>
       <p>Local-first runtime evidence for autonomous agents.</p>

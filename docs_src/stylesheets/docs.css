@@ -58,7 +58,7 @@ body:not(:has(.ad-home)) {
 }
 
 body:not(:has(.ad-home)) .md-container {
-  margin-left: 280px;
+  margin-left: 276px;
   padding-top: 0;
   background: var(--ad-doc-bg);
 }
@@ -67,8 +67,8 @@ body:not(:has(.ad-home)) .md-container {
 body:not(:has(.ad-home)) .ad-doc-header {
   position: fixed;
   inset: 0 auto 0 0;
-  width: 280px;
-  height: 68px;
+  width: 276px;
+  height: 64px;
   background: var(--ad-doc-sidebar);
   color: var(--ad-doc-text);
   border-right: 1px solid var(--ad-doc-line);
@@ -79,8 +79,8 @@ body:not(:has(.ad-home)) .ad-doc-header {
 
 .ad-doc-header__inner {
   width: 100%;
-  height: 68px;
-  padding: 0 16px 0 20px;
+  height: 64px;
+  padding: 0 16px 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -227,10 +227,10 @@ body:not(:has(.ad-home)) .md-search-result__meta {
 /* Fixed navigation rail */
 body:not(:has(.ad-home)) .md-sidebar--primary {
   position: fixed;
-  inset: 68px auto 0 0;
-  width: 280px;
+  inset: 64px auto 0 0;
+  width: 276px;
   height: auto;
-  padding: 16px 8px 36px 14px;
+  padding: 16px 8px 48px 12px;
   background: var(--ad-doc-sidebar);
   border-right: 1px solid var(--ad-doc-line);
   z-index: 15;
@@ -259,7 +259,7 @@ body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__inner {
 
 body:not(:has(.ad-home)) .md-nav {
   color: var(--ad-doc-muted);
-  font-size: 0.70rem;
+  font-size: 0.74rem;
 }
 
 body:not(:has(.ad-home)) .md-nav--primary > .md-nav__title {
@@ -267,15 +267,15 @@ body:not(:has(.ad-home)) .md-nav--primary > .md-nav__title {
 }
 
 body:not(:has(.ad-home)) .md-nav__link {
-  min-height: 29px;
-  margin: 1px 0;
-  padding: 5px 9px;
+  min-height: 31px;
+  margin: 1.5px 0;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
-  border-radius: 6px;
+  border-radius: 7px;
   color: var(--ad-doc-muted);
-  font-size: 0.70rem;
-  line-height: 1.35;
+  font-size: 0.74rem;
+  line-height: 1.4;
   transition: background 120ms ease, color 120ms ease;
 }
 
@@ -289,7 +289,7 @@ body:not(:has(.ad-home)) .md-nav__link--active,
 body:not(:has(.ad-home)) .md-nav__item .md-nav__link--active {
   background: var(--ad-doc-accent-soft);
   color: var(--ad-doc-accent);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 body:not(:has(.ad-home)) .md-nav--primary > .md-nav__list > .md-nav__item {
@@ -299,18 +299,18 @@ body:not(:has(.ad-home)) .md-nav--primary > .md-nav__list > .md-nav__item {
 body:not(:has(.ad-home)) .md-nav__item--section > .md-nav__link,
 body:not(:has(.ad-home)) .md-nav__item--section > .md-nav__container > .md-nav__link,
 body:not(:has(.ad-home)) .md-nav__item--nested > .md-nav__container > .md-nav__link {
-  margin-top: 14px;
-  margin-bottom: 2px;
-  padding: 4px 9px;
+  margin-top: 18px;
+  margin-bottom: 3px;
+  padding: 4px 10px;
   color: var(--ad-doc-muted);
-  font-size: 0.58rem;
+  font-size: 0.60rem;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 body:not(:has(.ad-home)) .md-nav__item--nested > .md-nav > .md-nav__list {
-  padding-left: 2px;
+  padding-left: 4px;
 }
 
 body:not(:has(.ad-home)) .md-nav__icon {
