@@ -34,7 +34,6 @@ theme:
   features:
     - navigation.expand
     - navigation.footer
-    - navigation.indexes
     - navigation.instant
     - navigation.instant.progress
     - navigation.path
@@ -51,8 +50,8 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
-  - Overview: docs/index.md
   - Getting started:
+      - Overview: docs/index.md
       - Quickstart: docs/quickstart.md
       - Installation: docs/installation.md
   - Core concepts:
@@ -72,10 +71,11 @@ nav:
       - MCP policy hook (Experimental): docs/integrations/mcp-policy.md
       - LangChain / LangGraph (Experimental): docs/integrations/langchain.md
       - Custom frameworks: docs/integrations/custom.md
-  - Security & capability limits: docs/trust.md
-  - Python API: docs/sdk-reference.md
-  - Capsule Reference: docs/api-reference.md
-  - Changelog: changelog.md
+  - Reference:
+      - Security & capability limits: docs/trust.md
+      - Python API: docs/sdk-reference.md
+      - Capsule Reference: docs/api-reference.md
+      - Changelog: changelog.md
 
 not_in_nav: |
   index.md
