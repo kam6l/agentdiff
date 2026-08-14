@@ -31,6 +31,8 @@
   </a>
 </p>
 
+The documentation shell is responsive across desktop and mobile, with an indexed command-palette search (`Ctrl K` or `/`) and a live link to the GitHub repository and star count.
+
 > [!IMPORTANT]
 > The local runtime observes a host subprocess; it is not a kernel sandbox and does not block network access. Recovery covers only eligible filesystem changes. Use a real isolation backend for untrusted code.
 
@@ -132,8 +134,8 @@ AgentDiff records symlinks without traversing them, redacts common secret-bearin
 Read the [runtime model](https://kam6l.github.io/agentdiff/docs/concepts/runtime/), [recovery guarantees](https://kam6l.github.io/agentdiff/docs/concepts/recovery/), and [security limits](https://kam6l.github.io/agentdiff/docs/trust/).
 
 <p align="center">
-  <a href="https://kam6l.github.io/agentdiff/docs/cli/">
-    <img src="docs_src/assets/images/agentdiff-docs.png" alt="AgentDiff CLI documentation" width="100%">
+  <a href="https://kam6l.github.io/agentdiff/docs/">
+    <img src="docs_src/assets/images/agentdiff-docs.png" alt="Responsive AgentDiff documentation with search and repository controls" width="100%">
   </a>
 </p>
 

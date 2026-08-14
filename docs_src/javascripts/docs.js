@@ -32,6 +32,77 @@
     return Promise.resolve();
   }
 
+  function openSearch() {
+    const searchToggle = document.getElementById("__search");
+    if (!searchToggle) return;
+    searchToggle.checked = true;
+    searchToggle.dispatchEvent(new Event("change", { bubbles: true }));
+    window.setTimeout(() => document.querySelector(".md-search__input")?.focus(), 40);
+  }
+
+  function enhanceSearch() {
+    const search = document.querySelector(".md-search");
+    const searchToggle = document.getElementById("__search");
+    const trigger = document.querySelector("[data-ad-search-open]");
+    const input = search?.querySelector(".md-search__input");
+    if (!search || !searchToggle || !trigger || !input) return;
+
+    search.id = "ad-doc-search";
+    search.setAttribute("aria-label", "Search AgentDiff documentation");
+    input.setAttribute("aria-label", "Search AgentDiff documentation");
+    input.placeholder = "Search AgentDiff documentation...";
+
+    if (trigger.dataset.searchEnhanced !== "true") {
+      trigger.dataset.searchEnhanced = "true";
+      let retriedValue = "";
+      trigger.addEventListener("click", openSearch);
+      input.addEventListener("input", () => {
+        window.setTimeout(() => {
+          const meta = search.querySelector(".md-search-result__meta");
+          const value = input.value.trim();
+          if (value && value !== retriedValue && meta?.textContent?.trim() === "Type to start searching") {
+            retriedValue = value;
+            input.dispatchEvent(new KeyboardEvent("keyup", { key: "Process", bubbles: true }));
+          }
+        }, 350);
+      });
+      searchToggle.addEventListener("change", () => {
+        const expanded = searchToggle.checked;
+        trigger.setAttribute("aria-expanded", String(expanded));
+        document.body.classList.toggle("ad-search-open", expanded);
+        search.setAttribute("aria-modal", String(expanded));
+        if (!expanded) trigger.focus();
+      });
+    }
+  }
+
+  function enhanceRepoBadge() {
+    const badge = document.querySelector("[data-github-repo]");
+    if (!badge || badge.dataset.starsEnhanced === "true") return;
+    badge.dataset.starsEnhanced = "true";
+
+    const repo = badge.dataset.githubRepo;
+    const count = badge.querySelector("[data-github-stars]");
+    if (!repo || !count) return;
+
+    fetch(`https://api.github.com/repos/${repo}`, {
+      headers: { Accept: "application/vnd.github+json" },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("GitHub repository metadata unavailable");
+        return response.json();
+      })
+      .then((data) => {
+        if (!Number.isFinite(data.stargazers_count)) return;
+        const stars = new Intl.NumberFormat("en-US").format(data.stargazers_count);
+        count.textContent = stars;
+        badge.setAttribute("aria-label", `${repo} on GitHub, ${stars} stars`);
+      })
+      .catch(() => {
+        // Keep the server-rendered count when GitHub is unavailable or rate limited.
+      });
+  }
+
   function setupBackToTop() {
     let topBtn = document.getElementById("ad-back-to-top");
     if (!topBtn) {
@@ -68,6 +139,8 @@
     labelThemeProgress();
     if (document.querySelector("[data-agentdiff-home]")) return;
     document.body.classList.add("ad-doc-page");
+    enhanceSearch();
+    enhanceRepoBadge();
 
     const article = document.querySelector(".md-content__inner");
     if (!article || article.dataset.docsEnhanced === "true") return;
@@ -125,10 +198,7 @@
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
     if (event.key === "/" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k")) {
       event.preventDefault();
-      const searchToggle = document.getElementById("__search");
-      if (!searchToggle) return;
-      searchToggle.checked = true;
-      window.setTimeout(() => document.querySelector(".md-search__input")?.focus(), 30);
+      openSearch();
     }
   }
 

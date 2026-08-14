@@ -7,16 +7,27 @@
       <span class="ad-doc-brand__suffix">Docs</span>
     </a>
 
-    <label class="ad-doc-search-trigger" for="__search" aria-label="Search documentation" title="Search documentation">
+    <button class="ad-doc-search-trigger" type="button" data-ad-search-open aria-label="Search documentation" aria-haspopup="dialog" aria-controls="ad-doc-search" aria-expanded="false" title="Search documentation">
       <span class="ad-doc-search-trigger__icon md-icon" aria-hidden="true">
         {% set icon = config.theme.icon.search or "material/magnify" %}
         {% include ".icons/" ~ icon ~ ".svg" %}
       </span>
       <span>Search documentation...</span>
-      <kbd>/</kbd>
-    </label>
+      <kbd>Ctrl K</kbd>
+    </button>
 
     <div class="ad-doc-header__actions">
+      <a class="ad-doc-repo-link" href="{{ config.repo_url }}" target="_blank" rel="noopener noreferrer" data-github-repo="kam6l/agentdiff" aria-label="kam6l/agentdiff on GitHub, 2 stars" title="Open kam6l/agentdiff on GitHub">
+        <span class="ad-doc-repo-link__icon md-icon" aria-hidden="true">
+          {% include ".icons/fontawesome/brands/github.svg" %}
+        </span>
+        <span class="ad-doc-repo-link__name">{{ config.repo_name }}</span>
+        <span class="ad-doc-repo-link__stars" aria-hidden="true">
+          <span class="md-icon">{% include ".icons/material/star-outline.svg" %}</span>
+          <span data-github-stars>2</span>
+        </span>
+      </a>
+
       <a class="ad-doc-home-link" href="{{ config.extra.homepage | url }}">AgentDiff home</a>
 
       {% if config.theme.palette %}
@@ -28,9 +39,6 @@
         {% include "partials/javascripts/palette.html" %}
       {% endif %}
 
-      <a class="ad-doc-icon-button md-icon" href="{{ config.repo_url }}" target="_blank" rel="noopener noreferrer" aria-label="AgentDiff on GitHub" title="GitHub">
-        {% include ".icons/fontawesome/brands/github.svg" %}
-      </a>
     </div>
 
     {% if "material/search" in config.plugins %}
