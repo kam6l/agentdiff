@@ -72,11 +72,10 @@ nav:
       - MCP policy hook (Experimental): docs/integrations/mcp-policy.md
       - LangChain / LangGraph (Experimental): docs/integrations/langchain.md
       - Custom frameworks: docs/integrations/custom.md
-  - Security & limits: docs/trust.md
-  - Reference:
-      - Python API: docs/sdk-reference.md
-      - Capsule Reference: docs/api-reference.md
-      - Changelog: changelog.md
+  - Security & capability limits: docs/trust.md
+  - Python API: docs/sdk-reference.md
+  - Capsule Reference: docs/api-reference.md
+  - Changelog: changelog.md
 
 not_in_nav: |
   index.md

@@ -145,9 +145,12 @@ body:has(.ad-home) .md-content__inner::after {
   letter-spacing: -0.03em;
 }
 
+.ad-wordmark img,
 .ad-wordmark svg {
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
   color: var(--ad-orange);
 }
 
