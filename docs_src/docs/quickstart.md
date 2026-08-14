@@ -97,4 +97,5 @@ Skipped: 1
 
 - [Understand the runtime and limits](concepts/runtime.md)
 - [Customize mutation policy](concepts/policy.md)
+- [Connect Cortex to Claude, Codex, or Ollama](concepts/cortex.md)
 - [Review every CLI command](cli/index.md)

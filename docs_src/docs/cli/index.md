@@ -1,6 +1,6 @@
 ---
 title: CLI overview
-description: The implemented AgentDiff command-line surface for transactions, evidence, policy, recovery, and legacy evaluation.
+description: The implemented AgentDiff command-line surface for transactions, evidence, recovery, memory, and provider routing.
 ---
 
 <span class="ad-doc-eyebrow">CLI</span>
@@ -33,6 +33,15 @@ agentdiff policy explain .env --policy agentdiff.yaml
 ```
 
 See [policy commands](policy.md) for the exact subcommand surface.
+
+## Cortex workflow
+
+```bash
+agentdiff memory search "authentication regression"
+agentdiff agent ask --provider codex-cli --task "Plan the smallest safe fix"
+```
+
+See [Cortex, memory, and provider commands](cortex.md) for Claude, Codex/OpenAI, Ollama, and optional local semantic indexing.
 
 ## Shared conventions
 
@@ -73,19 +82,20 @@ Use `--fail-on never` to report policy only, or `--fail-on review` to make both 
 ```text
 agentdiff
 ├── run
-├── inspect
-├── runs
-├── verify
-├── rollback
-├── cleanup
-├── doctor
+├── inspect / runs / verify
+├── rollback / cleanup / doctor
 ├── policy
-│   ├── init
-│   ├── validate
-│   └── explain
-├── snapshot    # legacy evaluator path
-├── diff        # legacy evaluator path
-└── eval        # legacy evaluator path
+│   └── init / validate / explain
+├── memory
+│   └── stats / search / index
+├── agent
+│   └── ask
+├── skill
+│   └── list / generate
+├── context
+│   └── pack
+├── heal
+└── snapshot / diff / eval    # legacy evaluator path
 ```
 
 !!! tip "Trust the installed help"

@@ -25,6 +25,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
       <div class="ad-site-nav__links" id="ad-nav-links" data-menu>
         <a href="#evidence">Evidence</a>
         <a href="#recovery">Recovery</a>
+        <a href="#cortex">Cortex</a>
         <a href="#trust">Trust model</a>
         <a href="docs/">Docs</a>
         <a class="ad-nav-cta" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
@@ -43,9 +44,9 @@ description: See exactly what an AI agent changed and selectively undo only the 
           <a class="ad-button ad-button--light" href="docs/quickstart/">Run your first transaction <span aria-hidden="true">→</span></a>
           <a class="ad-button ad-button--ghost" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="ad-command" aria-label="Run AgentDiff">
+        <div class="ad-command" aria-label="Install AgentDiff from source">
           <span class="ad-command__prompt" aria-hidden="true">$</span>
-          <code id="ad-install-command">agentdiff run --task "Fix authentication" -- codex</code>
+          <code id="ad-install-command">git clone https://github.com/kam6l/agentdiff.git &amp;&amp; cd agentdiff &amp;&amp; uv tool install .</code>
           <button type="button" data-copy-target="ad-install-command"><span data-copy-label>Copy</span></button>
         </div>
         <p class="ad-hero__note">Observation by default. External enforcement only through a separately configured runtime.</p>
@@ -250,10 +251,27 @@ description: See exactly what an AI agent changed and selectively undo only the 
       </div>
     </section>
 
+    <section class="ad-cortex ad-section" id="cortex" aria-labelledby="ad-cortex-title">
+      <div class="ad-section-label"><span>06</span> Provider-neutral agent memory</div>
+      <div class="ad-cortex__heading">
+        <h2 id="ad-cortex-title">One evidence memory.<br><em>Claude, Codex, or Ollama.</em></h2>
+        <p>Cortex ranks verified run memory by task, paths, recency, policy risk, and optional local embeddings—then sends a bounded context pack through the provider you explicitly choose.</p>
+      </div>
+      <div class="ad-cortex__providers" aria-label="Supported Cortex providers">
+        <article><span>API + CLIENT</span><strong>Claude</strong><p>Anthropic Messages API or Claude Code in non-persistent plan mode.</p></article>
+        <article><span>API + CLIENT</span><strong>Codex / OpenAI</strong><p>Responses API with persisted reasoning IDs or an ephemeral read-only Codex CLI run.</p></article>
+        <article><span>LOCAL API + CLIENT</span><strong>Ollama</strong><p>Native chat and embedding endpoints, with the local model selected by you.</p></article>
+      </div>
+      <div class="ad-cortex__command">
+        <code>agentdiff agent ask --provider codex-cli --task "Plan the smallest safe parser fix"</code>
+        <a href="docs/concepts/cortex/">Explore Cortex architecture <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
     <section class="ad-trust ad-section" id="trust" aria-labelledby="ad-trust-title">
       <div class="ad-trust__mark" aria-hidden="true">[ ! ]</div>
       <div>
-        <div class="ad-section-label ad-section-label--light"><span>06</span> Honest capability boundaries</div>
+        <div class="ad-section-label ad-section-label--light"><span>07</span> Honest capability boundaries</div>
         <h2 id="ad-trust-title">Evidence, not<br>security theater.</h2>
       </div>
       <div class="ad-trust__content">

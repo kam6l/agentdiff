@@ -367,21 +367,21 @@ body:not(:has(.ad-home)) .md-sidebar--primary {
   z-index: 15;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ad-doc-line-soft) transparent;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--primary::-webkit-scrollbar {
-  width: 4px;
-}
-
-body:not(:has(.ad-home)) .md-sidebar--primary::-webkit-scrollbar-thumb {
-  background: var(--ad-doc-line);
-  border-radius: 4px;
+  display: none;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__scrollwrap {
   margin: 0;
+  scrollbar-width: none;
+}
+
+body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__scrollwrap::-webkit-scrollbar {
+  display: none;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__inner {
@@ -535,7 +535,7 @@ body:not(:has(.ad-home)) .md-sidebar--secondary .md-nav__title {
   background: transparent;
   box-shadow: none;
   color: var(--ad-doc-text);
-  font-size: 0.62rem;
+  font-size: 0;
   font-weight: 720;
 }
 

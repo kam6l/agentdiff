@@ -40,6 +40,12 @@ description: Learn how AgentDiff records agent mutations, evaluates policy, scor
 <p>Preserve allowed work and refuse to overwrite paths changed after the run.</p>
 <em>See safe rollback →</em>
 </a>
+<a class="ad-doc-card" href="concepts/cortex/">
+<span>05 · Agent memory</span>
+<strong>Connect Claude, Codex, or Ollama</strong>
+<p>Retrieve verified run memory and route a bounded context pack through one explicit provider.</p>
+<em>Explore Cortex →</em>
+</a>
 </div>
 
 ## The transaction loop
@@ -55,7 +61,7 @@ description: Learn how AgentDiff records agent mutations, evaluates policy, scor
 
 | Status | Implemented surface |
 |---|---|
-| **Beta** | Local transactions, policy, capsules, verification, scoring, and regular-file recovery |
+| **Beta** | Local transactions, policy, capsules, verification, scoring, regular-file recovery, evidence memory, and Cortex provider routing |
 | **Experimental** | `srt` adapter, MCP policy hook, LangChain callback, and legacy evaluator |
 | **Planned** | Published packages, authenticated capsules, telemetry export, and a maintained hosted sandbox integration |
 
@@ -124,5 +130,6 @@ The following shape is taken from a real repository run. AgentDiff reported a su
 - **Install AgentDiff** — supported source installation and requirements. [Installation →](installation.md)
 - **Use the CLI** — exact commands and flags implemented in `v0.1.0`. [CLI reference →](cli/index.md)
 - **Integrate a command or framework** — use the transaction API, or the separately labeled experimental compatibility hooks. [Integrations →](integrations/custom.md)
+- **Connect an AI provider** — use verified repository memory with Claude, Codex/OpenAI, or Ollama. [Cortex →](concepts/cortex.md)
 - **Review the security boundary** — explicit guarantees, observations, and non-goals. [Security & limits →](trust.md)
 </div>
