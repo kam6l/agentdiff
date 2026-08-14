@@ -285,14 +285,14 @@ def test_cleanup_reports_a_process_that_survives_forceful_cleanup(
 
 def test_runtime_result_is_json_serializable(tmp_path: Path) -> None:
     result = LocalRuntime(root=tmp_path).run(
-        [sys.executable, "-c", "pass"],
+        [sys.executable, "-c", "import time; time.sleep(0.05)"],
         timeout_seconds=5,
     )
 
     payload = result.to_dict()
     assert json.loads(json.dumps(payload)) == payload
     assert payload["schema_version"] == 1
-    assert payload["argv"] == [sys.executable, "-c", "pass"]
+    assert payload["argv"] == [sys.executable, "-c", "import time; time.sleep(0.05)"]
     assert payload["owned_processes"][0]["pid"] > 0
     assert payload["owned_processes"][0]["create_time"] > 0
 
