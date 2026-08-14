@@ -14,6 +14,11 @@ AgentDiff is pre-release software. APIs and artifact schemas may change before t
 
 ### Changed
 
+- Renamed the public Cortex repair surface to `RemediationAdvisor` and `agentdiff cortex advise`; it produces advice and never claims to execute healing.
+- Reframed deterministic skill output as evidence-backed skill cards, grouped all optional Cortex commands under `agentdiff cortex`, and removed legacy evaluator verbs from the public CLI.
+- Replaced the simulated legacy evaluator demo with a real subprocess executed through `AgentRunTransaction`.
+- Renamed the five-case public CI check to the local recovery regression suite.
+- Prevented documentation search results from expanding full pages inside the command palette, standardized responsive tables and text rendering, and compacted article/footer spacing.
 - Rebuilt documentation search as a responsive command palette with keyboard navigation, corrected result styling, and reliable index updates.
 - Added an E2B-inspired GitHub repository badge with a current star count and reduced excess spacing before documentation footers.
 - Replaced nonexistent HTTP-server and SDK documentation with implemented Python and capsule references.

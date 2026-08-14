@@ -100,6 +100,7 @@ decision = hook.authorize("filesystem.write_file", {"path": "src/app.py"})
 | `agentdiff.scoring` | Weights, mutation risks, components, risk levels |
 | `agentdiff.state` | Secure manifests and deterministic filesystem diffs |
 | `agentdiff.runtime` | Local observer and optional external `SandboxRuntime` adapter |
+| `agentdiff.cortex` | Experimental evidence memory, skill-card generation, provider routing, and remediation advice |
 | `agentdiff.integrations` | MCP hook plus legacy evaluator session helpers |
 
 There is no `AgentDiffRuntime`, async runtime, HTTP server, `serve` command, or `__version_info__` attribute in `0.1.0`.

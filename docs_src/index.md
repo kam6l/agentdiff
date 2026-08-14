@@ -5,6 +5,8 @@ hide:
   - toc
   - footer
 description: See exactly what an AI agent changed and selectively undo only the collateral damage.
+search:
+  exclude: true
 ---
 
 <div class="ad-home" data-agentdiff-home>
@@ -25,7 +27,6 @@ description: See exactly what an AI agent changed and selectively undo only the 
       <div class="ad-site-nav__links" id="ad-nav-links" data-menu>
         <a href="#evidence">Evidence</a>
         <a href="#recovery">Recovery</a>
-        <a href="#cortex">Cortex</a>
         <a href="#trust">Trust model</a>
         <a href="docs/">Docs</a>
         <a class="ad-nav-cta" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
@@ -263,7 +264,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
         <article><span>LOCAL API + CLIENT</span><strong>Ollama</strong><p>Native chat and embedding endpoints, with the local model selected by you.</p></article>
       </div>
       <div class="ad-cortex__command">
-        <code>agentdiff agent ask --provider codex-cli --task "Plan the smallest safe parser fix"</code>
+        <code>agentdiff cortex agent ask --provider codex-cli --task "Plan the smallest safe parser fix"</code>
         <a href="docs/concepts/cortex/">Explore Cortex architecture <span aria-hidden="true">→</span></a>
       </div>
     </section>
@@ -303,7 +304,7 @@ description: See exactly what an AI agent changed and selectively undo only the 
         <img src="assets/images/favicon.svg" alt="AgentDiff logo" class="ad-wordmark__logo" width="28" height="28">
         <span>AgentDiff</span>
       </a>
-      <p>Local-first runtime evidence for autonomous agents.</p>
+      <p>Local-first runtime evidence for AI-agent commands.</p>
     </div>
     <div><b>Learn</b><a href="docs/">Documentation</a><a href="docs/quickstart/">Quickstart</a><a href="docs/cli/">CLI</a></div>
     <div><b>Project</b><a href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/kam6l/agentdiff/issues" target="_blank" rel="noopener noreferrer">Issues</a><a href="https://github.com/kam6l/agentdiff/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></div>

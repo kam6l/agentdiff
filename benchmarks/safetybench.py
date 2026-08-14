@@ -165,7 +165,9 @@ CASES: tuple[tuple[str, Callable[[Path], str]], ...] = (
 def run_case(name: str, function: Callable[[Path], str]) -> CaseResult:
     started = perf_counter()
     try:
-        with tempfile.TemporaryDirectory(prefix=f"agentdiff-safetybench-{name}-") as directory:
+        with tempfile.TemporaryDirectory(
+            prefix=f"agentdiff-recovery-regression-{name}-"
+        ) as directory:
             detail = function(Path(directory))
     except (AssertionError, KeyError, OSError, RuntimeError, TypeError, ValueError) as error:
         return CaseResult(
@@ -190,7 +192,7 @@ def main() -> int:
     cases = [run_case(name, function) for name, function in CASES]
     report = {
         "schema_version": 1,
-        "benchmark": "agentdiff-local-safetybench",
+        "suite": "agentdiff-local-recovery-regression",
         "passed": all(case.passed for case in cases),
         "cases": [asdict(case) for case in cases],
     }

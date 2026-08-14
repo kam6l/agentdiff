@@ -6,7 +6,7 @@ AgentDiff is a framework-neutral runtime evidence and recovery layer:
 
 > Independent real-state observation + deterministic intent policy + explainable blast radius + conflict-safe selective recovery.
 
-The primary path is `agentdiff run --task "…" -- <command>`. The original snapshot, trajectory, and cleanliness evaluator remains available as an experimental compatibility surface.
+The primary path is `agentdiff run --task "…" -- <command>`. Experimental memory and provider tools live under `agentdiff cortex`; the original snapshot, trajectory, and cleanliness evaluator is retained only as an internal compatibility import.
 
 ## Product principles
 
@@ -34,8 +34,8 @@ The primary path is `agentdiff run --task "…" -- <command>`. The original snap
 
 - Anthropic Sandbox Runtime argv adapter; enforcement belongs to the external runtime.
 - Transport-neutral MCP-style pre-dispatch policy hook; no MCP server or proxy.
-- LangChain callback and the original snapshot/diff/evaluator APIs.
-- Five-case local adversarial benchmark.
+- LangChain callback and internal snapshot/diff/evaluator compatibility APIs.
+- Five-case local recovery regression suite.
 
 ### Planned
 
@@ -56,7 +56,7 @@ An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal networ
 - [x] Ruff formatting/lint, mypy, CodeQL, Bandit, and dependency audit.
 - [x] Package build and clean-wheel smoke test.
 - [x] Strict docs build plus internal link and asset validation.
-- [x] Deterministic Local SafetyBench artifact.
+- [x] Deterministic local recovery regression artifact.
 - [x] Protected `main`, least-privilege workflow permissions, secret scanning, and Dependabot configuration.
 
 ### Required before a stable release
@@ -68,10 +68,23 @@ An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal networ
 - [ ] Measured performance bounds on representative repositories.
 - [ ] No documentation claim beyond tested behavior.
 
-## Highest-value contribution areas
+## Focused roadmap
 
-1. Adversarial race, path, hardlink, redaction, and rollback tests.
-2. Authenticated capsule format and migrations.
-3. Measured large-repository scan performance.
-4. A maintained sandbox integration with explicit guarantee mapping.
-5. Standardized evidence export rather than a proprietary dashboard.
+### Credibility and distribution
+
+1. Publish signed artifacts through PyPI Trusted Publishing after ownership and provenance are configured.
+2. Keep the primary CLI limited to transaction, evidence, recovery, policy, and diagnostics.
+3. Keep Cortex experimental, namespaced, and described as deterministic evidence tooling without autonomy claims.
+4. Ship a thin GitHub Action that reports transaction evidence without creating a proprietary dashboard.
+
+### Differentiated safety core
+
+1. Add clean-room proof by replaying a captured patch in a fresh worktree before promotion.
+2. Detect future execution risk in package scripts and GitHub Actions changes, then extend to Dockerfiles, Makefiles, hooks, and editor tasks.
+3. Add an experimental copy-on-write Docker runtime where the real repository is changed only by an explicit, policy-filtered promotion step.
+
+### Evidence moat
+
+1. Add signed, shareable capsule export and standardized telemetry.
+2. Add run attribution for changed lines and evidence-based comparison of parallel agent attempts.
+3. Keep adversarial race, path, hardlink, redaction, and rollback tests ahead of new claims.

@@ -9,18 +9,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agentdiff import AgentDiffEvaluator, AgentFramework, DiffEngine, TrajectoryTracker
 from agentdiff.cortex import (
     AgentMemoryStore,
     ContextCompressor,
     ContextPacker,
     CortexRouter,
+    RemediationAdvisor,
     RepositoryMemoryProvider,
-    SelfHealer,
-    SkillSynthesizer,
+    SkillCardGenerator,
 )
-from agentdiff.diff_engine import EnvironmentSnapshot, FilesystemSnapshot
+from agentdiff.diff_engine import DiffEngine, EnvironmentSnapshot, FilesystemSnapshot
 from agentdiff.doctor import doctor_report
+from agentdiff.evaluator import AgentDiffEvaluator
 from agentdiff.policy import (
     Policy,
     PolicyAction,
@@ -38,6 +38,7 @@ from agentdiff.providers import (
 )
 from agentdiff.redaction import safe_display
 from agentdiff.runtime import SandboxRuntime
+from agentdiff.trajectory import AgentFramework, TrajectoryTracker
 from agentdiff.transaction import (
     AgentRunTransaction,
     RollbackEngine,
@@ -340,14 +341,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_skill_list(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    skills = SkillSynthesizer(root).list_skills()
+    skills = SkillCardGenerator(root).list_skills()
     if args.format == "json":
         print(_json([s.to_dict() for s in skills]))
         return 0
     if not skills:
-        print("No learned skills found in .agentdiff/skills/")
+        print("No evidence skill cards found in .agentdiff/skills/")
         return 0
-    print(f"AgentDiff Learned Skills ({len(skills)} found):")
+    print(f"AgentDiff Evidence Skill Cards ({len(skills)} found):")
     for s in skills:
         print(f"  • {s.skill_id:24} {safe_display(s.title)}")
     return 0
@@ -357,12 +358,12 @@ def cmd_skill_generate(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     inspector = RunInspector(root, args.run_id)
     summary_dict = inspector.summary().to_dict()
-    synthesizer = SkillSynthesizer(root)
-    skill = synthesizer.synthesize(summary_dict, title=args.title, save=True)
+    generator = SkillCardGenerator(root)
+    skill = generator.generate(summary_dict, title=args.title, save=True)
     if args.format == "json":
         print(_json(skill.to_dict()))
     else:
-        print(f"Synthesized skill: {skill.skill_id}")
+        print(f"Generated skill card: {skill.skill_id}")
         print(f"Title: {safe_display(skill.title)}")
         print(f"Triggers: {', '.join(skill.triggers)}")
         print(f"Verification Recipe: {skill.verification_recipe}")
@@ -476,14 +477,14 @@ def cmd_agent_ask(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_heal(args: argparse.Namespace) -> int:
+def cmd_advise(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     inspector = RunInspector(root, args.run_id)
-    payload = SelfHealer.generate_remediation(inspector.summary().to_dict())
+    payload = RemediationAdvisor.generate_remediation(inspector.summary().to_dict())
     if args.format == "json":
         print(_json(payload))
     else:
-        print(f"Healing Status: {payload['status']}")
+        print(f"Remediation Status: {payload['status']}")
         print(
             f"Decision: {payload['decision']} (Blast Radius: {payload['blast_radius_score']}/100)"
         )
@@ -707,29 +708,35 @@ def build_parser() -> argparse.ArgumentParser:
     p_policy_explain.add_argument("--format", choices=["json", "summary"], default="summary")
     p_policy_explain.set_defaults(func=cmd_policy_explain)
 
-    p_skill = subparsers.add_parser("skill", help="Manage and synthesize autonomous agent skills")
+    p_cortex = subparsers.add_parser(
+        "cortex",
+        help="Experimental evidence memory, skill cards, and AI provider tools",
+    )
+    cortex_commands = p_cortex.add_subparsers(dest="cortex_command", required=True)
+
+    p_skill = cortex_commands.add_parser("skill", help="Manage evidence-backed skill cards")
     skill_commands = p_skill.add_subparsers(dest="skill_command", required=True)
     p_skill_list = skill_commands.add_parser(
-        "list", help="List synthesized skills in .agentdiff/skills/"
+        "list", help="List generated skill cards in .agentdiff/skills/"
     )
     p_skill_list.add_argument("--root", default=".")
     p_skill_list.add_argument("--format", choices=["json", "summary"], default="summary")
     p_skill_list.set_defaults(func=cmd_skill_list)
     p_skill_gen = skill_commands.add_parser(
-        "generate", help="Synthesize a reusable SKILL.md from a run"
+        "generate", help="Generate a reusable SKILL.md from verified run evidence"
     )
     p_skill_gen.add_argument("run_id")
-    p_skill_gen.add_argument("--title", help="Custom title for the synthesized skill")
+    p_skill_gen.add_argument("--title", help="Custom title for the generated skill card")
     p_skill_gen.add_argument("--root", default=".")
     p_skill_gen.add_argument("--format", choices=["json", "summary"], default="summary")
     p_skill_gen.set_defaults(func=cmd_skill_generate)
 
-    p_context = subparsers.add_parser(
-        "context", help="Generate compressed context packs for AI models"
+    p_context = cortex_commands.add_parser(
+        "context", help="Generate bounded evidence context packs for AI models"
     )
     context_commands = p_context.add_subparsers(dest="context_command", required=True)
     p_context_pack = context_commands.add_parser(
-        "pack", help="Pack learned skills and memory into prompt context"
+        "pack", help="Pack skill cards and evidence memory into prompt context"
     )
     p_context_pack.add_argument(
         "--task", required=True, help="Task prompt intent to pack context for"
@@ -738,7 +745,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_context_pack.add_argument("--format", choices=["json", "summary"], default="summary")
     p_context_pack.set_defaults(func=cmd_context_pack)
 
-    p_memory = subparsers.add_parser("memory", help="Inspect trajectory memory and code fragility")
+    p_memory = cortex_commands.add_parser(
+        "memory", help="Inspect verified trajectory memory and code fragility"
+    )
     memory_commands = p_memory.add_subparsers(dest="memory_command", required=True)
     p_memory_stats = memory_commands.add_parser(
         "stats", help="Display memory statistics and fragile paths"
@@ -768,7 +777,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_memory_index.add_argument("--format", choices=["json", "summary"], default="summary")
     p_memory_index.set_defaults(func=cmd_memory_index)
 
-    p_agent = subparsers.add_parser(
+    p_agent = cortex_commands.add_parser(
         "agent", help="Route a memory-aware request to Claude, Codex/OpenAI, or Ollama"
     )
     agent_commands = p_agent.add_subparsers(dest="agent_command", required=True)
@@ -791,47 +800,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent_ask.add_argument("--format", choices=["json", "summary"], default="summary")
     p_agent_ask.set_defaults(func=cmd_agent_ask)
 
-    p_heal = subparsers.add_parser(
-        "heal", help="Generate autonomous remediation JSON for agent retries"
+    p_advise = cortex_commands.add_parser(
+        "advise", help="Generate structured remediation advice without executing it"
     )
-    p_heal.add_argument("run_id", help="Run ID to generate remediation for")
-    p_heal.add_argument("--root", default=".")
-    p_heal.add_argument("--format", choices=["json", "summary"], default="summary")
-    p_heal.set_defaults(func=cmd_heal)
-
-    p_snap = subparsers.add_parser("snapshot", help="Capture a legacy environment snapshot")
-    p_snap.add_argument("--root", default=".", help="Root directory")
-    p_snap.add_argument("--ignore", help="Comma-separated ignore patterns")
-    p_snap.add_argument("--max-size", type=int, default=10_000_000, help="Max file size")
-    p_snap.add_argument("--no-env", action="store_true", help="Skip env vars")
-    p_snap.add_argument("--no-proc", action="store_true", help="Skip processes")
-    p_snap.add_argument("--no-ports", action="store_true", help="Skip ports")
-    p_snap.add_argument("-o", "--output", help="Output file")
-    p_snap.set_defaults(func=cmd_snapshot)
-
-    p_diff = subparsers.add_parser("diff", help="Diff two legacy snapshots")
-    p_diff.add_argument("pre", help="Pre-snapshot JSON file")
-    p_diff.add_argument("post", help="Post-snapshot JSON file")
-    p_diff.add_argument("--root", help="Root directory for relative paths")
-    p_diff.add_argument("--format", choices=["json", "summary"], default="summary")
-    p_diff.set_defaults(func=cmd_diff)
-
-    p_eval = subparsers.add_parser("eval", help="Evaluate a legacy trajectory")
-    p_eval.add_argument("trajectory", help="Trajectory JSON file")
-    p_eval.add_argument("--pre", help="Pre-snapshot JSON file")
-    p_eval.add_argument("--post", help="Post-snapshot JSON file")
-    p_eval.add_argument("--root", help="Root directory")
-    p_eval.add_argument("--target", help="Comma-separated target paths")
-    p_eval.add_argument("--threshold", type=float, default=0.8, help="Cleanliness threshold")
-    p_eval.add_argument("--format", choices=["json", "summary"], default="summary")
-    p_eval.add_argument(
-        "--fail-on-failure",
-        "--fail-below-threshold",
-        dest="fail_below_threshold",
-        action="store_true",
-        help="Exit 1 when the evaluation fails",
-    )
-    p_eval.set_defaults(func=cmd_eval)
+    p_advise.add_argument("run_id", help="Run ID to generate remediation advice for")
+    p_advise.add_argument("--root", default=".")
+    p_advise.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_advise.set_defaults(func=cmd_advise)
     return parser
 
 

@@ -55,6 +55,14 @@
 body:not(:has(.ad-home)) {
   background: var(--ad-doc-bg);
   color: var(--ad-doc-body);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body:not(:has(.ad-home)) *,
+body:not(:has(.ad-home)) *::before,
+body:not(:has(.ad-home)) *::after {
+  text-shadow: none !important;
 }
 
 body.ad-search-open {
@@ -446,13 +454,20 @@ body:not(:has(.ad-home)) .md-search-result__meta {
 }
 
 body:not(:has(.ad-home)) .md-search-result__item {
+  min-width: 0;
   margin: 0;
   border-top: 1px solid var(--ad-doc-line-soft);
 }
 
 body:not(:has(.ad-home)) .md-search-result__link {
+  min-width: 0;
   margin: 0;
   padding: 13px 18px;
+  overflow: hidden;
+}
+
+body:not(:has(.ad-home)) .md-search-result__item > .md-search-result__link:not(:first-child) {
+  display: none;
 }
 
 body:not(:has(.ad-home)) .md-search-result__link:hover,
@@ -465,10 +480,13 @@ body:not(:has(.ad-home)) .md-search__suggest {
 }
 
 body:not(:has(.ad-home)) .md-search-result__article {
+  min-width: 0;
   padding: 0 !important;
+  overflow: hidden;
   color: var(--ad-doc-body);
   font-size: 0.63rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 body:not(:has(.ad-home)) .md-search-result__article:has(> .md-search-result__icon) {
@@ -500,10 +518,7 @@ body:not(:has(.ad-home)) .md-search-result__article h2::before {
 }
 
 body:not(:has(.ad-home)) .md-search-result__article p {
-  margin: 3px 0 0 !important;
-  color: var(--ad-doc-muted);
-  font-size: 0.58rem;
-  line-height: 1.5;
+  display: none;
 }
 
 body:not(:has(.ad-home)) .md-search-result__article mark {
@@ -511,10 +526,8 @@ body:not(:has(.ad-home)) .md-search-result__article mark {
   color: var(--ad-doc-accent);
 }
 
-body:not(:has(.ad-home)) .md-search-result__more summary {
-  padding: 8px 18px 10px;
-  color: var(--ad-doc-muted);
-  font-size: 0.55rem;
+body:not(:has(.ad-home)) .md-search-result__more {
+  display: none !important;
 }
 
 /* Fixed navigation rail */
@@ -631,7 +644,7 @@ body:not(:has(.ad-home)) .md-main__inner {
   max-width: none;
   min-height: calc(100vh - 112px);
   margin: 0;
-  padding: 54px clamp(28px, 4.5vw, 76px) 42px;
+  padding: 54px clamp(28px, 4.5vw, 76px) 20px;
   display: grid;
   grid-template-columns: minmax(0, 720px) 216px;
   grid-template-areas: "content toc";
@@ -911,10 +924,14 @@ body:not(:has(.ad-home)) .tabbed-block pre {
 /* Tables */
 body:not(:has(.ad-home)) .md-typeset__table {
   display: block;
+  max-width: 100%;
   margin: 1.5em 0;
   border: 1px solid var(--ad-doc-line);
-  border-radius: 9px;
-  overflow: auto;
+  border-radius: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--ad-doc-bg);
+  scrollbar-gutter: stable;
 }
 
 body:not(:has(.ad-home)) .md-typeset table:not([class]) {
@@ -936,6 +953,12 @@ body:not(:has(.ad-home)) .md-typeset table:not([class]) td {
   padding: 13px 15px;
   border-top-color: var(--ad-doc-line);
   color: var(--ad-doc-body);
+  overflow-wrap: anywhere;
+}
+
+body:not(:has(.ad-home)) .md-typeset table:not([class]) code {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 body:not(:has(.ad-home)) .md-typeset table:not([class]) tr:hover {
@@ -1208,8 +1231,8 @@ body:not(:has(.ad-home)) .md-typeset pre[data-language-label]::before {
 }
 
 .ad-doc-feedback {
-  margin-top: 74px;
-  padding: 22px 0;
+  margin-top: 36px;
+  padding: 16px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1265,6 +1288,18 @@ body:not(:has(.ad-home)) .md-footer-meta__inner {
   padding-left: 38px;
 }
 
+body:not(:has(.ad-home)) .md-footer__inner {
+  min-height: 72px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+body:not(:has(.ad-home)) .md-footer__link {
+  margin-top: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 body:not(:has(.ad-home)) .md-footer__link {
   color: var(--ad-doc-muted);
 }
@@ -1281,6 +1316,16 @@ body:not(:has(.ad-home)) .md-footer__link:hover {
 body:not(:has(.ad-home)) .md-footer-meta {
   background: var(--ad-doc-sidebar);
   border-top: 1px solid var(--ad-doc-line);
+}
+
+body:not(:has(.ad-home)) .md-footer-meta__inner {
+  min-height: 52px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+body:not(:has(.ad-home)) .md-copyright {
+  margin: 0;
 }
 
 body:not(:has(.ad-home)) .md-copyright,
@@ -1460,7 +1505,7 @@ body:not(:has(.ad-home)) :focus-visible {
   }
 
   body:not(:has(.ad-home)) .md-main__inner {
-    padding: 32px 20px 42px;
+    padding: 32px 20px 20px;
   }
 
   .ad-doc-repo-link__name {
@@ -1487,6 +1532,7 @@ body:not(:has(.ad-home)) :focus-visible {
   .ad-doc-feedback {
     align-items: flex-start;
     flex-direction: column;
+    margin-top: 30px;
   }
 
   .ad-doc-steps > div {
