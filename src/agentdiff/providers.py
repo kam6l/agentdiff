@@ -54,6 +54,9 @@ def http_json_transport(
 ) -> JsonObject:
     """Send one JSON request with the standard library."""
 
+    if not url.startswith(("https://", "http://")):
+        raise ProviderError(f"unsupported URL scheme for provider: {url}")
+
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -61,7 +64,7 @@ def http_json_transport(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:  # nosec B310
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = _error_detail(exc.read().decode("utf-8", errors="replace"))
