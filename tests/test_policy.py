@@ -106,9 +106,9 @@ def test_rollback_size_aliases_cannot_both_be_set() -> None:
 def test_policy_rejects_unsupported_schema_version_with_clear_error() -> None:
     with pytest.raises(
         PolicyValidationError,
-        match="unsupported policy version: 2; supported versions: 1",
+        match="unsupported policy version: 99; supported versions: 1, 2",
     ):
-        load_policy({"version": 2})
+        load_policy({"version": 99})
 
 
 def test_file_loader_reports_optional_pyyaml_dependency(

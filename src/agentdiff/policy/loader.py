@@ -12,6 +12,7 @@ from typing import Any
 
 from .models import (
     BLAST_RADIUS_WEIGHT_KEYS,
+    SUPPORTED_POLICY_VERSIONS,
     FilesystemPolicy,
     LimitsPolicy,
     NetworkMode,
@@ -19,6 +20,7 @@ from .models import (
     Policy,
     PolicyAction,
     ProcessPolicy,
+    ProofPolicy,
     RollbackPolicy,
     ScoringPolicy,
 )
@@ -55,6 +57,17 @@ def _patterns(value: object, path: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _commands(value: object, path: str) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(value, list):
+        raise PolicyValidationError(f"{path} must be a list of command sequences")
+    commands: list[tuple[str, ...]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, list) or any(not isinstance(arg, str) for arg in item):
+            raise PolicyValidationError(f"{path}[{index}] must be a list of strings")
+        commands.append(tuple(item))
+    return tuple(commands)
+
+
 def _action(value: object, path: str) -> PolicyAction:
     try:
         return PolicyAction(value)
@@ -71,17 +84,18 @@ def _optional_limit(value: object, path: str) -> int | None:
 
 
 def load_policy(data: Mapping[str, Any]) -> Policy:
-    """Load policy schema version 1 from an in-memory mapping."""
+    """Load policy schema version 1 or 2 from an in-memory mapping."""
     root = _mapping(data, "policy")
     _reject_unknown(
         root,
-        frozenset({"version", "filesystem", "process", "network", "limits", "rollback", "scoring"}),
+        frozenset({"version", "filesystem", "process", "network", "limits", "rollback", "scoring", "proof"}),
     )
     version = root.get("version")
     if isinstance(version, bool) or not isinstance(version, int):
-        raise PolicyValidationError("version is required and must be the integer 1")
-    if version != 1:
-        raise PolicyValidationError(f"unsupported policy version: {version}; supported versions: 1")
+        raise PolicyValidationError("version is required and must be an integer (1 or 2)")
+    if version not in SUPPORTED_POLICY_VERSIONS:
+        supported = ", ".join(str(v) for v in sorted(SUPPORTED_POLICY_VERSIONS))
+        raise PolicyValidationError(f"unsupported policy version: {version}; supported versions: {supported}")
 
     filesystem_data = _mapping(root.get("filesystem", {}), "filesystem")
     process_data = _mapping(root.get("process", {}), "process")
@@ -89,6 +103,8 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
     limits_data = _mapping(root.get("limits", {}), "limits")
     rollback_data = _mapping(root.get("rollback", {}), "rollback")
     scoring_data = _mapping(root.get("scoring", {}), "scoring")
+    proof_data = _mapping(root.get("proof", {}), "proof")
+
     _reject_unknown(
         filesystem_data,
         frozenset({"allow_write", "review", "deny", "default"}),
@@ -111,6 +127,12 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
         "rollback",
     )
     _reject_unknown(scoring_data, frozenset({"weights"}), "scoring")
+    _reject_unknown(
+        proof_data,
+        frozenset({"image", "network", "setup", "build", "tests", "trusted_digests"}),
+        "proof",
+    )
+
     scoring_weights = _mapping(scoring_data.get("weights", {}), "scoring.weights")
     _reject_unknown(scoring_weights, BLAST_RADIUS_WEIGHT_KEYS, "scoring.weights")
     normalized_weights: list[tuple[str, int]] = []
@@ -145,22 +167,35 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
     if not isinstance(rollback_enabled, bool):
         raise PolicyValidationError("rollback.enabled must be a boolean")
 
+    proof_network = proof_data.get("network", False)
+    if not isinstance(proof_network, bool):
+        raise PolicyValidationError("proof.network must be a boolean")
+    proof_image = proof_data.get("image")
+    if proof_image is not None and not isinstance(proof_image, str):
+        raise PolicyValidationError("proof.image must be a string or null")
+
+    proof_policy = ProofPolicy(
+        image=proof_image,
+        network=proof_network,
+        setup=_commands(proof_data.get("setup", []), "proof.setup"),
+        build=_commands(proof_data.get("build", []), "proof.build"),
+        tests=_commands(proof_data.get("tests", []), "proof.tests"),
+        trusted_digests=_patterns(proof_data.get("trusted_digests", []), "proof.trusted_digests"),
+    )
+
     return Policy(
+        version=version,
         filesystem=FilesystemPolicy(
             allow_write=_patterns(filesystem_data.get("allow_write", []), "filesystem.allow_write"),
             review=_patterns(filesystem_data.get("review", []), "filesystem.review"),
             deny=_patterns(filesystem_data.get("deny", []), "filesystem.deny"),
-            default=_action(
-                filesystem_data.get("default", PolicyAction.REVIEW.value), "filesystem.default"
-            ),
+            default=_action(filesystem_data.get("default", PolicyAction.REVIEW.value), "filesystem.default"),
         ),
         process=ProcessPolicy(
             allow=_patterns(process_data.get("allow", []), "process.allow"),
             review=_patterns(process_data.get("review", []), "process.review"),
             deny=_patterns(process_data.get("deny", []), "process.deny"),
-            default=_action(
-                process_data.get("default", PolicyAction.REVIEW.value), "process.default"
-            ),
+            default=_action(process_data.get("default", PolicyAction.REVIEW.value), "process.default"),
         ),
         network=NetworkPolicy(mode=network_mode),
         limits=LimitsPolicy(
@@ -178,26 +213,36 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
             max_backup_file_mb=max_backup_file_mb,
         ),
         scoring=ScoringPolicy(weights=tuple(normalized_weights)),
+        proof=proof_policy,
     )
 
 
 def load_policy_file(path: str | Path) -> Policy:
-    """Load and validate a YAML policy file using the optional PyYAML package."""
+    """Load a policy from a YAML or JSON file."""
+    candidate = Path(path)
+    if not candidate.is_file():
+        raise FileNotFoundError(f"policy file not found: {path}")
+    raw = candidate.read_text(encoding="utf-8")
     try:
-        import yaml  # type: ignore[import-untyped]
-    except ImportError as exc:
-        raise PolicyLoadError(
-            "PyYAML is required to load policy files; install it with 'pip install PyYAML'"
-        ) from exc
+        import yaml  # lazy import
+        if yaml is None:
+            raise ImportError("PyYAML not installed")
+        parsed = yaml.safe_load(raw)
+    except (ImportError, ModuleNotFoundError) as exc:
+        import json
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            raise PolicyLoadError(
+                "PyYAML is required to load policy files; install it with 'pip install PyYAML'"
+            ) from exc
+    except Exception as exc:
+        raise PolicyLoadError(f"failed to parse policy file {path}: {exc}") from exc
 
-    policy_path = Path(path)
-    try:
-        loaded = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise PolicyLoadError(f"could not load policy file {policy_path}: {exc}") from exc
-    if not isinstance(loaded, Mapping):
-        raise PolicyValidationError("policy file must contain a mapping")
-    return load_policy(loaded)
+    if not isinstance(parsed, dict):
+        raise PolicyValidationError("policy root must be a mapping")
+    return load_policy(parsed)
 
 
+# Compatibility alias
 load_policy_mapping = load_policy

@@ -19,6 +19,7 @@ from .models import (
     PolicyAction,
     PolicyConfig,
     ProcessPolicy,
+    ProofPolicy,
     RollbackPolicy,
     ScoringPolicy,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "PolicyLoadError",
     "PolicyValidationError",
     "ProcessPolicy",
+    "ProofPolicy",
     "RollbackPolicy",
     "ScoringPolicy",
     "load_policy",

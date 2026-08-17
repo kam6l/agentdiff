@@ -56,6 +56,9 @@ class ProofResult:
     immutable_manifest_sha256: str
     phases: tuple[ProofPhaseResult, ...]
     reasons: tuple[str, ...]
+    verification_source: str = "unconfigured"
+    verification_digest: str = ""
+    trusted_plan: bool = True
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -74,4 +77,7 @@ class ProofResult:
             "immutable_manifest_sha256": self.immutable_manifest_sha256,
             "phases": [phase.to_dict() for phase in self.phases],
             "reasons": list(self.reasons),
+            "verification_source": self.verification_source,
+            "verification_digest": self.verification_digest,
+            "trusted_plan": self.trusted_plan,
         }
