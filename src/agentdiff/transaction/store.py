@@ -207,7 +207,7 @@ class RunStore:
         """
 
         self._ensure_run_dir_identity()
-        integrity_path = self.run_dir / "integrity.json"
+        integrity_path = self.run_dir / "integrity" / "manifest.json"
         if integrity_path.exists():
             raise RuntimeError("run capsule is already sealed")
         discovered = self._discover_sealed_files()
@@ -224,11 +224,12 @@ class RunStore:
             digest, size = self._hash_regular_artifact(path)
             files[relative] = {"sha256": digest, "size": size}
         manifest: dict[str, Any] = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": 2,
             "algorithm": "sha256",
             "created_at": _utc_now(),
             "files": dict(sorted(files.items())),
         }
+        self.write_json_path("integrity/manifest.json", manifest)
         self.write_json("integrity.json", manifest)
         return manifest
 
@@ -236,25 +237,29 @@ class RunStore:
         """Verify a sealed capsule without following links."""
 
         self._ensure_run_dir_identity()
-        integrity_path = self.run_dir / "integrity.json"
-        if not integrity_path.exists():
+        v2_integrity = self.run_dir / "integrity" / "manifest.json"
+        v1_integrity = self.run_dir / "integrity.json"
+        if not v2_integrity.exists() and not v1_integrity.exists():
             return IntegrityReport(present=False, ok=False, files_checked=0)
         issues: list[IntegrityIssue] = []
+        if not v2_integrity.exists():
+            issues.append(IntegrityIssue("integrity/manifest.json", "missing integrity manifest"))
+            return IntegrityReport(present=True, ok=False, files_checked=0, issues=tuple(issues))
         try:
-            manifest = self.read_json("integrity.json")
+            manifest = self.read_json_path("integrity/manifest.json")
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity.json", type(error).__name__),),
+                issues=(IntegrityIssue("integrity/manifest.json", type(error).__name__),),
             )
         if not isinstance(manifest, dict) or manifest.get("algorithm") != "sha256":
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity.json", "invalid integrity manifest"),),
+                issues=(IntegrityIssue("integrity/manifest.json", "invalid integrity manifest"),),
             )
         raw_files = manifest.get("files")
         if not isinstance(raw_files, dict):
@@ -262,7 +267,7 @@ class RunStore:
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity.json", "files must be an object"),),
+                issues=(IntegrityIssue("integrity/manifest.json", "files must be an object"),),
             )
 
         try:
@@ -351,6 +356,7 @@ class RunStore:
 
     def _discover_sealed_files(self) -> list[tuple[str, Path]]:
         self._ensure_run_dir_identity()
+        _EXTENSION_DIRS = frozenset({"proof", "promotion", "recovery", "staging", "backups", ".agentdiff"})
         discovered: list[tuple[str, Path]] = []
         for directory, directory_names, file_names in os.walk(self.run_dir, followlinks=False):
             base = Path(directory)
@@ -364,12 +370,16 @@ class RunStore:
             for name in file_names:
                 path = base / name
                 relative = path.relative_to(self.run_dir).as_posix()
-                if relative == "integrity.json" or relative in _MUTABLE_AFTER_SEAL:
+                if relative in {"integrity.json", "integrity/manifest.json"} or relative in _MUTABLE_AFTER_SEAL:
                     continue
                 if name.startswith(".") and name.endswith(".tmp"):
                     continue
+                parts = relative.split("/")
+                if parts[0] in _EXTENSION_DIRS:
+                    continue
                 discovered.append((relative, path))
         return sorted(discovered)
+
 
     @staticmethod
     def _hash_regular_artifact(path: Path) -> tuple[str, int]:
@@ -551,3 +561,211 @@ class RunStore:
         if not _ARTIFACT_PATTERN.fullmatch(name):
             raise ValueError("invalid artifact name")
         return self.run_dir / name
+
+    def ensure_artifact_directory(self, relpath: str) -> Path:
+        target = self.artifact_path(relpath)
+        target.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return target
+
+    def copy_artifact(
+        self,
+        relpath: str,
+        source: Path,
+        *,
+        expected_sha256: str | None = None,
+        expected_size: int | None = None,
+        mode: int | None = None,
+    ) -> tuple[str, int]:
+        target = self.artifact_path(relpath)
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = source.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise InvalidRunIdError("source artifact must be a single-link regular file")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(source, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                raise InvalidRunIdError("source artifact must be a single-link regular file")
+            temp_descriptor, temp_path = tempfile.mkstemp(
+                prefix=".artifact-copy-", suffix=".tmp", dir=str(target.parent)
+            )
+            hasher = hashlib.sha256()
+            size = 0
+            with (
+                os.fdopen(descriptor, "rb", closefd=False) as src,
+                os.fdopen(temp_descriptor, "wb") as dst,
+            ):
+                while chunk := src.read(1024 * 1024):
+                    dst.write(chunk)
+                    hasher.update(chunk)
+                    size += len(chunk)
+                dst.flush()
+                os.fsync(dst.fileno())
+            digest = hasher.hexdigest()
+            if expected_sha256 is not None and digest != expected_sha256:
+                raise InvalidRunIdError(
+                    f"artifact digest mismatch: expected {expected_sha256}, got {digest}"
+                )
+            if expected_size is not None and size != expected_size:
+                raise InvalidRunIdError(
+                    f"artifact size mismatch: expected {expected_size}, got {size}"
+                )
+            os.replace(temp_path, str(target))
+            if mode is not None and os.name != "nt":
+                target.chmod(stat.S_IMODE(mode))
+            return digest, size
+        finally:
+            os.close(descriptor)
+
+    def artifact_digest(self, relpath: str) -> tuple[str, int]:
+        target = self.artifact_path(relpath)
+        return self._hash_regular_artifact(target)
+
+    def artifact_path(self, relpath: str) -> Path:
+
+        self._ensure_run_dir_identity()
+        normalized = normalize_relative_path(relpath)
+        if normalized != relpath:
+            raise ValueError("unsafe artifact path")
+        target = self.run_dir.joinpath(*normalized.split("/"))
+        current = self.run_dir
+        for part in normalized.split("/")[:-1]:
+            current /= part
+            if current.exists() or current.is_symlink():
+                info = current.lstat()
+                if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+                    raise ValueError("unsafe artifact directory")
+        return target
+
+    def write_json_path(self, relpath: str, data: Any) -> None:
+        target = self.artifact_path(relpath)
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        payload = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".artifact-", suffix=".tmp", dir=str(target.parent)
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, target)
+            if os.name != "nt":
+                target.chmod(0o600)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def read_json_path(self, relpath: str) -> Any:
+        target = self.artifact_path(relpath)
+        if not target.is_file():
+            raise FileNotFoundError(f"artifact not found: {relpath}")
+        before = target.lstat()
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise InvalidRunIdError("artifact must be a single-link regular file")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(target, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                raise InvalidRunIdError("artifact must be a single-link regular file")
+            if opened.st_size > _MAX_JSON_BYTES:
+                raise InvalidRunIdError("artifact exceeds JSON size limit")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                payload = stream.read(_MAX_JSON_BYTES + 1)
+            return json.loads(payload.decode("utf-8"))
+        finally:
+            os.close(descriptor)
+
+    def immutable_manifest_sha256(self) -> str:
+        integrity_path = self.run_dir / "integrity.json"
+        if not integrity_path.is_file():
+            raise RuntimeError("run capsule is not sealed")
+        digest, _ = self._hash_regular_artifact(integrity_path)
+        return digest
+
+    def seal_extension(self, name: str, files: tuple[str, ...]) -> dict[str, Any]:
+        self._ensure_run_dir_identity()
+        normalized_name = normalize_relative_path(name)
+        ext_dir = self.run_dir / normalized_name
+        if not ext_dir.is_dir():
+            ext_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        manifest_files: dict[str, dict[str, int | str]] = {}
+        for filename in files:
+            path = ext_dir / filename
+            digest, size = self._hash_regular_artifact(path)
+            manifest_files[filename] = {"sha256": digest, "size": size}
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "extension": normalized_name,
+            "created_at": _utc_now(),
+            "immutable_manifest_sha256": self.immutable_manifest_sha256(),
+            "files": dict(sorted(manifest_files.items())),
+        }
+        self.write_json_path(f"{normalized_name}/integrity.json", manifest)
+        return manifest
+
+    def verify_extension(self, name: str) -> IntegrityReport:
+        self._ensure_run_dir_identity()
+        normalized_name = normalize_relative_path(name)
+        integrity_path = self.run_dir / normalized_name / "integrity.json"
+        if not integrity_path.exists():
+            return IntegrityReport(present=False, ok=False, files_checked=0)
+        issues: list[IntegrityIssue] = []
+        try:
+            manifest = self.read_json_path(f"{normalized_name}/integrity.json")
+        except Exception as error:
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                issues=(IntegrityIssue(f"{name}/integrity.json", str(error)),),
+            )
+        if not isinstance(manifest, dict) or manifest.get("extension") != normalized_name:
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                issues=(IntegrityIssue(f"{name}/integrity.json", "invalid extension manifest"),),
+            )
+        if manifest.get("immutable_manifest_sha256") != self.immutable_manifest_sha256():
+            issues.append(
+                IntegrityIssue(
+                    f"{name}/integrity.json",
+                    "extension not bound to immutable run manifest",
+                )
+            )
+        raw_files = manifest.get("files", {})
+        checked = 0
+        if not isinstance(raw_files, dict):
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                issues=(IntegrityIssue(f"{name}/integrity.json", "files must be a mapping"),),
+            )
+        # Verify no unsealed files exist in extension directory
+        actual_ext_files: set[str] = set()
+        for directory, _, file_names in os.walk(self.run_dir / normalized_name):
+            for fname in file_names:
+                p = Path(directory) / fname
+                rel = p.relative_to(self.run_dir / normalized_name).as_posix()
+                if rel != "integrity.json":
+                    actual_ext_files.add(rel)
+        for unsealed in sorted(actual_ext_files - set(raw_files.keys())):
+            issues.append(IntegrityIssue(f"{name}/{unsealed}", "unsealed extension artifact"))
+
+        for filename, expected in raw_files.items():
+            path = self.run_dir / normalized_name / filename
+            if not path.is_file():
+                issues.append(IntegrityIssue(f"{name}/{filename}", "missing extension artifact"))
+                continue
+            try:
+                digest, size = self._hash_regular_artifact(path)
+                checked += 1
+                if not isinstance(expected, dict) or expected.get("sha256") != digest or expected.get("size") != size:
+                    issues.append(IntegrityIssue(f"{name}/{filename}", "digest or size mismatch"))
+            except Exception as error:
+                issues.append(IntegrityIssue(f"{name}/{filename}", str(error)))
+        return IntegrityReport(present=True, ok=not issues, files_checked=checked, issues=tuple(issues))
