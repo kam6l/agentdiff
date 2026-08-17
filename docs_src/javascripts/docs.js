@@ -135,8 +135,27 @@
     onScroll();
   }
 
+  function clearSearchHighlights() {
+    // Strip any lingering ?h= query parameter from URL
+    if (window.location.search.includes("h=")) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("h");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : "") + url.hash);
+    }
+    // Unwrap any mark elements created by search highlight in page content
+    document.querySelectorAll(".md-content mark, .md-content__inner mark").forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      mark.remove();
+    });
+  }
+
   function enhanceDocs() {
     labelThemeProgress();
+    clearSearchHighlights();
     if (document.querySelector("[data-agentdiff-home]")) return;
     document.body.classList.add("ad-doc-page");
     enhanceSearch();
