@@ -122,9 +122,9 @@ def select_trusted_verification_plan(
         return TrustedVerificationPlan(
             image=policy.proof.image or "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
             network=policy.proof.network,
-            setup=setup_cmds,
-            build=build_cmds,
-            tests=test_cmds,
+            setup=setup,
+            build=build,
+            tests=tests,
             source="auto:uv",
             trusted=trusted,
             plan_digest=_compute_plan_digest(setup, build, tests),
@@ -134,7 +134,7 @@ def select_trusted_verification_plan(
 
     if (base_root / "pyproject.toml").is_file():
         python = ".agentdiff-proof/venv/bin/python"
-        py_setup: tuple[tuple[str, ...], ...] = (
+        setup = (
             ("python", "-m", "venv", ".agentdiff-proof/venv"),
             (python, "-m", "pip", "install", "--no-cache-dir", "-e", "."),
         )
@@ -143,9 +143,9 @@ def select_trusted_verification_plan(
         return TrustedVerificationPlan(
             image=policy.proof.image or "python:3.12-slim",
             network=policy.proof.network,
-            setup=py_setup,
-            build=py_build,
-            tests=py_tests,
+            setup=setup,
+            build=build,
+            tests=tests,
             source="auto:python",
             trusted=trusted,
             plan_digest=_compute_plan_digest(setup, build, tests),
@@ -164,9 +164,9 @@ def select_trusted_verification_plan(
         return TrustedVerificationPlan(
             image=policy.proof.image or "node:22-slim",
             network=policy.proof.network,
-            setup=npm_setup,
-            build=npm_build,
-            tests=npm_tests,
+            setup=setup,
+            build=build,
+            tests=tests,
             source="auto:npm",
             trusted=trusted,
             plan_digest=_compute_plan_digest(setup, build, tests),

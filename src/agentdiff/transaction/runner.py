@@ -199,7 +199,6 @@ def _validate_recovery_backups(
                 backup_path=None,
                 backup_error=f"backup validation failed: {error}",
             )
-
     return FilesystemManifest(
         schema_version=manifest.schema_version,
         captured_at=manifest.captured_at,
@@ -415,9 +414,9 @@ class AgentRunTransaction:
         unsupported_paths = sorted(set(before.unsupported) | set(after.unsupported))
         observation_warnings = [
             ObservationWarning(
-                path=unsupported_path,
-                reason=after.unsupported.get(unsupported_path)
-                or before.unsupported.get(unsupported_path)
+                path=path,
+                reason=after.unsupported.get(path)
+                or before.unsupported.get(path)
                 or "unsupported entry",
             )
             for path in unsupported_paths
@@ -431,7 +430,6 @@ class AgentRunTransaction:
             processes_spawned=processes_spawned,
             duration_seconds=duration,
         )
-
         orphan_processes = 0
         opened_ports = 0
         if runtime_result is not None:

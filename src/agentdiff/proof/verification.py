@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
     from agentdiff.policy import Policy
 
-
 # Compatibility alias
 VerificationPlan = TrustedVerificationPlan
 

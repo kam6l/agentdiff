@@ -474,6 +474,7 @@ class RunStore:
                 if parts[0] in _EXTENSION_DIRS:
                     continue
                 discovered.append((relative, path))
+        return sorted(discovered)
 
     @staticmethod
     def _hash_regular_artifact(path: Path) -> tuple[str, int]:
