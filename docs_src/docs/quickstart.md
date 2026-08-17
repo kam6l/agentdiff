@@ -93,9 +93,31 @@ Skipped: 1
 
 `src/parser.py` stays because policy allowed it. If a person or later process changed a collateral path, AgentDiff records a conflict and preserves the current path.
 
+## 7. Prove and promote (trust pipeline)
+
+The full trust pipeline isolates the agent, reproduces the patch in a clean
+room, and promotes only proven work:
+
+```bash
+agentdiff run --runtime docker --task "Update the parser" -- python agent_task.py
+agentdiff inspect <run-id>
+agentdiff prove <run-id>
+agentdiff promote <run-id> --dry-run --safe-only
+agentdiff promote <run-id> --safe-only
+agentdiff verify <run-id>
+```
+
+`prove` rebuilds the base-plus-patch workspace in a clean Docker container and
+runs both the patched tests and the trusted baseline tests. `promote` applies
+only proof-PROVEN changes through a write-ahead journal; `--safe-only` selects
+only `ALLOW` changes. Without Docker, `--runtime local` observes a host
+subprocess — lower isolation, as described in the runtime concept.
+
 ## Next steps
 
 - [Understand the runtime and limits](concepts/runtime.md)
+- [Trust pipeline and promotion](concepts/trust-pipeline.md)
+- [Prove and promote commands](cli/prove-promote.md)
 - [Customize mutation policy](concepts/policy.md)
 - [Connect Cortex to Claude, Codex, or Ollama](concepts/cortex.md)
 - [Review every CLI command](cli/index.md)

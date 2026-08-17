@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install the AgentDiff 0.1.0 beta from source on Python 3.12 or newer.
+description: Install the AgentDiff 0.2.x beta from source on Python 3.12 or newer.
 ---
 
 <span class="ad-doc-eyebrow">Getting started</span>

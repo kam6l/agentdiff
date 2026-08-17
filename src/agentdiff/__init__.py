@@ -3,7 +3,7 @@
 The transaction API and trust pipeline are the primary product surfaces.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .analyzers import FutureBlastEngine, FutureBlastResult
 from .cortex import (

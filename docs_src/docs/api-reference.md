@@ -1,6 +1,6 @@
 ---
 title: Capsule reference
-description: Files and trust properties of an AgentDiff 0.1.0 run capsule.
+description: Files and trust properties of an AgentDiff 0.2.x run capsule.
 ---
 
 # Capsule reference
