@@ -1,6 +1,7 @@
 """Normalized source and patch evidence used by proof and promotion."""
 
 from .capsule import BlobReference, CapsuleReader
+from .objects import ObjectRef, ObjectStore, ObjectStoreError, validate_object_digest
 from .patch import (
     PatchBundle,
     PatchEntry,
@@ -14,12 +15,15 @@ from .patch import (
 __all__ = [
     "BlobReference",
     "CapsuleReader",
+    "ObjectRef",
+    "ObjectStore",
+    "ObjectStoreError",
     "PatchBundle",
     "PatchEntry",
     "PatchManifest",
     "SourceSnapshot",
     "capture_patch",
     "capture_source_snapshot",
+    "validate_object_digest",
     "validate_source_snapshot",
 ]
-

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,8 +54,15 @@ class CapsuleReader:
             raise FileNotFoundError("capsule integrity manifest not found")
         return json.loads(target.read_text(encoding="utf-8"))
 
-    def compute_merkle_root(self) -> str:
-        """Compute the deterministic Merkle root digest over the sealed manifest entries."""
+    def compute_root_digest(self) -> str:
+        """Compute the deterministic Capsule Root Digest over sealed manifest entries.
+
+        This is a flat aggregate digest over ``path:digest:size`` entries —
+        deliberately NOT a Merkle tree. It provides tamper evidence against
+        accidental or modest modification, not inclusion proofs and not
+        authentication (an attacker who can rewrite the artifact and the
+        manifest can produce a new self-consistent capsule).
+        """
         manifest = self.read_manifest()
         files = manifest.get("files", {})
         hasher = hashlib.sha256()
@@ -65,6 +70,14 @@ class CapsuleReader:
             entry = files[relpath]
             hasher.update(f"{relpath}:{entry.get('sha256')}:{entry.get('size')}\n".encode("utf-8"))
         return hasher.hexdigest()
+
+    def compute_merkle_root(self) -> str:
+        """Deprecated alias for :meth:`compute_root_digest`.
+
+        The digest is a flat aggregate, not a Merkle tree; the old name was
+        inaccurate and is retained only for compatibility.
+        """
+        return self.compute_root_digest()
 
     def get_artifact_path(self, relative_path: str) -> Path:
         normalized = normalize_relative_path(relative_path)
