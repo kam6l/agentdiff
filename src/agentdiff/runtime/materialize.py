@@ -14,6 +14,10 @@ Every strategy preserves regular-file content, size, and POSIX mode
 rejects symlinks and special files instead of silently dropping or following
 them. This is a trust-boundary component: a source swap during materialization
 must never leak into the private workspace.
+
+The materialized workspace is an ephemeral copy derived from durable sealed
+evidence (the run capsule), so destination writes are flushed but not fsynced;
+durability is owned by the capsule and by promotion staging, which fsync.
 """
 
 from __future__ import annotations
@@ -251,7 +255,6 @@ class WorkspaceMaterializer:
                     digest.update(chunk)
                     copied += len(chunk)
                 output.flush()
-                os.fsync(output.fileno())
             if copied != size:
                 raise OSError("streaming copy produced a short copy")
             return "stream_copy"

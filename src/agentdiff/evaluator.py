@@ -24,7 +24,7 @@ from .diff_engine import (
 from .trajectory import TrajectoryRecord
 
 warnings.warn(
-    "agentdiff.evaluator is deprecated and will be removed in a future release. "
+    "agentdiff.evaluator is deprecated since 0.2 and will be removed in 0.4 or later. "
     "Use agentdiff.scoring and agentdiff.analyzers instead.",
     DeprecationWarning,
     stacklevel=2,

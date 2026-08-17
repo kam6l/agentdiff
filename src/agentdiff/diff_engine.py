@@ -20,7 +20,7 @@ from typing import Any
 from .redaction import fingerprint
 
 warnings.warn(
-    "agentdiff.diff_engine is deprecated and will be removed in a future release. "
+    "agentdiff.diff_engine is deprecated since 0.2 and will be removed in 0.4 or later. "
     "Use agentdiff.state.FilesystemScanner and diff_manifests instead.",
     DeprecationWarning,
     stacklevel=2,

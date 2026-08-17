@@ -19,7 +19,7 @@ from typing import Any
 from typing_extensions import Self
 
 warnings.warn(
-    "agentdiff.trajectory is deprecated and will be removed in a future release. "
+    "agentdiff.trajectory is deprecated since 0.2 and will be removed in 0.4 or later. "
     "Use agentdiff.transaction.RunStore for structured run evidence and event logging.",
     DeprecationWarning,
     stacklevel=2,
