@@ -162,6 +162,7 @@ class PromotionEngine:
             report.status = "PROMOTED"
             for journal_entry, planned in zip(journal.entries, ready, strict=True):
                 patch_entry = entries_by_path[planned.path]
+
                 try:
                     # APPLY_INTENT: persist intent, then mutate, then verify.
                     journal_entry.state = EntryState.APPLY_INTENT

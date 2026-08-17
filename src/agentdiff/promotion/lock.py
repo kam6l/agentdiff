@@ -11,9 +11,11 @@ process exits, so crashed promotions never leave a stale lease.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
+import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone

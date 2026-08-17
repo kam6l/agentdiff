@@ -246,7 +246,7 @@ def load_policy_file(path: str | Path) -> Policy:
         if yaml is None:
             raise ImportError("PyYAML not installed")
         parsed = yaml.safe_load(raw)
-    except (ImportError, ModuleNotFoundError) as exc:
+    except (ImportError, ModuleNotFoundError):
         import json
 
         try:
