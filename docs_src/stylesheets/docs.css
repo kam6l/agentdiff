@@ -93,12 +93,13 @@ body:not(:has(.ad-home)) .ad-doc-header {
   height: 64px;
   padding: 0 20px;
   display: grid;
-  grid-template-columns: 236px minmax(280px, 520px) minmax(240px, 1fr);
+  grid-template-columns: 1fr minmax(260px, 460px) 1fr;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
 }
 
 .ad-doc-brand {
+  justify-self: start;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -142,6 +143,8 @@ body:not(:has(.ad-home)) .ad-doc-header {
 .ad-doc-search-trigger {
   appearance: none;
   width: 100%;
+  max-width: 460px;
+  justify-self: center;
   height: 38px;
   padding: 0 10px 0 12px;
   display: flex;
@@ -191,10 +194,10 @@ body:not(:has(.ad-home)) .ad-doc-header {
 }
 
 .ad-doc-header__actions {
+  justify-self: end;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
+  gap: 10px;
 }
 
 .ad-doc-repo-link {
@@ -239,58 +242,63 @@ body:not(:has(.ad-home)) .ad-doc-header {
   gap: 4px;
 }
 
-.ad-doc-home-link {
-  min-height: 34px;
-  margin-right: 7px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
+.ad-doc-theme-toggle {
+  appearance: none;
+  background: transparent;
   border: 1px solid var(--ad-doc-line);
   border-radius: 8px;
-  color: var(--ad-doc-body) !important;
-  font-size: 0.63rem;
-  font-weight: 650;
-}
-
-.ad-doc-home-link:hover,
-.ad-doc-home-link:focus-visible {
-  border-color: var(--ad-doc-muted);
-  color: var(--ad-doc-text) !important;
-}
-
-.ad-doc-icon-button,
-.ad-doc-header .md-header__button {
-  width: 32px;
-  height: 32px;
-  margin: 0;
-  padding: 7px;
-  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
   place-items: center;
-  border-radius: 7px;
-  color: var(--ad-doc-muted) !important;
+  color: var(--ad-doc-muted);
   cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
-.ad-doc-icon-button:hover,
-.ad-doc-icon-button:focus-visible,
-.ad-doc-header .md-header__button:hover {
+.ad-doc-theme-toggle:hover,
+.ad-doc-theme-toggle:focus-visible {
   background: var(--ad-doc-panel-2);
-  color: var(--ad-doc-text) !important;
+  color: var(--ad-doc-text);
+  border-color: var(--ad-doc-muted);
 }
 
-.ad-doc-icon-button svg,
-.ad-doc-header .md-header__button svg {
-  width: 17px;
-  height: 17px;
+.ad-doc-theme-toggle__icon {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.ad-doc-theme-toggle svg {
+  width: 16px;
+  height: 16px;
   fill: currentColor;
+}
+
+[data-md-color-scheme="slate"] .ad-doc-theme-toggle .icon-moon {
+  display: none !important;
+}
+
+[data-md-color-scheme="slate"] .ad-doc-theme-toggle .icon-sun {
+  display: block !important;
+}
+
+[data-md-color-scheme="default"] .ad-doc-theme-toggle .icon-sun {
+  display: none !important;
+}
+
+[data-md-color-scheme="default"] .ad-doc-theme-toggle .icon-moon {
+  display: block !important;
 }
 
 .ad-doc-topnav {
   height: 48px;
-  padding: 0 24px 0 294px;
+  padding: 0 20px;
   display: flex;
   align-items: stretch;
-  gap: clamp(22px, 2.5vw, 42px);
+  gap: clamp(18px, 2.2vw, 36px);
   overflow-x: auto;
   border-top: 1px solid var(--ad-doc-line-soft);
   scrollbar-width: none;
@@ -680,7 +688,7 @@ body:not(:has(.ad-home)) .md-main__inner {
   max-width: none;
   min-height: calc(100vh - 112px);
   margin: 0;
-  padding: 54px clamp(28px, 4.5vw, 76px) 20px;
+  padding: 36px clamp(28px, 4.5vw, 76px) 20px;
   display: grid;
   grid-template-columns: minmax(0, 720px) 216px;
   grid-template-areas: "content toc";
@@ -729,10 +737,11 @@ body:not(:has(.ad-home)) .md-path__item:not(:last-child)::after {
 body:not(:has(.ad-home)) .md-sidebar--secondary {
   grid-area: toc;
   position: sticky;
-  top: 42px;
+  top: 148px;
   width: 216px;
   height: auto !important;
   padding: 0;
+  z-index: 10;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--secondary .md-sidebar__scrollwrap {
@@ -740,6 +749,9 @@ body:not(:has(.ad-home)) .md-sidebar--secondary .md-sidebar__scrollwrap {
   max-height: calc(100vh - 170px) !important;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--secondary .md-nav__title {
@@ -1437,8 +1449,7 @@ body:not(:has(.ad-home)) :focus-visible {
   }
 
   .ad-doc-search-trigger > span:not(.ad-doc-search-trigger__icon),
-  .ad-doc-search-trigger kbd,
-  .ad-doc-home-link {
+  .ad-doc-search-trigger kbd {
     display: none;
   }
 
@@ -1617,8 +1628,7 @@ body:not(:has(.ad-home)) :focus-visible {
 }
 
 @media (max-width: 420px) {
-  .ad-doc-brand__suffix,
-  .ad-doc-home-link {
+  .ad-doc-brand__suffix {
     display: none;
   }
 

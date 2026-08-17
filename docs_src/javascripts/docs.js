@@ -32,6 +32,43 @@
     return Promise.resolve();
   }
 
+  function setupThemeToggle() {
+    const toggle = document.querySelector(".ad-doc-theme-toggle");
+    if (!toggle || toggle.dataset.themeEnhanced === "true") return;
+    toggle.dataset.themeEnhanced = "true";
+
+    const getPreferredScheme = () => {
+      const saved = localStorage.getItem("agentdiff-color-scheme");
+      if (saved === "slate" || saved === "default") return saved;
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "slate" : "default";
+    };
+
+    const applyScheme = (scheme) => {
+      document.body.setAttribute("data-md-color-scheme", scheme);
+      const isDark = scheme === "slate";
+      const title = isDark ? "Switch to light mode" : "Switch to dark mode";
+      toggle.setAttribute("title", title);
+      toggle.setAttribute("aria-label", title);
+    };
+
+    applyScheme(getPreferredScheme());
+
+    toggle.addEventListener("click", () => {
+      const current = document.body.getAttribute("data-md-color-scheme") || getPreferredScheme();
+      const next = current === "slate" ? "default" : "slate";
+      localStorage.setItem("agentdiff-color-scheme", next);
+      applyScheme(next);
+    });
+
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+        if (!localStorage.getItem("agentdiff-color-scheme")) {
+          applyScheme(e.matches ? "slate" : "default");
+        }
+      });
+    }
+  }
+
   function openSearch() {
     const searchToggle = document.getElementById("__search");
     if (!searchToggle) return;
@@ -155,6 +192,7 @@
 
   function enhanceDocs() {
     labelThemeProgress();
+    setupThemeToggle();
     clearSearchHighlights();
     if (document.querySelector("[data-agentdiff-home]")) return;
     document.body.classList.add("ad-doc-page");
