@@ -4,6 +4,10 @@ The controller observes user-space state at polling boundaries. It never calls
 that observation syscall interception. A backend may terminate the owned
 execution domain when :attr:`terminated` becomes true; Docker additionally
 keeps observed mutations away from the host repository.
+
+The controller exposes cheap budget checks separately from the expensive
+full filesystem reconciliation so a hybrid watcher can run targeted dirty-path
+checks between authoritative full captures.
 """
 
 from __future__ import annotations
@@ -61,9 +65,29 @@ class SafetyController:
         runtime_active: bool = True,
     ) -> bool:
         """Record current state and return whether execution must terminate."""
-
         if self.report.terminated:
             return True
+        self.check_budgets(
+            duration_seconds=duration_seconds,
+            processes_spawned=processes_spawned,
+            runtime_active=runtime_active,
+        )
+        now = time.monotonic()
+        if force_filesystem or now - self._last_filesystem_poll >= self.filesystem_poll_interval:
+            self._last_filesystem_poll = now
+            self.check_filesystem(root, runtime_active=runtime_active)
+        return self.report.terminated
+
+    def check_budgets(
+        self,
+        *,
+        duration_seconds: float,
+        processes_spawned: int,
+        runtime_active: bool,
+    ) -> None:
+        """Cheap duration/process budget checks (no filesystem work)."""
+        if self.report.terminated:
+            return
         self._check_limit(
             "duration_seconds",
             duration_seconds,
@@ -76,13 +100,13 @@ class SafetyController:
             self.policy.limits.processes_spawned,
             runtime_active=runtime_active,
         )
-        now = time.monotonic()
-        if force_filesystem or now - self._last_filesystem_poll >= self.filesystem_poll_interval:
-            self._last_filesystem_poll = now
-            self._observe_filesystem(Path(root), runtime_active=runtime_active)
-        return self.report.terminated
 
-    def _observe_filesystem(self, root: Path, *, runtime_active: bool) -> None:
+    def check_filesystem(self, root: str | Path, *, runtime_active: bool) -> None:
+        """Full authoritative reconciliation against the pre-run manifest.
+
+        This is the only place filesystem budgets and protected-path verdicts
+        are computed: event-driven dirty-path checks are hints, never truth.
+        """
         if self.policy.version < 2:
             return
         try:
@@ -130,6 +154,28 @@ class SafetyController:
                     runtime_active=runtime_active,
                 )
                 return
+
+    def check_path(self, relative: str, *, runtime_active: bool) -> None:
+        """Targeted policy check for one dirty path (acceleration hint only).
+
+        This never replaces :meth:`check_filesystem`; it only fails fast on
+        clearly protected paths between authoritative reconciliations.
+        """
+        if self.report.terminated or self.policy.version < 2:
+            return
+        decision = self.engine.decide_path(relative, phase="intercept")
+        if decision.action is PolicyAction.DENY:
+            self._terminate(
+                metric="protected_path",
+                observed="targeted_check",
+                limit=None,
+                detail=(
+                    "protected path was modified; the owned runtime is terminated, "
+                    "but the write was not syscall-intercepted"
+                ),
+                path=relative,
+                runtime_active=runtime_active,
+            )
 
     def _check_limit(
         self,

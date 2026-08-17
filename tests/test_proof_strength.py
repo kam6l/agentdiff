@@ -45,8 +45,28 @@ class IsolatedRuntime:
         self.temporary = None
         self.workspace: Path | None = None
 
+    @property
+    def capabilities(self):
+        from agentdiff.runtime import RuntimeCapabilities, RuntimeControlLevel
+
+        return RuntimeCapabilities(
+            backend="test-isolated",
+            filesystem=RuntimeControlLevel.SANDBOXED,
+            host_repository=RuntimeControlLevel.SANDBOXED,
+            network=RuntimeControlLevel.BLOCKED,
+            processes=RuntimeControlLevel.SANDBOXED,
+            resources=RuntimeControlLevel.SANDBOXED,
+            privileges=RuntimeControlLevel.SANDBOXED,
+            private_workspace=True,
+            supports_live_safety=True,
+            supports_source_snapshot=True,
+        )
+
     def configure_source(self, source: Path) -> None:
         self.source = source
+
+    def configure_safety(self, _watcher) -> None:
+        return None
 
     def configure_safety(self, _controller) -> None:
         return None

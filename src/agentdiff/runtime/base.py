@@ -40,6 +40,41 @@ class RuntimeCapability:
 
 
 @dataclass(frozen=True)
+class RuntimeCapabilities:
+    """Explicit, pre-execution runtime capability metadata.
+
+    Every backend reports exactly the controls it actually provides, before
+    any command runs, so callers never have to guess from post-hoc result
+    strings or attribute presence.
+    """
+
+    backend: str
+    filesystem: RuntimeControlLevel
+    host_repository: RuntimeControlLevel
+    network: RuntimeControlLevel
+    processes: RuntimeControlLevel
+    resources: RuntimeControlLevel
+    privileges: RuntimeControlLevel
+    private_workspace: bool
+    supports_live_safety: bool
+    supports_source_snapshot: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "backend": self.backend,
+            "filesystem": self.filesystem.value,
+            "host_repository": self.host_repository.value,
+            "network": self.network.value,
+            "processes": self.processes.value,
+            "resources": self.resources.value,
+            "privileges": self.privileges.value,
+            "private_workspace": self.private_workspace,
+            "supports_live_safety": self.supports_live_safety,
+            "supports_source_snapshot": self.supports_source_snapshot,
+        }
+
+
+@dataclass(frozen=True)
 class OwnedProcess:
     """PID identity observed in the launched process tree.
 
@@ -202,6 +237,11 @@ class RuntimeResult:
 class RuntimeBackend(Protocol):
     """Execution backend implemented by local and future isolated runtimes."""
 
+    @property
+    def capabilities(self) -> RuntimeCapabilities:
+        """Explicit capability metadata available before execution."""
+        ...
+
     def run(
         self,
         argv: Sequence[str],
@@ -221,4 +261,16 @@ class RuntimeBackend(Protocol):
         grace_period_seconds: float = 1.0,
     ) -> CleanupReport:
         """Clean up only process identities proven to belong to a prior run."""
+        ...
+
+    def configure_source(self, source_dir: str | Path) -> None:
+        """Supply a sealed source snapshot for backends that use a private copy."""
+        ...
+
+    def configure_safety(self, controller: Any) -> None:
+        """Attach the live safety controller/watcher used during execution."""
+        ...
+
+    def close(self) -> None:
+        """Release backend resources after evidence collection."""
         ...
