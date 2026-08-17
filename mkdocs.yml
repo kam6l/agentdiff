@@ -39,7 +39,6 @@ theme:
     - navigation.path
     - navigation.sections
     - navigation.tracking
-    - search.highlight
     - content.code.annotate
     - content.code.copy
     - content.tabs.link
