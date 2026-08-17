@@ -22,16 +22,17 @@ from typing import IO, TYPE_CHECKING, Any
 from .base import (
     CleanupReport,
     OwnedProcess,
+    RuntimeCapabilities,
     RuntimeCapability,
     RuntimeControlLevel,
     RuntimeResult,
 )
 from .local import LocalRuntime
+from .materialize import WorkspaceMaterializer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from agentdiff.safety import SafetyController
 
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 
@@ -83,8 +84,28 @@ class DockerRuntime:
         self._source_dir: Path | None = None
         self._workspace: Path | None = None
         self._temporary_root: Path | None = None
-        self._safety_controller: SafetyController | None = None
+        self._safety_controller: Any | None = None
         self._container_id: str | None = None
+        self._materialization_report: Any | None = None
+
+    @property
+    def capabilities(self) -> RuntimeCapabilities:
+        """Explicit capability metadata available before any execution."""
+        network_level = (
+            RuntimeControlLevel.BLOCKED if self.network == "none" else RuntimeControlLevel.SANDBOXED
+        )
+        return RuntimeCapabilities(
+            backend="docker",
+            filesystem=RuntimeControlLevel.SANDBOXED,
+            host_repository=RuntimeControlLevel.SANDBOXED,
+            network=network_level,
+            processes=RuntimeControlLevel.SANDBOXED,
+            resources=RuntimeControlLevel.SANDBOXED,
+            privileges=RuntimeControlLevel.SANDBOXED,
+            private_workspace=True,
+            supports_live_safety=True,
+            supports_source_snapshot=True,
+        )
 
     def configure_source(self, source_dir: str | Path) -> None:
         """Use the transaction's sealed pre-run source copy as container input."""
@@ -94,7 +115,7 @@ class DockerRuntime:
             raise ValueError("Docker source snapshot must be a real directory")
         self._source_dir = candidate
 
-    def configure_safety(self, controller: SafetyController) -> None:
+    def configure_safety(self, controller: Any) -> None:
         self._safety_controller = controller
 
     def run(
@@ -119,7 +140,11 @@ class DockerRuntime:
         temporary_root = Path(tempfile.mkdtemp(prefix="agentdiff-docker-"))
         workspace = temporary_root / "workspace"
         workspace.mkdir(mode=0o700)
-        shutil.copytree(self._source_dir, workspace, dirs_exist_ok=True, symlinks=False)
+        # Materialize the private writable source copy through the validated
+        # WorkspaceMaterializer instead of a raw copytree: modes are preserved
+        # and unsafe entries are rejected, never silently followed or dropped.
+        materialized = WorkspaceMaterializer().materialize(self._source_dir, workspace)
+        self._materialization_report = materialized
         self._temporary_root = temporary_root
         self._workspace = workspace
         container_name = f"agentdiff-{secrets.token_hex(8)}"
@@ -225,7 +250,7 @@ class DockerRuntime:
             user,
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=64m",  # nosec B108
+            "/tmp:rw,noexec,nosuid,nodev,size=64m",  # nosec B108 hardened container tmpfs, never host /tmp
             "--cap-drop",
             "ALL",
             "--security-opt",
@@ -253,7 +278,7 @@ class DockerRuntime:
         return argv
 
     def _runtime_config(self, user: str) -> dict[str, Any]:
-        return {
+        config: dict[str, Any] = {
             "schema_version": 1,
             "image": self.image,
             "user": user,
@@ -269,7 +294,17 @@ class DockerRuntime:
             "pids_limit": self.pids_limit,
             "environment_allowlist": list(self.environment_allowlist),
             "ephemeral_container": True,
+            "capabilities": self.capabilities.to_dict(),
         }
+        if self._materialization_report is not None:
+            report = self._materialization_report
+            config["materialization"] = {
+                "strategy_used": report.strategy_used,
+                "files_materialized": report.files_materialized,
+                "bytes_materialized": report.bytes_materialized,
+                "duration_seconds": report.duration_seconds,
+            }
+        return config
 
     def _docker_call(
         self,

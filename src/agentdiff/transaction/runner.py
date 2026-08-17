@@ -22,7 +22,7 @@ from agentdiff.policy import (
     policy_to_dict,
 )
 from agentdiff.runtime import LocalRuntime, RuntimeBackend, RuntimeResult
-from agentdiff.safety import SafetyController
+from agentdiff.safety import HybridSafetyWatcher
 from agentdiff.scoring import (
     BlastRadiusResult,
     BlastRadiusScorer,
@@ -37,7 +37,7 @@ from agentdiff.state import (
     diff_manifests,
 )
 
-from .store import RunStore
+from .store import InvalidRunIdError, RunStore
 
 if TYPE_CHECKING:
     import os
@@ -192,14 +192,13 @@ def _validate_recovery_backups(
                 size=record.size,
             )
             verified_files[path] = record
-        except (OSError, ValueError, TypeError) as error:
+        except (InvalidRunIdError, OSError, ValueError, TypeError, KeyError) as error:
             verified_unsupported[path] = f"backup validation failed: {error}"
             verified_files[path] = replace(
                 record,
                 backup_path=None,
                 backup_error=f"backup validation failed: {error}",
             )
-
     return FilesystemManifest(
         schema_version=manifest.schema_version,
         captured_at=manifest.captured_at,
@@ -273,7 +272,7 @@ class AgentRunTransaction:
         runtime_result: RuntimeResult | None = None
         execution_error: dict[str, Any] | None = None
         blocked = command_decision.action is PolicyAction.DENY
-        safety_controller: SafetyController | None = None
+        safety_watcher: HybridSafetyWatcher | None = None
         selected_runtime: RuntimeBackend | None = None
 
         if not blocked:
@@ -281,20 +280,34 @@ class AgentRunTransaction:
                 self.root,
                 observe_ports=self.policy.network.mode is NetworkMode.OBSERVE,
             )
-            if hasattr(selected_runtime, "configure_source"):
+            if selected_runtime.capabilities.supports_source_snapshot:
                 selected_runtime.configure_source(store.artifact_path("source/files"))
 
-            isolated_workspace = (
-                getattr(selected_runtime, "enforcement", "") == "isolated_private_workspace"
-            )
-            safety_controller = SafetyController(
+            isolated_workspace = selected_runtime.capabilities.private_workspace
+            backend = selected_runtime.capabilities.backend
+            event_source: Any = None
+            if not isolated_workspace:
+                # Local runs can accelerate with OS event hints; isolated
+                # backends observe their private workspace, which does not
+                # exist until the backend creates it, so they poll.
+                from agentdiff.safety.watchers.polling import PollingEventSource
+                from agentdiff.safety.watchers.watchdog_backend import WatchdogEventSource
+
+                try:
+                    event_source = WatchdogEventSource(self.root)
+                except RuntimeError:
+                    event_source = PollingEventSource()
+            watcher = HybridSafetyWatcher(
+                root=self.root,
                 policy=self.policy,
                 before=before,
-                backend=getattr(selected_runtime, "backend", "local-observe"),
+                backend=backend,
                 isolated_workspace=isolated_workspace,
+                event_source=event_source,
             )
-            if hasattr(selected_runtime, "configure_safety"):
-                selected_runtime.configure_safety(safety_controller)
+            safety_watcher = watcher
+            selected_runtime.configure_safety(safety_watcher)
+            watcher.start()
 
             effective_timeout = timeout_seconds
             policy_timeout = self.policy.limits.duration_seconds
@@ -401,12 +414,12 @@ class AgentRunTransaction:
         unsupported_paths = sorted(set(before.unsupported) | set(after.unsupported))
         observation_warnings = [
             ObservationWarning(
-                path=unsupported_path,
-                reason=after.unsupported.get(unsupported_path)
-                or before.unsupported.get(unsupported_path)
+                path=path,
+                reason=after.unsupported.get(path)
+                or before.unsupported.get(path)
                 or "unsupported entry",
             )
-            for unsupported_path in unsupported_paths
+            for path in unsupported_paths
         ]
         files_deleted = sum(change.change_type == "deleted" for change in changes)
         processes_spawned = len(runtime_result.owned_processes) if runtime_result is not None else 0
@@ -417,7 +430,6 @@ class AgentRunTransaction:
             processes_spawned=processes_spawned,
             duration_seconds=duration,
         )
-
         orphan_processes = 0
         opened_ports = 0
         if runtime_result is not None:
@@ -450,7 +462,7 @@ class AgentRunTransaction:
             actions.append(PolicyAction.REVIEW)
         safety_outcome = _highest_action(actions)
 
-        is_terminated = bool(safety_controller is not None and safety_controller.terminated)
+        is_terminated = bool(safety_watcher is not None and safety_watcher.terminated)
         if blocked:
             status = "blocked"
         elif is_terminated:
@@ -468,9 +480,15 @@ class AgentRunTransaction:
         else:
             status = "passed"
 
-        safety_report = (
-            safety_controller.report.to_dict() if safety_controller is not None else None
-        )
+        safety_report = None
+        if safety_watcher is not None:
+            safety_report = safety_watcher.report.to_dict()
+            safety_report["watcher"] = safety_watcher.status.to_dict()
+            safety_report["watcher_stats"] = {
+                "hints_received": safety_watcher.stats.hints_received,
+                "targeted_checks_performed": safety_watcher.stats.targeted_checks_performed,
+                "full_scans_performed": safety_watcher.stats.full_scans_performed,
+            }
         result = TransactionResult(
             run_id=store.run_id,
             status=status,
@@ -498,6 +516,8 @@ class AgentRunTransaction:
             },
         )
         store.finalize_integrity()
-        if selected_runtime is not None and hasattr(selected_runtime, "close"):
+        if safety_watcher is not None:
+            safety_watcher.stop()
+        if selected_runtime is not None:
             selected_runtime.close()
         return result

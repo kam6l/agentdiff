@@ -18,6 +18,7 @@ from agentdiff.proof import ProofEngine, ProofPhaseResult, ProofVerdict
 from agentdiff.runtime import (
     CleanupReport,
     DockerRuntime,
+    RuntimeCapabilities,
     RuntimeCapability,
     RuntimeControlLevel,
     RuntimeResult,
@@ -53,6 +54,21 @@ class IsolatedRuntime:
         self.workspace: Path | None = None
         self.temporary: Path | None = None
         self.closed = False
+
+    @property
+    def capabilities(self):
+        return RuntimeCapabilities(
+            backend="test-isolated",
+            filesystem=RuntimeControlLevel.SANDBOXED,
+            host_repository=RuntimeControlLevel.SANDBOXED,
+            network=RuntimeControlLevel.BLOCKED,
+            processes=RuntimeControlLevel.SANDBOXED,
+            resources=RuntimeControlLevel.SANDBOXED,
+            privileges=RuntimeControlLevel.SANDBOXED,
+            private_workspace=True,
+            supports_live_safety=True,
+            supports_source_snapshot=True,
+        )
 
     def configure_source(self, source: Path) -> None:
         self.source = source

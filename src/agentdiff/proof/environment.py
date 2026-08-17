@@ -56,7 +56,7 @@ class DockerProofEnvironment:
             user,
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=128m",  # nosec B108
+            "/tmp:rw,noexec,nosuid,nodev,size=128m",  # nosec B108 hardened container tmpfs, never host /tmp
             "--cap-drop",
             "ALL",
             "--security-opt",
@@ -137,6 +137,7 @@ class DockerProofEnvironment:
         )
         if process.stdout is None:  # pragma: no cover - guaranteed by PIPE
             raise RuntimeError("proof output pipe is unavailable")
+        stdout_pipe: Any = process.stdout
         digest = hashlib.sha256()
         bounded = bytearray()
         output_bytes = 0
@@ -144,16 +145,15 @@ class DockerProofEnvironment:
 
         def drain_output() -> None:
             nonlocal output_bytes
-            if process.stdout is not None:
-                with process.stdout:
-                    while chunk := process.stdout.read(64 * 1024):
-                        digest.update(chunk)
-                        output_bytes += len(chunk)
-                        remaining = _MAX_OUTPUT_BYTES - len(bounded)
-                        if remaining > 0:
-                            bounded.extend(chunk[:remaining])
-                        if output_bytes > _MAX_OUTPUT_BYTES:
-                            output_limit_reached.set()
+            with stdout_pipe:
+                while chunk := stdout_pipe.read(64 * 1024):
+                    digest.update(chunk)
+                    output_bytes += len(chunk)
+                    remaining = _MAX_OUTPUT_BYTES - len(bounded)
+                    if remaining > 0:
+                        bounded.extend(chunk[:remaining])
+                    if output_bytes > _MAX_OUTPUT_BYTES:
+                        output_limit_reached.set()
 
         reader = threading.Thread(target=drain_output, daemon=True)
         reader.start()
@@ -213,7 +213,9 @@ class DockerProofEnvironment:
         detail: str,
     ) -> ProofPhaseResult:
         text = bounded_output.decode("utf-8", "replace")
-        tests_passed, tests_total = parse_test_counts(text) if phase == "tests" else (None, None)
+        tests_passed, tests_total = (
+            parse_test_counts(text) if phase in {"tests", "baseline_tests"} else (None, None)
+        )
         return ProofPhaseResult(
             phase=phase,
             command=tuple(command),

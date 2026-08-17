@@ -43,7 +43,8 @@ def main() -> int:
         [
             "python",
             "-c",
-            "from pathlib import Path; Path('src/result.txt').write_text('ok\\n')",
+            "from pathlib import Path; "
+            "Path('src/result.txt').write_text('ok\\n', encoding='utf-8')",
         ],
         timeout_seconds=60,
     )

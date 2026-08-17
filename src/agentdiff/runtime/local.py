@@ -17,13 +17,13 @@ from .base import (
     OwnedProcess,
     PortEndpoint,
     PortObservation,
+    RuntimeCapabilities,
+    RuntimeControlLevel,
     RuntimeResult,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-
-    from agentdiff.safety import SafetyController
 
 _TIMEOUT_RETURN_CODE = 124
 
@@ -37,7 +37,7 @@ class LocalRuntime:
         *,
         poll_interval_seconds: float = 0.02,
         observe_ports: bool = True,
-        safety_controller: SafetyController | None = None,
+        safety_controller: Any = None,
     ) -> None:
         self.root = Path(root).resolve()
         if not self.root.is_dir():
@@ -47,9 +47,31 @@ class LocalRuntime:
         self.poll_interval_seconds = poll_interval_seconds
         self.observe_ports = observe_ports
         self._safety_controller = safety_controller
+        self._root_session: int | None = None
 
-    def configure_safety(self, controller: SafetyController) -> None:
+    @property
+    def capabilities(self) -> RuntimeCapabilities:
+        return RuntimeCapabilities(
+            backend="local-observe",
+            filesystem=RuntimeControlLevel.OBSERVED,
+            host_repository=RuntimeControlLevel.OBSERVED,
+            network=RuntimeControlLevel.UNCONTROLLED,
+            processes=RuntimeControlLevel.OBSERVED,
+            resources=RuntimeControlLevel.UNCONTROLLED,
+            privileges=RuntimeControlLevel.UNCONTROLLED,
+            private_workspace=False,
+            supports_live_safety=True,
+            supports_source_snapshot=False,
+        )
+
+    def configure_source(self, source_dir: str | os.PathLike[str]) -> None:
+        """Local runs execute against the live host root; source snapshots are unused."""
+
+    def configure_safety(self, controller: Any) -> None:
         self._safety_controller = controller
+
+    def close(self) -> None:
+        """Local runtime holds no backend resources to release."""
 
     def run(
         self,
@@ -82,6 +104,9 @@ class LocalRuntime:
             start_new_session=os.name == "posix",
         )
         owned: dict[tuple[int, float], OwnedProcess] = {}
+        # Capture the execution session immediately: after the root exits,
+        # getsid on its pid fails, but reparented descendants keep the sid.
+        self._root_session = self._session_id(process.pid)
         deadline = started + timeout_seconds if timeout_seconds is not None else None
         try:
             return self._monitor_process(
@@ -247,6 +272,10 @@ class LocalRuntime:
         owned: dict[tuple[int, float], OwnedProcess],
     ) -> None:
         self._observe_process_tree(root_pid, owned)
+        root_created = next(
+            (created for owned_pid, created in owned if owned_pid == root_pid), None
+        )
+        root_session = self._root_session or self._session_id(root_pid)
         for process in psutil.process_iter(["pid", "create_time", "ppid"]):
             with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                 pid = int(process.info["pid"])
@@ -256,11 +285,16 @@ class LocalRuntime:
                     owned_pid == parent_pid and create_time >= owned_created
                     for owned_pid, owned_created in owned
                 )
-                matching_session = False
-                if os.name == "posix" and hasattr(os, "getsid"):
-                    with suppress(OSError):
-                        matching_session = os.getsid(pid) == root_pid
-                if matching_parent or matching_session:
+                # A descendant that was reparented (its parent exited) keeps
+                # the execution session id, so it can still be attributed to
+                # the run even though its ppid no longer points at us.
+                same_session = (
+                    root_session is not None
+                    and self._session_id(pid) == root_session
+                    and root_created is not None
+                    and create_time >= root_created
+                )
+                if matching_parent or same_session:
                     owned.setdefault(
                         (pid, create_time),
                         OwnedProcess(
@@ -270,6 +304,17 @@ class LocalRuntime:
                             relation="reparented_descendant",
                         ),
                     )
+
+    @staticmethod
+    def _session_id(pid: int) -> int | None:
+        """Return the POSIX session id of ``pid``, or None when unavailable."""
+        getsid = getattr(os, "getsid", None)
+        if getsid is None:
+            return None
+        try:
+            return int(getsid(pid))
+        except (OSError, ProcessLookupError):
+            return None
 
     def cleanup(
         self,
@@ -326,7 +371,7 @@ class LocalRuntime:
             wait_fn = getattr(psutil, "wait_procs", None)
             alive: list[Any] = []
             if wait_fn is not None:
-                _gone, alive = wait_fn([proc for _, proc in signaled], timeout=grace_period_seconds)
+                _, alive = wait_fn([proc for _, proc in signaled], timeout=grace_period_seconds)
             else:
                 deadline = time.monotonic() + max(0.0, grace_period_seconds)
                 while time.monotonic() < deadline:

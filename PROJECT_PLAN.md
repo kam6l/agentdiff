@@ -18,16 +18,20 @@ The primary path is `agentdiff run --task "…" -- <command>`. Experimental memo
 6. Evidence is redacted, bounded, and private by default.
 7. Isolation, tracing, and agent protocols are integration seams, not features to rebuild.
 
-## Current `0.1.0` surface
+## Current `0.2.x` surface
 
-### Beta
+### Beta — trust pipeline
 
-- No-follow filesystem manifests and private run capsules.
-- Deterministic `allow`, `review`, and `deny` policy with provenance.
-- Local shell-free command execution with timeout and best-effort process evidence.
-- Explainable, capped blast-radius scoring.
+- No-follow filesystem manifests and private run capsules (spec v2; legacy v1 capsules remain verifiable under their original guarantees).
+- Deterministic `allow`, `review`, and `deny` policy with provenance and live budget enforcement.
+- Local shell-free execution with timeout, process, and port evidence; Docker runtime with a private writable workspace (never a writable host repo), cap-drop, no-new-privileges, and explicit network modes.
+- Explainable, capped immediate blast-radius scoring; separate future-execution-risk analysis.
+- Hybrid safety watcher: OS event hints feed dirty-path targeted checks, authoritative full reconciliation runs on schedule/overflow/force, and backend failures degrade to polling with recorded status.
+- Clean-room proof: trusted verification plan from pre-run evidence, patched tests, and an independent baseline verifier (pre-run verifier files over patched product code) with deterministic proof-strength metadata (L0-L4).
+- Crash-consistent promotion gate: write-ahead journal with per-entry state machine, persistent workspace lease (never-unlinked lock file), validated backup restore with digest/mode checks, and fail-closed recovery on corrupt or ambiguous state.
 - Run listing, inspection, checksum verification, and exact-identity cleanup.
 - Conflict-safe recovery for eligible regular files.
+- Content-addressed immutable object store as the migration foundation for spec-v3 artifact references and future export/import.
 - Linux, macOS, and native Windows CI on Python 3.12–3.14.
 
 ### Experimental
@@ -46,7 +50,7 @@ The primary path is `agentdiff run --task "…" -- <command>`. Experimental memo
 - Artifact migration and compatibility tooling.
 - Larger external-state benchmark coverage.
 
-An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal network blocking, and arbitrary external-state rollback are not implemented.
+An HTTP API, hosted dashboard, bundled sandbox, universal network blocking, and arbitrary external-state rollback are not implemented. The Docker backend implements the isolation boundary this plan targets; it is a capability-bearing container boundary, not a virtual machine.
 
 ## Release gates
 
@@ -79,12 +83,14 @@ An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal networ
 
 ### Differentiated safety core
 
-1. Add clean-room proof by replaying a captured patch in a fresh worktree before promotion.
-2. Detect future execution risk in package scripts and GitHub Actions changes, then extend to Dockerfiles, Makefiles, hooks, and editor tasks.
-3. Add an experimental copy-on-write Docker runtime where the real repository is changed only by an explicit, policy-filtered promotion step.
+1. [x] Clean-room proof replays the captured patch in a fresh environment before promotion.
+2. [x] Future execution risk analysis covers package scripts, GitHub Actions, Dockerfiles, Makefiles, hooks, and editor tasks.
+3. [x] Docker runtime materializes a private workspace and the real repository is changed only by an explicit, policy-filtered promotion step.
+4. Harden verifier independence further: external signed CI verification (proof strength L4) and verifier-file policy controls.
 
 ### Evidence moat
 
-1. Add signed, shareable capsule export and standardized telemetry.
-2. Add run attribution for changed lines and evidence-based comparison of parallel agent attempts.
-3. Keep adversarial race, path, hardlink, redaction, and rollback tests ahead of new claims.
+1. Add signed (authenticated) capsule support; current checksums are tamper-evident, not authenticated.
+2. Add shareable capsule export/import (the CAS object store is the hydration foundation).
+3. Add run attribution for changed lines and evidence-based comparison of parallel agent attempts.
+4. Keep adversarial race, path, hardlink, redaction, promotion-crash, and rollback tests ahead of new claims.

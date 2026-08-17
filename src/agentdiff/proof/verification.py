@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from agentdiff.policy import Policy
+
 from .plan import (
     TrustedVerificationPlan,
     select_trusted_verification_plan,
@@ -14,7 +17,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from agentdiff.policy import Policy
-
 
 # Compatibility alias
 VerificationPlan = TrustedVerificationPlan

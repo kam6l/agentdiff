@@ -55,4 +55,4 @@ with AgentDiffSession("Fix authentication", config=config) as session:
 evaluation = session.evaluate()
 ```
 
-The compatibility session is separate from the transaction/recovery core. There is no plugin entry-point discovery or built-in CrewAI/AutoGen adapter in `0.1.0`.
+The compatibility session is separate from the transaction/recovery core. There is no plugin entry-point discovery or built-in CrewAI/AutoGen adapter in `0.2.x`.

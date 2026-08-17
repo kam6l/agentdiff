@@ -64,6 +64,7 @@ class IntegrityReport:
     ok: bool
     files_checked: int
     issues: tuple[IntegrityIssue, ...] = ()
+    version: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -71,6 +72,7 @@ class IntegrityReport:
             "present": self.present,
             "ok": self.ok,
             "files_checked": self.files_checked,
+            "version": self.version,
             "issues": [issue.to_dict() for issue in self.issues],
         }
 
@@ -234,17 +236,33 @@ class RunStore:
         return manifest
 
     def verify_integrity(self) -> IntegrityReport:
-        """Verify a sealed capsule without following links."""
+        """Verify a sealed capsule without following links.
 
+        Verification is routed by capsule version: spec v2 capsules
+        (``integrity/manifest.json``) are verified with the structured
+        manifest, and legacy v1 capsules (``integrity.json`` only, schema
+        version 1) are verified with their original guarantees. A schema-2
+        ``integrity.json`` mirror without the ``integrity/`` directory is
+        treated as an incomplete seal and fails.
+        """
         self._ensure_run_dir_identity()
-        v2_integrity = self.run_dir / "integrity" / "manifest.json"
-        v1_integrity = self.run_dir / "integrity.json"
-        if not v2_integrity.exists() and not v1_integrity.exists():
-            return IntegrityReport(present=False, ok=False, files_checked=0)
-        issues: list[IntegrityIssue] = []
-        if not v2_integrity.exists():
-            issues.append(IntegrityIssue("integrity/manifest.json", "missing integrity manifest"))
-            return IntegrityReport(present=True, ok=False, files_checked=0, issues=tuple(issues))
+        if self.capsule_version == 2:
+            return self._verify_v2_capsule()
+        if self.capsule_version == 1:
+            return self._verify_v1_capsule()
+        return IntegrityReport(present=False, ok=False, files_checked=0, version=0)
+
+    @property
+    def capsule_version(self) -> int:
+        """Return the sealed capsule spec version (0 when unsealed)."""
+        if (self.run_dir / "integrity" / "manifest.json").is_file():
+            return 2
+        if (self.run_dir / "integrity.json").is_file():
+            return 1
+        return 0
+
+    def _verify_v2_capsule(self) -> IntegrityReport:
+        """Verify a spec v2 capsule: structured manifest + required artifacts."""
         try:
             manifest = self.read_json_path("integrity/manifest.json")
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
@@ -252,6 +270,7 @@ class RunStore:
                 present=True,
                 ok=False,
                 files_checked=0,
+                version=2,
                 issues=(IntegrityIssue("integrity/manifest.json", type(error).__name__),),
             )
         if not isinstance(manifest, dict) or manifest.get("algorithm") != "sha256":
@@ -259,6 +278,7 @@ class RunStore:
                 present=True,
                 ok=False,
                 files_checked=0,
+                version=2,
                 issues=(IntegrityIssue("integrity/manifest.json", "invalid integrity manifest"),),
             )
         raw_files = manifest.get("files")
@@ -267,18 +287,94 @@ class RunStore:
                 present=True,
                 ok=False,
                 files_checked=0,
+                version=2,
                 issues=(IntegrityIssue("integrity/manifest.json", "files must be an object"),),
             )
+        report = self._verify_manifest_files(raw_files, version=2)
+        return IntegrityReport(
+            present=True,
+            ok=bool(report[0]),
+            files_checked=report[1],
+            version=2,
+            issues=tuple(report[2]),
+        )
 
+    def _verify_v1_capsule(self) -> IntegrityReport:
+        """Verify a legacy v1 capsule under its original guarantees.
+
+        V1 manifests are the flat ``integrity.json`` with schema version 1.
+        A schema-2 mirror without the ``integrity/`` directory is an
+        incomplete spec-v2 seal, not a v1 capsule, and fails closed.
+        """
         try:
-            actual_files = dict(self._discover_sealed_files())
-        except (OSError, ValueError) as error:
+            manifest = self.read_json("integrity.json")
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("<capsule>", str(error)),),
+                version=1,
+                issues=(IntegrityIssue("integrity.json", type(error).__name__),),
             )
+        if not isinstance(manifest, dict):
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                version=1,
+                issues=(IntegrityIssue("integrity.json", "invalid integrity manifest"),),
+            )
+        if int(manifest.get("schema_version", -1)) != 1:
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                version=1,
+                issues=(
+                    IntegrityIssue(
+                        "integrity/manifest.json",
+                        "incomplete spec-v2 seal: missing structured integrity manifest",
+                    ),
+                ),
+            )
+        if manifest.get("algorithm") != "sha256":
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                version=1,
+                issues=(IntegrityIssue("integrity.json", "invalid integrity manifest"),),
+            )
+        raw_files = manifest.get("files")
+        if not isinstance(raw_files, dict):
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                version=1,
+                issues=(IntegrityIssue("integrity.json", "files must be an object"),),
+            )
+        report = self._verify_manifest_files(raw_files, version=1)
+        return IntegrityReport(
+            present=True,
+            ok=bool(report[0]),
+            files_checked=report[1],
+            version=1,
+            issues=tuple(report[2]),
+        )
+
+    def _verify_manifest_files(
+        self,
+        raw_files: dict[str, Any],
+        *,
+        version: int,
+    ) -> tuple[bool, int, list[IntegrityIssue]]:
+        """Shared digest/size verification against one manifest files mapping."""
+        issues: list[IntegrityIssue] = []
+        try:
+            actual_files = dict(self._discover_sealed_files())
+        except (OSError, ValueError) as error:
+            return True, 0, [IntegrityIssue("<capsule>", str(error))]
         expected_names = {str(name) for name in raw_files}
         required = set(_REQUIRED_SEALED_ARTIFACTS)
         try:
@@ -309,12 +405,7 @@ class RunStore:
             checked += 1
             if expected.get("sha256") != digest or expected.get("size") != size:
                 issues.append(IntegrityIssue(relative, "digest or size mismatch"))
-        return IntegrityReport(
-            present=True,
-            ok=not issues,
-            files_checked=checked,
-            issues=tuple(issues),
-        )
+        return not issues, checked, issues
 
     def _required_sealed_paths(self) -> set[str]:
         """Return principal artifacts plus every backup referenced by before-state."""
@@ -357,14 +448,7 @@ class RunStore:
     def _discover_sealed_files(self) -> list[tuple[str, Path]]:
         self._ensure_run_dir_identity()
         _EXTENSION_DIRS = frozenset(
-            {
-                "proof",
-                "promotion",
-                "recovery",
-                "staging",
-                "backups",
-                ".agentdiff",
-            }
+            {"proof", "promotion", "recovery", "staging", "backups", ".agentdiff"}
         )
         discovered: list[tuple[str, Path]] = []
         for directory, directory_names, file_names in os.walk(self.run_dir, followlinks=False):
@@ -390,7 +474,6 @@ class RunStore:
                 if parts[0] in _EXTENSION_DIRS:
                     continue
                 discovered.append((relative, path))
-
         return sorted(discovered)
 
     @staticmethod
@@ -727,7 +810,7 @@ class RunStore:
         issues: list[IntegrityIssue] = []
         try:
             manifest = self.read_json_path(f"{normalized_name}/integrity.json")
-        except (OSError, ValueError, TypeError) as error:
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             return IntegrityReport(
                 present=True,
                 ok=False,
@@ -782,11 +865,8 @@ class RunStore:
                     or expected.get("size") != size
                 ):
                     issues.append(IntegrityIssue(f"{name}/{filename}", "digest or size mismatch"))
-            except (OSError, ValueError, TypeError) as error:
+            except (OSError, ValueError, TypeError, RuntimeError, InvalidRunIdError) as error:
                 issues.append(IntegrityIssue(f"{name}/{filename}", str(error)))
         return IntegrityReport(
-            present=True,
-            ok=not issues,
-            files_checked=checked,
-            issues=tuple(issues),
+            present=True, ok=not issues, files_checked=checked, issues=tuple(issues)
         )

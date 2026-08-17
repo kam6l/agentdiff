@@ -13,7 +13,6 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-
 from agentdiff.policy import load_policy
 from agentdiff.promotion import PromotionEngine
 from agentdiff.proof import ProofEngine, ProofVerdict

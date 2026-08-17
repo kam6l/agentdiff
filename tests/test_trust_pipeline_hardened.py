@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
-
-import pytest
 
 if TYPE_CHECKING:
     from pathlib import Path
+import json
 
+import pytest
 
 from agentdiff.evidence import CapsuleReader, PatchEntry
 from agentdiff.policy import Policy, ProofPolicy, load_policy
 from agentdiff.promotion import (
+    EntryState,
     JournalEntry,
     JournalState,
     PromotionJournal,
@@ -92,6 +92,11 @@ def test_proof_plan_accepts_explicit_policy_override(tmp_path: Path) -> None:
 
 def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
     """Test WAL journal persistence and crash recovery restores files."""
+    import hashlib
+
+    def sha256(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
     host_file = tmp_path / "target.txt"
     host_file.write_text("initial host state", encoding="utf-8")
 
@@ -101,9 +106,10 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
     backup_file.write_text("initial host state", encoding="utf-8")
 
     created_file = tmp_path / "created.txt"
-    created_file.write_text("partially created", encoding="utf-8")
+    created_file.write_text("created content", encoding="utf-8")
 
-    # Simulate an interrupted journal in APPLYING state
+    # Simulate an interrupted journal in APPLYING state with both entries
+    # recorded as APPLIED (mutation happened, then the process died).
     journal = PromotionJournal(
         root=tmp_path,
         run_id="run-123",
@@ -113,21 +119,25 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
             JournalEntry(
                 path="target.txt",
                 change_type="modified",
-                base_sha256="base",
-                result_sha256="target",
+                base_sha256=sha256("initial host state"),
+                result_sha256=sha256("target"),
                 base_mode=0o644,
                 result_mode=0o644,
+                base_size=len("initial host state"),
+                result_size=len("target"),
                 backup_relpath=".agentdiff/backups/run-123/target.txt",
-                applied=True,
+                state=EntryState.APPLIED,
             ),
             JournalEntry(
                 path="created.txt",
                 change_type="created",
                 base_sha256=None,
-                result_sha256="created",
+                result_sha256=sha256("created content"),
                 base_mode=None,
                 result_mode=0o644,
-                applied=True,
+                base_size=None,
+                result_size=len("created content"),
+                state=EntryState.APPLIED,
             ),
         ],
     )
@@ -151,13 +161,13 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
 def test_workspace_lease_concurrency(tmp_path: Path) -> None:
     """Test advisory lock lease prevents overlapping promotion locks."""
     lease1 = WorkspaceLease(tmp_path, run_id="run-1")
-    lease2 = WorkspaceLease(tmp_path, run_id="run-2")
-    with (
-        lease1.hold(),
-        pytest.raises(PromotionLockError, match="another process is promoting"),
-        lease2.hold(),
-    ):
-        pass
+    with lease1.hold():
+        lease2 = WorkspaceLease(tmp_path, run_id="run-2")
+        with (
+            pytest.raises(PromotionLockError, match=r"another process is promoting"),
+            lease2.hold(),
+        ):
+            pass
 
 
 def test_capsule_reader_and_merkle_root(tmp_path: Path) -> None:
@@ -219,4 +229,16 @@ def test_hybrid_safety_watcher(tmp_path: Path) -> None:
 
     terminated = watcher.poll(duration_seconds=1.0, processes_spawned=1)
     assert terminated is False
+    # Dirty hints accelerate with targeted checks; authoritative full
+    # reconciliation runs on schedule/overflow/force.
+    assert watcher.stats.targeted_checks_performed == 1
+    assert (
+        watcher.observe(
+            root=tmp_path,
+            duration_seconds=1.0,
+            processes_spawned=1,
+            force_filesystem=True,
+        )
+        is False
+    )
     assert watcher.stats.full_scans_performed == 1

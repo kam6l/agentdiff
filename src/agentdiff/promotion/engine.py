@@ -1,4 +1,11 @@
-"""Fail-closed host promotion for proven, policy-selected patch entries."""
+"""Fail-closed host promotion for proven, policy-selected patch entries.
+
+The application phase is crash-consistent: every mutation is preceded by a
+persisted ``APPLY_INTENT`` journal state (write-ahead), followed by a
+post-state verification and a persisted ``APPLIED`` state. Recovery never
+guesses between "mutated" and "not mutated" -- it compares the current host
+state against the recorded base and result and fails closed on ambiguity.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +21,7 @@ from agentdiff.pathing import normalize_relative_path
 from agentdiff.state import FileRecord, FilesystemScanner
 from agentdiff.transaction.store import RunStore
 
-from .journal import JournalEntry, JournalState, PromotionJournal
+from .journal import EntryState, JournalEntry, JournalState, PromotionJournal
 from .lock import WorkspaceLease
 from .models import (
     PromotionAction,
@@ -23,7 +30,7 @@ from .models import (
     PromotionPlanEntry,
     PromotionReport,
 )
-from .recovery import PromotionRecovery
+from .recovery import PromotionRecovery, PromotionRecoveryError
 from .staging import PromotionStager
 
 
@@ -49,7 +56,8 @@ class PromotionEngine:
         paths: list[str] | None = None,
     ) -> PromotionReport:
         with self.lease.hold():
-            # Pre-flight: recover any stale crashed journal if present
+            # Pre-flight: recover any stale crashed journal if present. A
+            # corrupt, ambiguous, or failed recovery raises and blocks.
             PromotionRecovery(self.root).check_and_recover()
 
             integrity = self.store.verify_integrity()
@@ -118,6 +126,7 @@ class PromotionEngine:
             )
 
             # 2. Stage all modifications and backups
+            base_sizes = self._base_sizes()
             for planned in ready:
                 patch_entry = entries_by_path[planned.path]
                 staged_rel = None
@@ -138,37 +147,45 @@ class PromotionEngine:
                         result_sha256=patch_entry.result_sha256,
                         base_mode=patch_entry.base_mode,
                         result_mode=patch_entry.result_mode,
+                        base_size=base_sizes.get(patch_entry.path),
+                        result_size=patch_entry.size,
                         staged_relpath=staged_rel,
                         backup_relpath=backup_rel,
-                        applied=False,
                     )
                 )
 
-            # 3. Write-ahead log journal commit
+            # 3. Write-ahead log: transaction is about to mutate the host.
             journal.state = JournalState.APPLYING
             journal.persist()
 
-            # 4. Atomic application phase
+            # 4. Atomic application phase with per-entry write-ahead states.
+            report.status = "PROMOTED"
             for journal_entry, planned in zip(journal.entries, ready, strict=True):
                 patch_entry = entries_by_path[planned.path]
-
                 try:
+                    # APPLY_INTENT: persist intent, then mutate, then verify.
+                    journal_entry.state = EntryState.APPLY_INTENT
+                    journal.persist()
                     action = self._apply_one(bundle, patch_entry)
-                    journal_entry.applied = True
+                    self._verify_post_state(patch_entry)
+                    journal_entry.state = EntryState.APPLIED
                     journal.persist()
                 except (OSError, RuntimeError, ValueError) as error:
                     report.conflicts.append(
                         PromotionConflict(patch_entry.path, str(error) or type(error).__name__)
                     )
                     report.status = "PARTIAL_CONFLICT" if report.actions else "CONFLICT"
-                    # Interrupted -> trigger recovery
                     journal.state = JournalState.RECOVERY_REQUIRED
                     journal.persist()
-                    PromotionRecovery(self.root).check_and_recover()
+                    try:
+                        PromotionRecovery(self.root).check_and_recover()
+                    except PromotionRecoveryError:
+                        report.status = "RECOVERY_FAILED"
+                        self._persist_result(report)
+                        raise
                     break
                 report.actions.append(action)
             else:
-                report.status = "PROMOTED"
                 journal.state = JournalState.COMMITTED
                 journal.persist()
                 journal.clean()
@@ -176,6 +193,20 @@ class PromotionEngine:
 
             self._persist_result(report)
             return report
+
+    def _base_sizes(self) -> dict[str, int]:
+        """Map patch paths to their recorded pre-run file sizes for backup checks."""
+        sizes: dict[str, int] = {}
+        try:
+            before = self.store.read_json("before.json")
+        except (OSError, ValueError, TypeError, KeyError, FileNotFoundError):
+            return sizes
+        if not isinstance(before, dict) or not isinstance(before.get("files"), dict):
+            return sizes
+        for path, record in before["files"].items():
+            if isinstance(record, dict) and isinstance(record.get("size"), int):
+                sizes[str(path)] = int(record["size"])
+        return sizes
 
     def _persist_result(self, report: PromotionReport) -> None:
         self.store.write_json_path("promotion/result.json", report.to_dict())
@@ -312,6 +343,17 @@ class PromotionEngine:
         self._atomic_replace(source, target, entry, current)
         return PromotionAction(entry.path, "modified", "proven file replaced")
 
+    def _verify_post_state(self, entry: PatchEntry) -> None:
+        """Verify the promoted host file exactly equals the proven result."""
+        if entry.change_type == "deleted":
+            target = self._resolve_target(entry.path, create_parents=False)
+            if target.exists() or target.is_symlink():
+                raise RuntimeError("deleted file reappeared after promotion")
+            return
+        current = self.scanner.capture_one(entry.path)
+        if not self._matches_result(current, entry):
+            raise RuntimeError("promoted file does not equal the proven result")
+
     def _atomic_create(self, source: Path, target: Path, entry: PatchEntry) -> None:
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".agentdiff-promote-", dir=target.parent
@@ -370,21 +412,37 @@ class PromotionEngine:
 
     @staticmethod
     def _copy_payload(source: Path, descriptor: int, entry: PatchEntry) -> None:
-        info = source.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise RuntimeError("patch payload is not a single-link regular file")
-        digest = hashlib.sha256()
-        size = 0
-        with (
-            source.open("rb") as input_stream,
-            os.fdopen(descriptor, "wb", closefd=False) as output_stream,
-        ):
-            while chunk := input_stream.read(1024 * 1024):
-                digest.update(chunk)
-                size += len(chunk)
-                output_stream.write(chunk)
-            output_stream.flush()
-            os.fsync(output_stream.fileno())
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        source_fd = os.open(source, flags)
+        try:
+            opened = os.fstat(source_fd)
+            info = source.lstat()
+            if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                raise RuntimeError("patch payload is not a single-link regular file")
+            if opened.st_dev != info.st_dev or opened.st_ino != info.st_ino:
+                raise RuntimeError("patch payload changed while opening")
+            digest = hashlib.sha256()
+            size = 0
+            with (
+                os.fdopen(source_fd, "rb", closefd=False) as input_stream,
+                os.fdopen(descriptor, "wb", closefd=False) as output_stream,
+            ):
+                while chunk := input_stream.read(1024 * 1024):
+                    digest.update(chunk)
+                    size += len(chunk)
+                    output_stream.write(chunk)
+                output_stream.flush()
+                os.fsync(output_stream.fileno())
+            finished = os.fstat(source_fd)
+            if (
+                finished.st_dev != opened.st_dev
+                or finished.st_ino != opened.st_ino
+                or finished.st_size != opened.st_size
+                or finished.st_mtime_ns != opened.st_mtime_ns
+            ):
+                raise RuntimeError("patch payload changed while copying")
+        finally:
+            os.close(source_fd)
         if digest.hexdigest() != entry.result_sha256 or size != entry.size:
             raise RuntimeError("patch payload digest mismatch")
 

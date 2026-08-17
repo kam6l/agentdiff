@@ -246,16 +246,16 @@ def load_policy_file(path: str | Path) -> Policy:
         if yaml is None:
             raise ImportError("PyYAML not installed")
         parsed = yaml.safe_load(raw)
-    except (ImportError, ModuleNotFoundError):
+    except (ImportError, ModuleNotFoundError) as exc:
         import json
 
         try:
             parsed = json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
+        except (TypeError, ValueError, json.JSONDecodeError):
             raise PolicyLoadError(
                 "PyYAML is required to load policy files; install it with 'pip install PyYAML'"
-            ) from None
-    except (OSError, ValueError, TypeError) as exc:
+            ) from exc
+    except (OSError, TypeError, ValueError) as exc:
         raise PolicyLoadError(f"failed to parse policy file {path}: {exc}") from exc
 
     if not isinstance(parsed, dict):

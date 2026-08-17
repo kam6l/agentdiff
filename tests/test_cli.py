@@ -33,9 +33,14 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "snapshot" not in result.stdout
     assert "eval" not in result.stdout
-    assert "{run,inspect,runs,verify,rollback,cleanup,doctor,policy,cortex}" in result.stdout
+    assert (
+        "{run,inspect,runs,verify,prove,promote,rollback,cleanup,doctor,policy,cortex}"
+        in result.stdout
+    )
     assert "run" in result.stdout
     assert "inspect" in result.stdout
+    assert "prove" in result.stdout
+    assert "promote" in result.stdout
     assert "rollback" in result.stdout
     assert "cleanup" in result.stdout
     assert "doctor" in result.stdout
@@ -388,3 +393,45 @@ def test_cli_doctor_reports_port_observation_without_network_control(tmp_path: P
     assert report["network_observation"] is False
     assert report["network_enforcement"] is False
     assert report["sandboxed"] is False
+
+
+def test_cli_promote_blocks_without_sealed_capsule(tmp_path: Path) -> None:
+    result = run_cli("promote", "missing-run", cwd=tmp_path)
+    assert result.returncode == 2
+    assert "error" in result.stderr.lower() or "not found" in result.stderr.lower()
+
+
+def test_cli_promote_fails_closed_without_proof(tmp_path: Path) -> None:
+    """A sealed run without PROVEN proof must be blocked by the promotion gate."""
+    (tmp_path / "base.txt").write_text("old", encoding="utf-8")
+    task = tmp_path / "task.py"
+    task.write_text(
+        "from pathlib import Path\nPath('base.txt').write_text('new', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    run = run_cli(
+        "run",
+        "--task",
+        "cli promote gate",
+        "--",
+        sys.executable,
+        "-c",
+        "from pathlib import Path; Path('base.txt').write_text('new', encoding='utf-8')",
+        cwd=tmp_path,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    run_id = run.stdout.split("Run: ")[1].split()[0]
+
+    promoted = run_cli("promote", run_id, "--safe-only", cwd=tmp_path)
+    assert promoted.returncode == 9
+    assert "blocked" in promoted.stderr
+
+    # A dry-run must also fail closed: promotion requires PROVEN proof.
+    dry = run_cli("promote", run_id, "--dry-run", "--safe-only", cwd=tmp_path)
+    assert dry.returncode == 9
+
+
+def test_cli_prove_requires_sealed_capsule(tmp_path: Path) -> None:
+    result = run_cli("prove", "missing-run", cwd=tmp_path)
+    assert result.returncode == 2
+    assert "error" in result.stderr.lower() or "not found" in result.stderr.lower()

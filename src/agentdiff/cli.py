@@ -110,6 +110,20 @@ def _json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True)
 
 
+def _emit_report(payload: Any, *, machine_format: str) -> None:
+    """Emit a machine-readable report with recursive redaction applied.
+
+    Machine JSON output is evidence that may be shared or uploaded, so it is
+    passed through :func:`agentdiff.redaction.redact_data` to redact
+    sensitive-looking fields before serialization.
+    """
+
+    if machine_format == "json":
+        from agentdiff.redaction import redact_data
+
+        print(_json(redact_data(payload)))
+
+
 def _load_runtime_policy(root: Path, requested: str | None) -> Policy:
     if requested is not None:
         return load_policy_file(requested)
@@ -544,6 +558,100 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if report.ok else 6
 
 
+def cmd_prove(args: argparse.Namespace) -> int:
+    """Reproduce the patch in a clean room and verify it deterministically."""
+
+    from agentdiff.proof import ProofEngine
+
+    proof = ProofEngine(args.root, args.run_id).prove(timeout_seconds=args.timeout)
+    if args.format == "json":
+        _emit_report(proof.to_dict(), machine_format="json")
+        return 0 if proof.verdict.value == "PROVEN" else 7
+
+    tests_phase = next((phase for phase in proof.phases if phase.phase == "tests"), None)
+    baseline_phase = next(
+        (phase for phase in proof.phases if phase.phase == "baseline_tests"), None
+    )
+    baseline_tests = (
+        f"{baseline_phase.tests_passed} / {baseline_phase.tests_total}"
+        if baseline_phase is not None and baseline_phase.tests_total is not None
+        else "-"
+    )
+    patched_tests = (
+        f"{tests_phase.tests_passed} / {tests_phase.tests_total}"
+        if tests_phase is not None and tests_phase.tests_total is not None
+        else "-"
+    )
+    print("AgentDiff Trust Report")
+    print(f"  Runtime              {proof.verification_source or 'n/a'}")
+    print(f"  Policy               {proof.policy}")
+    print(
+        f"  Immediate Blast      {proof.immediate_blast_radius} / "
+        f"{blast_level(proof.immediate_blast_radius)}"
+    )
+    print(
+        f"  Future Blast         {proof.future_blast_radius} / "
+        f"{blast_level(proof.future_blast_radius)}"
+    )
+    print(f"  Trusted Plan         {'YES' if proof.verification_confirmed else 'NO'}")
+    print(f"  Baseline Tests       {baseline_tests}")
+    print(f"  Patched Tests        {patched_tests}")
+    print(f"  Verifier Changes     {proof.verifier_files_changed}")
+    print(f"  Hidden State         {proof.hidden_state_dependency}")
+    print(f"  Proof Strength       {proof.proof_strength} / {proof.proof_strength_label}")
+    print(f"  Promotion            {proof.promotion}")
+    print()
+    verdict = "PROVEN" if proof.verdict.value == "PROVEN" else "NOT_PROVEN"
+    print(f"  VERDICT: {verdict}")
+    for reason in proof.reasons:
+        print(f"  reason: {safe_display(reason)}")
+    return 0 if proof.verdict.value == "PROVEN" else 7
+
+
+def blast_level(score: int) -> str:
+    if score >= 60:
+        return "CRITICAL"
+    if score >= 30:
+        return "HIGH"
+    if score >= 10:
+        return "MEDIUM"
+    return "LOW"
+
+
+def cmd_promote(args: argparse.Namespace) -> int:
+    """Apply only proven, policy-selected patch changes to the real repository."""
+
+    from agentdiff.promotion import PromotionEngine, PromotionRecoveryError
+
+    try:
+        report = PromotionEngine(args.root, args.run_id).promote(
+            dry_run=args.dry_run,
+            safe_only=args.safe_only,
+            paths=args.path,
+        )
+    except PromotionRecoveryError as error:
+        print(f"agentdiff: promotion blocked: {safe_display(str(error))}", file=sys.stderr)
+        return 9
+    except PermissionError as error:
+        print(f"agentdiff: promotion blocked: {safe_display(str(error))}", file=sys.stderr)
+        return 9
+    if args.format == "json":
+        _emit_report(report.to_dict(), machine_format="json")
+    else:
+        print(f"Promotion run: {report.run_id}")
+        print(f"Status: {report.status}")
+        print(f"Actions: {len(report.actions)}")
+        for action in report.actions:
+            print(f"  {action.action:8} {safe_display(action.path)}")
+        print(f"Conflicts: {len(report.conflicts)}")
+        for conflict in report.conflicts:
+            print(f"  {safe_display(conflict.path)}: {safe_display(conflict.reason)}")
+        print(f"Skipped: {len(report.skipped)}")
+    if report.conflicts:
+        return 4
+    return 0 if report.ok else 8
+
+
 def cmd_rollback(args: argparse.Namespace) -> int:
     report = RollbackEngine.open(args.root, args.run_id).rollback(
         safe_only=args.safe_only,
@@ -667,6 +775,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify.add_argument("--root", default=".")
     p_verify.add_argument("--format", choices=["json", "summary"], default="summary")
     p_verify.set_defaults(func=cmd_verify)
+
+    p_prove = subparsers.add_parser(
+        "prove", help="Reproduce the patch in a clean room and verify it deterministically"
+    )
+    p_prove.add_argument("run_id")
+    p_prove.add_argument("--root", default=".")
+    p_prove.add_argument("--timeout", type=float, default=900.0)
+    p_prove.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_prove.set_defaults(func=cmd_prove)
+
+    p_promote = subparsers.add_parser(
+        "promote",
+        help="Apply only proven, policy-selected changes through the crash-consistent gate",
+    )
+    p_promote.add_argument("run_id")
+    p_promote.add_argument("--root", default=".")
+    p_promote.add_argument("--dry-run", action="store_true", help="Plan without applying")
+    p_promote.add_argument("--safe-only", action="store_true", help="Select only ALLOW changes")
+    p_promote.add_argument("--path", action="append", help="Limit promotion to a relative path")
+    p_promote.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_promote.set_defaults(func=cmd_promote)
 
     p_rollback = subparsers.add_parser("rollback", help="Conflict-check and recover run changes")
     p_rollback.add_argument("run_id")

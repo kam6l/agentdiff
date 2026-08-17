@@ -132,7 +132,7 @@ The following shape is taken from a real repository run. AgentDiff reported a su
 
 <div class="ad-doc-link-list" markdown>
 - **Install AgentDiff** — supported source installation and requirements. [Installation →](installation.md)
-- **Use the CLI** — exact commands and flags implemented in `v0.1.0`. [CLI reference →](cli/index.md)
+- **Use the CLI** — exact commands and flags implemented in `v0.2.x`. [CLI reference →](cli/index.md)
 - **Integrate a command or framework** — use the transaction API, or the separately labeled experimental compatibility hooks. [Integrations →](integrations/custom.md)
 - **Connect an AI provider** — use verified repository memory with Claude, Codex/OpenAI, or Ollama. [Cortex →](concepts/cortex.md)
 - **Review the security boundary** — explicit guarantees, observations, and non-goals. [Security & limits →](trust.md)

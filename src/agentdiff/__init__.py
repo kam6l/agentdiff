@@ -3,7 +3,7 @@
 The transaction API and trust pipeline are the primary product surfaces.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .analyzers import FutureBlastEngine, FutureBlastResult
 from .cortex import (
@@ -59,6 +59,7 @@ from .runtime import (
     DockerRuntime,
     LocalRuntime,
     RuntimeBackend,
+    RuntimeCapabilities,
     RuntimeCapability,
     RuntimeControlLevel,
     RuntimeResult,
@@ -134,6 +135,7 @@ __all__ = [
     "RunInspector",
     "RunStore",
     "RuntimeBackend",
+    "RuntimeCapabilities",
     "RuntimeCapability",
     "RuntimeControlLevel",
     "RuntimeResult",

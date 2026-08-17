@@ -7,8 +7,8 @@
 <h1 align="center">AgentDiff</h1>
 
 <p align="center">
-  <strong>See what the agent changed. Undo only the collateral.</strong><br>
-  Independent state observation, deterministic intent policy, explainable blast radius, and conflict-safe selective recovery for AI-agent commands.
+  <strong>DON'T TRUST AN AI PATCH. PROVE IT.</strong><br>
+  Isolate the agent, observe real state, enforce deterministic policy, reproduce the patch in a clean room, and promote only proven work through a crash-consistent gate.
 </p>
 
 <p align="center">
@@ -42,7 +42,7 @@ A command can exit successfully while leaving one intended edit, one dependency 
 
 ## Start in under a minute
 
-AgentDiff `0.1.0` requires Python 3.12+ and is currently installed from source:
+AgentDiff `0.2.x` requires Python 3.12+ and is currently installed from source:
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
@@ -50,62 +50,90 @@ cd agentdiff
 uv tool install .
 ```
 
-From the project you want to observe:
+From the project you want to guard, run the agent inside an isolated private
+workspace, prove the result in a clean room, then promote only proven work
+through the crash-consistent gate:
 
 ```bash
 agentdiff policy init
-agentdiff run --task "Fix authentication" -- codex
+
+agentdiff run \
+  --runtime docker \
+  --task "Fix authentication" \
+  -- codex
+
+agentdiff inspect <run-id>
+
+agentdiff prove <run-id>
+
+agentdiff promote <run-id> --dry-run --safe-only
+agentdiff promote <run-id> --safe-only
+
+agentdiff verify <run-id>
 ```
 
-The summary leads with the decision you need:
+`agentdiff prove` reproduces the base-plus-patch workspace in a clean Docker
+container, runs the **patched** tests, then re-runs the trusted **baseline**
+tests (the pre-run verifier files restored over the patched product code) so
+an agent cannot hide behind weakened tests. `agentdiff promote` applies only
+proven, policy-selected changes with a write-ahead journal and automatic
+crash recovery; `--safe-only` selects only `ALLOW` changes.
+
+The trust report shows immediate vs future blast radius, verifier changes,
+proof strength, and a single deterministic verdict:
 
 ```text
-Task completed
-
-Expected changes:   4
-Unexpected changes: 3
-Protected changes:  1
-
-Blast Radius: HIGH (72/100)
-Recovery available: YES
-Policy outcome: DENY
+Runtime              Docker / private isolated workspace
+Policy               ALLOW
+Immediate Blast      12 / LOW
+Future Blast          6 / LOW
+Trusted Plan         YES
+Baseline Tests       184 / 184
+Patched Tests        191 / 191
+Verifier Changes     2
+Proof Strength       L3 / STRONG
+Promotion            CRASH-CONSISTENT / SAFE
+                     ✓ PROVEN
 ```
 
-Then inspect the durable capsule or recover unchanged collateral:
+For lower isolation, `--runtime local` runs the agent directly on the host
+with observation and recovery, not a sandbox.
 
-```bash
-agentdiff inspect <run-id>
-agentdiff verify <run-id>
-agentdiff rollback <run-id> --safe-only
-```
-
-[Run the reproducible five-minute example](https://kam6l.github.io/agentdiff/docs/quickstart/)
+[Run the reproducible example](https://kam6l.github.io/agentdiff/docs/quickstart/)
 
 ## How it works
 
 | Stage | Result |
 |---|---|
-| **Capture** | No-follow before-state manifest and bounded recovery backups |
-| **Execute** | Exact argv, exit status, owned-process evidence, and machine-wide port observations |
-| **Evaluate** | `allow` / `review` / `deny` decisions, rule provenance, warnings, and a 0-100 score |
-| **Recover** | Exact post-state conflict checks before eligible collateral is changed |
+| **Isolate** | Docker private workspace (never a writable host repo) or observed local run |
+| **Observe** | No-follow before/after manifests, live hybrid safety watcher, owned-process and port evidence |
+| **Control** | Deterministic `allow` / `review` / `deny` policy plus budget enforcement |
+| **Analyze** | Immediate and future blast radius stay separate |
+| **Prove** | Clean-room reproduction with trusted baseline + patched verification |
+| **Promote** | Write-ahead journal, crash-consistent recovery, workspace lease |
+| **Evidence** | Tamper-evident sealed capsules (spec v2, v1 still verifiable) |
 
 ## Feature status
 
 | Status | Surface |
 |---|---|
-| **Beta** | Local transactions, policy, capsules, verification, scoring, and regular-file recovery (tested on Python 3.12-3.14) |
-| **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, and LangChain callback |
-| **Planned** | PyPI/binary releases, authenticated evidence, telemetry export, and a maintained hosted sandbox integration |
+| **Beta** | Transactions, policy, blast radius, capsules, clean-room proof, baseline verifier, promotion gate with crash recovery, and Docker/local runtimes (tested on Python 3.12-3.14, Linux/macOS/Windows) |
+| **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, LangChain callback, content-addressed object store (spec-v3 migration foundation) |
+| **Planned** | PyPI/binary releases, authenticated (signed) capsules, capsule export/import CLI, hosted dashboard, maintained hosted sandbox integration |
 
-There is no HTTP server, hosted dashboard, Docker backend, bundled sandbox, or claimed PyPI release today.
+Capsule checksums are **tamper-evident, not authenticated**: they detect
+accidental or modest modification but an attacker who can rewrite the whole
+capsule can produce a new self-consistent one. Signing remains future work.
+There is no HTTP server, hosted dashboard, or claimed PyPI release today.
 
 ## CLI
 
 | Command | Purpose |
 |---|---|
-| `agentdiff run -- <cmd>` | Wrap an explicit argv in a transaction |
-| `agentdiff runs` / `inspect` / `verify` | Find and validate local evidence capsules |
+| `agentdiff run -- <cmd>` | Wrap an explicit argv in a transaction (`--runtime docker` for isolation) |
+| `agentdiff runs` / `inspect` / `verify` | Find, inspect, and validate evidence capsules |
+| `agentdiff prove <id>` | Clean-room reproduction + trusted baseline/patched verification |
+| `agentdiff promote <id> [--dry-run] [--safe-only]` | Crash-consistent, proof-gated promotion |
 | `agentdiff rollback <id> --safe-only` | Recover eligible `review` and `deny` changes |
 | `agentdiff cleanup <id>` | Signal exact PID/create-time identities recorded for a run |
 | `agentdiff doctor` | Report implemented capabilities and limits |
@@ -129,7 +157,20 @@ agentdiff cortex advise <run-id>
 
 ## Trust boundary
 
-AgentDiff records symlinks without traversing them, redacts common secret-bearing values, verifies backups and capsule checksums, and identifies processes by PID plus creation time. It does **not** authenticate a capsule against an attacker who can replace the whole directory, attribute machine-wide port changes to one process, or undo APIs, databases, network effects, hardlinks, symlinks, and unbacked files.
+AgentDiff never trusts the agent's explanation, environment, verifier, or
+generated state. It observes independent filesystem state, reproduces patches
+with trusted pre-run verification commands, and promotes only when evidence
+supports it. Promotion recovery fails closed when host state is ambiguous or
+the journal is corrupt, and the workspace lease never deletes its lock file
+(the OS lock itself is released instead), so concurrent promotions cannot
+both hold the lock.
+
+It does **not** authenticate a capsule against an attacker who can replace
+the whole directory, attribute machine-wide port changes to one process, or
+undo APIs, databases, network effects, hardlinks, symlinks, and unbacked
+files. Cortex (the experimental LLM surface) can read verified evidence and
+generate advice but never decides policy, proof, blast radius, or promotion
+outcomes.
 
 Read the [runtime model](https://kam6l.github.io/agentdiff/docs/concepts/runtime/), [recovery guarantees](https://kam6l.github.io/agentdiff/docs/concepts/recovery/), and [security limits](https://kam6l.github.io/agentdiff/docs/trust/).
 

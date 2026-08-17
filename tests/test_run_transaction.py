@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from agentdiff.policy import Policy, PolicyAction, load_policy
-from agentdiff.runtime import OwnedProcess, PortObservation, RuntimeResult
+from agentdiff.runtime import (
+    OwnedProcess,
+    PortObservation,
+    RuntimeCapabilities,
+    RuntimeControlLevel,
+    RuntimeResult,
+)
 from agentdiff.transaction import AgentRunTransaction, RollbackEngine, RunStore
 
 
@@ -32,6 +38,30 @@ def _policy(*, allow: list[str], deny: list[str]) -> Policy:
 
 def test_missing_cleanup_report_is_scored_as_residual_process_risk(tmp_path: Path) -> None:
     class RuntimeWithoutCleanup:
+        @property
+        def capabilities(self):
+            return RuntimeCapabilities(
+                backend="test-no-cleanup",
+                filesystem=RuntimeControlLevel.OBSERVED,
+                host_repository=RuntimeControlLevel.OBSERVED,
+                network=RuntimeControlLevel.UNCONTROLLED,
+                processes=RuntimeControlLevel.OBSERVED,
+                resources=RuntimeControlLevel.UNCONTROLLED,
+                privileges=RuntimeControlLevel.UNCONTROLLED,
+                private_workspace=False,
+                supports_live_safety=True,
+                supports_source_snapshot=False,
+            )
+
+        def configure_source(self, source):
+            return None
+
+        def configure_safety(self, _watcher):
+            return None
+
+        def close(self):
+            return None
+
         def run(self, argv, **_kwargs):
             return RuntimeResult(
                 argv=tuple(argv),

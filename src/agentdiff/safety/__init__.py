@@ -2,7 +2,7 @@
 
 from .controller import SafetyController
 from .models import ControlLevel, SafetyEvent, SafetyReport
-from .watcher import HybridSafetyWatcher, WatcherStats
+from .watcher import HybridSafetyWatcher, WatcherStats, WatcherStatus
 
 __all__ = [
     "ControlLevel",
@@ -11,4 +11,5 @@ __all__ = [
     "SafetyEvent",
     "SafetyReport",
     "WatcherStats",
+    "WatcherStatus",
 ]

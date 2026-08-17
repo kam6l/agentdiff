@@ -1,11 +1,11 @@
 ---
 title: Python API
-description: Implemented Python interfaces for AgentDiff 0.1.0.
+description: Implemented Python interfaces for AgentDiff 0.2.x.
 ---
 
 # Python API
 
-This page lists the implemented `0.1.0` interfaces. The transaction API is **Beta**; the MCP hook and evaluator integrations are **Experimental**.
+This page lists the implemented `0.2.x` interfaces. The transaction API is **Beta**; the MCP hook and evaluator integrations are **Experimental**.
 
 ## Run a transaction
 
@@ -103,4 +103,4 @@ decision = hook.authorize("filesystem.write_file", {"path": "src/app.py"})
 | `agentdiff.cortex` | Experimental evidence memory, skill-card generation, provider routing, and remediation advice |
 | `agentdiff.integrations` | MCP hook plus legacy evaluator session helpers |
 
-There is no `AgentDiffRuntime`, async runtime, HTTP server, `serve` command, or `__version_info__` attribute in `0.1.0`.
+There is no `AgentDiffRuntime`, async runtime, HTTP server, `serve` command, or `__version_info__` attribute in `0.2.x`.

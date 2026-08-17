@@ -101,6 +101,28 @@ Rollback is not guaranteed for:
 
 Use version control, disposable workspaces, and real sandboxing alongside AgentDiff for high-risk runs.
 
+### Promotion gate
+
+Promotion applies only proof-PROVEN, policy-selected regular-file changes to the real repository. Its core invariants:
+
+- the workspace lease is an OS-level advisory lock on a **persistent** lock file that is never unlinked, so concurrent AgentDiff promotions cannot both hold the lease (the lock coordinates AgentDiff-aware processes only, not arbitrary external writers);
+- every filesystem mutation is preceded by a persisted write-ahead journal entry (`APPLY_INTENT`), followed by post-state verification and a persisted `APPLIED` entry;
+- recovery treats the journal as untrusted input: every path is validated (normalized, below the root and the approved backup directory, no symlink parents, no AgentDiff-internal targets), backups are re-verified by SHA-256/size before restore, and restore writes through an fsynced temp so a swapped backup can never be moved into the tree;
+- a corrupt journal is **not** the same as no journal — promotion fails closed (`PromotionRecoveryError`) whenever recovery state cannot be established;
+- recovery fails closed on ambiguous host state and never overwrites legitimate concurrent host edits; and
+- proof must be PROVEN and bound to the same patch digest and immutable manifest before promotion is allowed.
+
+Promotion is not atomic across files: it is crash-consistent (recoverable to the recorded base after any crash point), not an all-or-nothing transaction. Recovery restores content and mode where the platform permits; it cannot restore unbacked external effects.
+
+### Clean-room proof
+
+Proof replays the sealed base-plus-patch workspace in a fresh container using a verification plan whose commands come only from trusted pre-run evidence (explicit policy, sealed pre-run repository state, or conservative defaults). It runs two verifications:
+
+- **patched verification** — the complete patched project tests; and
+- **baseline verification** — the pre-run verifier files (tests, fixtures, runner config, manifests, lockfiles, CI workflows) restored over the patched product code, so an agent that modified the tests cannot silently weaken the verifier.
+
+When verifier-related files were modified and the baseline cannot confirm the patched run, the verdict is NOT_PROVEN. Proof-strength metadata (L0-L4) is explanatory; the PROVEN/NOT_PROVEN verdict is deterministic and never an LLM decision. Capsule checksums are tamper-evident, not authenticated: an attacker able to rewrite the entire capsule can produce a new self-consistent one, and signing remains future work.
+
 ## Safer operating guidance
 
 1. Run agents in an unprivileged disposable workspace.
@@ -115,4 +137,4 @@ Use version control, disposable workspaces, and real sandboxing alongside AgentD
 
 ## Security testing
 
-Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, and post-run divergence. Pull requests run CodeQL, Bandit, `pip-audit`, Dependency Review, cross-platform tests, and package validation.
+Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, and post-run divergence. Promotion changes should include adversarial crash/fault-injection coverage (corrupt journals, path traversal, backup symlink/hardlink, crash at every write-ahead transition, ambiguous recovery). Pull requests run CodeQL, Bandit, `pip-audit`, Dependency Review, cross-platform tests, and package validation.
