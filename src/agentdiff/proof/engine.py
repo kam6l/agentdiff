@@ -14,7 +14,7 @@ from agentdiff.transaction.store import RunStore
 from .environment import DockerProofEnvironment
 from .hidden_state import hidden_state_result
 from .models import ProofPhaseResult, ProofResult, ProofVerdict
-from .verification import select_verification_plan
+from .plan import select_trusted_verification_plan
 
 EnvironmentFactory = Callable[..., Any]
 
@@ -65,9 +65,16 @@ class ProofEngine:
             workspace = Path(temporary) / "workspace"
             workspace.mkdir(mode=0o700)
             try:
+                # 1. Materialize base source first
                 bundle.materialize_source(workspace)
+                # 2. Select trusted verification plan from base state + patch analysis
+                plan = select_trusted_verification_plan(workspace, policy, patch_bundle=bundle)
+                if not plan.trusted:
+                    reasons.append(f"untrusted verification plan: {plan.reason}")
+
+                # 3. Apply patch on top of base
                 bundle.apply(workspace)
-                plan = select_verification_plan(workspace, policy)
+
                 environment = self.environment_factory(
                     workspace=workspace,
                     image=plan.image,
@@ -78,6 +85,9 @@ class ProofEngine:
                     environment_payload["verification_plan"] = {
                         "schema_version": 1,
                         "source": plan.source,
+                        "trusted": plan.trusted,
+                        "plan_digest": plan.plan_digest,
+                        "tampered_files": list(plan.tampered_files),
                         "setup": [redact_argv(command) for command in plan.setup],
                         "build": [redact_argv(command) for command in plan.build],
                         "tests": [redact_argv(command) for command in plan.tests],
@@ -124,6 +134,7 @@ class ProofEngine:
             and clean_environment == "PASS"
             and all_phases_pass
             and has_test_phase
+            and plan.trusted
             and not reasons
         )
         hidden_state = hidden_state_result(
@@ -148,6 +159,9 @@ class ProofEngine:
             immutable_manifest_sha256=self.store.immutable_manifest_sha256(),
             phases=tuple(phases),
             reasons=tuple(dict.fromkeys(reasons)),
+            verification_source=plan.source,
+            verification_digest=plan.plan_digest,
+            trusted_plan=plan.trusted,
         )
         self.store.write_json_path("proof/environment.json", environment_payload)
         self.store.write_json_path("proof/result.json", proof.to_dict())

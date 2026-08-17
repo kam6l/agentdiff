@@ -10,6 +10,7 @@ import hashlib
 import os
 import stat as stat_module
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
@@ -17,6 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from .redaction import fingerprint
+
+warnings.warn(
+    "agentdiff.diff_engine is deprecated and will be removed in a future release. "
+    "Use agentdiff.state.FilesystemScanner and diff_manifests instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class DiffType(Enum):

@@ -83,6 +83,8 @@ class SafetyController:
         return self.report.terminated
 
     def _observe_filesystem(self, root: Path, *, runtime_active: bool) -> None:
+        if self.policy.version < 2:
+            return
         try:
             current = FilesystemScanner(
                 root,
@@ -138,6 +140,8 @@ class SafetyController:
         runtime_active: bool,
     ) -> None:
         if limit is None or self.report.terminated:
+            return
+        if self.policy.version < 2:
             return
         reached = observed > 0 if limit == 0 else observed >= limit
         if reached:

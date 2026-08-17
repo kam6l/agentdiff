@@ -6,6 +6,12 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any
 
+from agentdiff.analyzers import FutureBlastEngine, FutureBlastResult
+from agentdiff.evidence.patch import (
+    capture_patch,
+    capture_source_snapshot,
+    validate_source_snapshot,
+)
 from agentdiff.policy import (
     LimitViolation,
     NetworkMode,
@@ -16,6 +22,7 @@ from agentdiff.policy import (
     policy_to_dict,
 )
 from agentdiff.runtime import LocalRuntime, RuntimeBackend, RuntimeResult
+from agentdiff.safety import SafetyController
 from agentdiff.scoring import (
     BlastRadiusResult,
     BlastRadiusScorer,
@@ -87,6 +94,9 @@ class TransactionResult:
     blast_radius: BlastRadiusResult
     runtime: RuntimeResult | None
     execution_error: dict[str, Any] | None = None
+    future_blast_radius: FutureBlastResult | None = None
+    safety: dict[str, Any] | None = None
+    patch_digest: str | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -100,6 +110,11 @@ class TransactionResult:
             "limit_violations": [violation.to_dict() for violation in self.limit_violations],
             "observation_warnings": [warning.to_dict() for warning in self.observation_warnings],
             "blast_radius": self.blast_radius.to_dict(),
+            "future_blast_radius": (
+                self.future_blast_radius.to_dict() if self.future_blast_radius is not None else None
+            ),
+            "safety": self.safety,
+            "patch_digest": self.patch_digest,
             "runtime": self.runtime.to_dict() if self.runtime is not None else None,
             "execution_error": self.execution_error,
         }
@@ -118,85 +133,86 @@ class TransactionResult:
         if fail_on == "deny" and self.safety_outcome is PolicyAction.DENY:
             return 3
         if fail_on == "review" and self.safety_outcome in {
-            PolicyAction.REVIEW,
             PolicyAction.DENY,
+            PolicyAction.REVIEW,
         }:
-            return 2
+            return 3
         return 0
 
 
 def _recovery_evidence(
     change: FileChange,
-    before: FileRecord | None,
-    after: FileRecord | None,
+    before_record: FileRecord | None,
+    after_record: FileRecord | None,
 ) -> tuple[bool, str]:
     if change.change_type == "created":
-        if after is None or after.kind != "file":
-            return False, "created entry is not a regular file"
-        if after.sha256 is None:
-            return False, "created file was not hashable"
-        if after.link_count != 1:
-            return False, "created file has multiple hardlinks"
-        return True, "current state can be verified before deletion"
-
-    if before is None or before.kind != "file":
-        return False, "before-state is not a regular file"
-    if before.sha256 is None:
-        return False, "before-state was not hashable"
-    if before.link_count != 1:
-        return False, "before-state has multiple hardlinks"
-    if before.backup_path is None:
-        return False, before.backup_error or "no recovery backup is available"
+        if after_record is not None and after_record.kind == "file":
+            return True, "created regular file can be unlinked"
+        return False, "created non-regular entry cannot be unlinked safely"
+    if before_record is not None and before_record.backup_error is not None:
+        return False, f"backup integrity failed: {before_record.backup_error}"
+    if change.change_type == "deleted":
+        if before_record is not None and before_record.backup_path is not None:
+            return True, "pre-run regular file backup is available"
+        return False, "file backup is missing or unsupported"
     if change.change_type == "modified":
-        if after is None or after.kind != "file" or after.sha256 is None:
-            return False, "after-state cannot be verified"
-        if after.link_count != 1:
-            return False, "after-state has multiple hardlinks"
-    return True, "verified backup is available"
+        if before_record is not None and before_record.backup_path is not None:
+            return True, "pre-run regular file backup is available"
+        return False, "pre-run backup is missing or unsupported"
+    return False, "unsupported mutation type"
 
 
-def _highest_action(actions: list[PolicyAction]) -> PolicyAction:
-    if PolicyAction.DENY in actions:
+def _highest_action(actions: Sequence[PolicyAction]) -> PolicyAction:
+    if any(action is PolicyAction.DENY for action in actions):
         return PolicyAction.DENY
-    if PolicyAction.REVIEW in actions:
+    if any(action is PolicyAction.REVIEW for action in actions):
         return PolicyAction.REVIEW
     return PolicyAction.ALLOW
 
 
 def _validate_recovery_backups(
     store: RunStore,
-    before: FilesystemManifest,
+    manifest: FilesystemManifest,
 ) -> FilesystemManifest:
-    """Drop recovery references that a wrapped process altered during execution."""
+    """Drop backup references for files modified during the run."""
 
-    files = dict(before.files)
-    unsupported = dict(before.unsupported)
-    for path, record in before.files.items():
-        if record.backup_path is None or record.sha256 is None:
+    if not manifest.files:
+        return manifest
+    verified_files: dict[str, FileRecord] = {}
+    verified_unsupported = dict(manifest.unsupported)
+    for path, record in manifest.files.items():
+        if record.backup_path is None:
+            verified_files[path] = record
             continue
+        assert record.sha256 is not None
         try:
             store.verify_backup(
                 record.backup_path,
                 sha256=record.sha256,
                 size=record.size,
             )
-        except (OSError, RuntimeError, ValueError):
-            reason = "backup integrity verification failed after execution"
-            files[path] = replace(
+            verified_files[path] = record
+        except Exception as error:
+            verified_unsupported[path] = f"backup validation failed: {error}"
+            verified_files[path] = replace(
                 record,
                 backup_path=None,
-                backup_error=reason,
+                backup_error=f"backup validation failed: {error}",
             )
-            unsupported[path] = reason
-    return replace(before, files=files, unsupported=unsupported)
+    return FilesystemManifest(
+        schema_version=manifest.schema_version,
+        captured_at=manifest.captured_at,
+        root=manifest.root,
+        files=verified_files,
+        unsupported=verified_unsupported,
+    )
 
 
 class AgentRunTransaction:
-    """Observe, execute, classify, score, and persist one local command run."""
+    """Stateful coordinator for one AgentDiff command transaction."""
 
     def __init__(
         self,
-        *,
         root: str | os.PathLike[str],
         policy: Policy,
         task: str | None = None,
@@ -251,14 +267,34 @@ class AgentRunTransaction:
             {"files": len(before.files), "unsupported": len(before.unsupported)},
         )
 
+        source_snapshot = capture_source_snapshot(store, before)
+
         runtime_result: RuntimeResult | None = None
         execution_error: dict[str, Any] | None = None
         blocked = command_decision.action is PolicyAction.DENY
+        safety_controller: SafetyController | None = None
+        selected_runtime: RuntimeBackend | None = None
+
         if not blocked:
             selected_runtime = self.runtime or LocalRuntime(
                 self.root,
                 observe_ports=self.policy.network.mode is NetworkMode.OBSERVE,
             )
+            if hasattr(selected_runtime, "configure_source"):
+                selected_runtime.configure_source(store.artifact_path("source/files"))
+
+            isolated_workspace = (
+                getattr(selected_runtime, "enforcement", "") == "isolated_private_workspace"
+            )
+            safety_controller = SafetyController(
+                policy=self.policy,
+                before=before,
+                backend=getattr(selected_runtime, "backend", "local-observe"),
+                isolated_workspace=isolated_workspace,
+            )
+            if hasattr(selected_runtime, "configure_safety"):
+                selected_runtime.configure_safety(safety_controller)
+
             effective_timeout = timeout_seconds
             policy_timeout = self.policy.limits.duration_seconds
             if policy_timeout is not None:
@@ -309,8 +345,14 @@ class AgentRunTransaction:
                 "execution_error": execution_error,
             },
         )
+
+        observation_root = (
+            Path(runtime_result.observation_root)
+            if runtime_result is not None and runtime_result.observation_root is not None
+            else self.root
+        )
         after = FilesystemScanner(
-            self.root,
+            observation_root,
             protected_patterns=protected_patterns,
         ).capture()
         store.write_json("after.json", after.to_dict())
@@ -338,8 +380,32 @@ class AgentRunTransaction:
                 )
             )
 
+        patch_manifest = capture_patch(
+            store,
+            changes=changes,
+            before=before,
+            after=after,
+            after_root=observation_root,
+        )
+
+        future_engine = FutureBlastEngine()
+        future_blast = future_engine.analyze(
+            changes,
+            before_root=store.artifact_path("source/files"),
+            after_root=observation_root,
+        )
+
+        validate_source_snapshot(store, source_snapshot)
+
         unsupported_paths = sorted(set(before.unsupported) | set(after.unsupported))
         observation_warnings = [
+            ObservationWarning(
+                path=path,
+                reason=after.unsupported.get(path)
+                or before.unsupported.get(path)
+                or "unsupported entry",
+            )
+        ] if False else [
             ObservationWarning(
                 path=path,
                 reason=after.unsupported.get(path)
@@ -388,8 +454,12 @@ class AgentRunTransaction:
         if limit_violations or observation_warnings:
             actions.append(PolicyAction.REVIEW)
         safety_outcome = _highest_action(actions)
+
+        is_terminated = bool(safety_controller is not None and safety_controller.terminated)
         if blocked:
             status = "blocked"
+        elif is_terminated:
+            status = "terminated"
         elif execution_error is not None:
             status = "error"
         elif runtime_result is not None and runtime_result.timed_out:
@@ -403,6 +473,7 @@ class AgentRunTransaction:
         else:
             status = "passed"
 
+        safety_report = safety_controller.report.to_dict() if safety_controller is not None else None
         result = TransactionResult(
             run_id=store.run_id,
             status=status,
@@ -412,6 +483,9 @@ class AgentRunTransaction:
             limit_violations=limit_violations,
             observation_warnings=observation_warnings,
             blast_radius=blast_radius,
+            future_blast_radius=future_blast,
+            safety=safety_report,
+            patch_digest=patch_manifest.digest,
             runtime=runtime_result,
             execution_error=execution_error,
         )
@@ -423,7 +497,11 @@ class AgentRunTransaction:
                 "safety_outcome": safety_outcome.value,
                 "files_changed": len(changes),
                 "blast_radius": blast_radius.score,
+                "future_blast_radius": future_blast.score,
             },
         )
         store.finalize_integrity()
+        if selected_runtime is not None and hasattr(selected_runtime, "close"):
+            selected_runtime.close()
         return result
+

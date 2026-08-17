@@ -7,6 +7,7 @@ quantitative evaluation metrics and actionable reports.
 
 import json
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -21,6 +22,13 @@ from .diff_engine import (
     FilesystemSnapshot,
 )
 from .trajectory import TrajectoryRecord
+
+warnings.warn(
+    "agentdiff.evaluator is deprecated and will be removed in a future release. "
+    "Use agentdiff.scoring and agentdiff.analyzers instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class SideEffectSeverity(Enum):

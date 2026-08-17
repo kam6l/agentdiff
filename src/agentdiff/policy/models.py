@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-POLICY_SCHEMA_VERSION = 1
+POLICY_SCHEMA_VERSION = 2
+SUPPORTED_POLICY_VERSIONS = frozenset({1, 2})
+
 BLAST_RADIUS_WEIGHT_KEYS = frozenset(
     {
         "review_created",
@@ -98,8 +100,20 @@ class ScoringPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class ProofPolicy:
+    """Deterministic clean-room proof verification configuration."""
+
+    image: str | None = None
+    network: bool = False
+    setup: tuple[tuple[str, ...], ...] = ()
+    build: tuple[tuple[str, ...], ...] = ()
+    tests: tuple[tuple[str, ...], ...] = ()
+    trusted_digests: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class Policy:
-    """AgentDiff policy schema version 1."""
+    """AgentDiff policy schema versions 1 and 2."""
 
     version: int = POLICY_SCHEMA_VERSION
     filesystem: FilesystemPolicy = field(default_factory=FilesystemPolicy)
@@ -108,6 +122,7 @@ class Policy:
     limits: LimitsPolicy = field(default_factory=LimitsPolicy)
     rollback: RollbackPolicy = field(default_factory=RollbackPolicy)
     scoring: ScoringPolicy = field(default_factory=ScoringPolicy)
+    proof: ProofPolicy = field(default_factory=ProofPolicy)
 
 
 PolicyConfig = Policy

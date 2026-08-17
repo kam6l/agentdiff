@@ -176,4 +176,13 @@ def policy_to_dict(policy: Policy) -> dict[str, Any]:
             "max_backup_file_mb": policy.rollback.max_backup_file_mb,
         },
         "scoring": {"weights": dict(policy.scoring.weights)},
+        "proof": {
+            "image": policy.proof.image,
+            "network": policy.proof.network,
+            "setup": [list(cmd) for cmd in policy.proof.setup],
+            "build": [list(cmd) for cmd in policy.proof.build],
+            "tests": [list(cmd) for cmd in policy.proof.tests],
+            "trusted_digests": list(policy.proof.trusted_digests),
+        },
     }
+

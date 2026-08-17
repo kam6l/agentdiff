@@ -3,12 +3,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import IO, TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from agentdiff.redaction import redact_argv
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+
+
+class RuntimeControlLevel(str, Enum):
+    """Honest classification of runtime control enforcement."""
+
+    UNCONTROLLED = "uncontrolled"
+    OBSERVED = "observed"
+    SANDBOXED = "sandboxed"
+    BLOCKED = "blocked"
+
+
+@dataclass(frozen=True)
+class RuntimeCapability:
+    """One capability boundary and its active control level."""
+
+    boundary: str
+    control: RuntimeControlLevel
+    mechanism: str
+    description: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "boundary": self.boundary,
+            "control": self.control.value if hasattr(self.control, "value") else str(self.control),
+            "mechanism": self.mechanism,
+            "description": self.description,
+        }
 
 
 @dataclass(frozen=True)
@@ -127,10 +155,17 @@ class RuntimeResult:
     backend: str = "local-observe"
     enforcement: str = "observation"
     wrapper_argv: tuple[str, ...] | None = None
+    capabilities: tuple[RuntimeCapability, ...] = ()
+    safety: dict[str, Any] | None = None
+    container_id: str | None = None
+    image: str | None = None
+    image_digest: str | None = None
+    runtime_config: dict[str, Any] | None = None
+    observation_root: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return versioned, JSON-compatible runtime evidence."""
-        return {
+        data: dict[str, Any] = {
             "schema_version": 1,
             "argv": redact_argv(self.argv),
             "cwd": self.cwd,
@@ -146,6 +181,21 @@ class RuntimeResult:
                 redact_argv(self.wrapper_argv) if self.wrapper_argv is not None else None
             ),
         }
+        if self.capabilities:
+            data["capabilities"] = [cap.to_dict() for cap in self.capabilities]
+        if self.safety is not None:
+            data["safety"] = self.safety
+        if self.container_id is not None:
+            data["container_id"] = self.container_id
+        if self.image is not None:
+            data["image"] = self.image
+        if self.image_digest is not None:
+            data["image_digest"] = self.image_digest
+        if self.runtime_config is not None:
+            data["runtime_config"] = self.runtime_config
+        if self.observation_root is not None:
+            data["observation_root"] = self.observation_root
+        return data
 
 
 @runtime_checkable

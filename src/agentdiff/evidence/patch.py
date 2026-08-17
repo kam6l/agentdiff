@@ -307,6 +307,9 @@ class PatchBundle:
         if self.manifest.run_id != store.run_id:
             raise ValueError("patch manifest run id mismatch")
 
+    def entry_path(self, entry: PatchEntry) -> Path:
+        return self.store.artifact_path(f"patch/files/{entry.path}")
+
     def materialize_source(self, destination: str | Path) -> None:
         target_root = Path(destination).resolve(strict=True)
         raw = self.store.read_json_path("source/manifest.json")

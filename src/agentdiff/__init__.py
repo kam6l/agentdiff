@@ -1,11 +1,11 @@
 """AgentDiff runtime evidence, deterministic policy, and selective recovery.
 
-The transaction API is the primary product surface. The original trajectory
-evaluation API remains available for compatibility.
+The transaction API and trust pipeline are the primary product surfaces.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
+from .analyzers import FutureBlastEngine, FutureBlastResult
 from .cortex import (
     AgentMemoryStore,
     CompressedContextCard,
@@ -19,6 +19,7 @@ from .cortex import (
     SkillCardGenerator,
     SkillContract,
 )
+from .evidence import CapsuleReader, PatchBundle, PatchEntry, PatchManifest
 from .integrations import (
     AgentDiffConfig,
     AgentDiffSession,
@@ -32,8 +33,17 @@ from .policy import (
     PolicyAction,
     PolicyDecision,
     PolicyEngine,
+    ProofPolicy,
     load_policy,
     load_policy_file,
+)
+from .proof import ProofEngine, ProofPhaseResult, ProofResult, ProofVerdict
+from .promotion import (
+    PromotionEngine,
+    PromotionPlan,
+    PromotionRecovery,
+    PromotionReport,
+    WorkspaceLease,
 )
 from .providers import (
     AIProvider,
@@ -45,6 +55,16 @@ from .providers import (
     ProviderResponse,
     create_provider,
 )
+from .runtime import (
+    DockerRuntime,
+    LocalRuntime,
+    RuntimeBackend,
+    RuntimeCapability,
+    RuntimeControlLevel,
+    RuntimeResult,
+    WorkspaceMaterializer,
+)
+from .safety import ControlLevel, HybridSafetyWatcher, SafetyController, SafetyReport
 from .scoring import (
     BlastRadiusResult,
     BlastRadiusScorer,
@@ -52,7 +72,7 @@ from .scoring import (
     MutationRisk,
     RiskLevel,
 )
-from .transaction import AgentRunTransaction, RollbackEngine, RunInspector, TransactionResult
+from .transaction import AgentRunTransaction, RollbackEngine, RunInspector, RunStore, TransactionResult
 
 __all__ = [
     "AIProvider",
@@ -65,21 +85,40 @@ __all__ = [
     "BlastRadiusResult",
     "BlastRadiusScorer",
     "BlastRadiusWeights",
+    "CapsuleReader",
     "CompressedContextCard",
     "ContextCompressor",
     "ContextPacker",
+    "ControlLevel",
     "CortexResult",
     "CortexRouter",
+    "DockerRuntime",
+    "FutureBlastEngine",
+    "FutureBlastResult",
+    "HybridSafetyWatcher",
+    "LocalRuntime",
     "MCPPolicyHook",
     "MemoryHit",
     "MutationRisk",
     "OllamaChatProvider",
     "OllamaEmbeddingProvider",
     "OpenAIResponsesProvider",
+    "PatchBundle",
+    "PatchEntry",
+    "PatchManifest",
     "Policy",
     "PolicyAction",
     "PolicyDecision",
     "PolicyEngine",
+    "ProofEngine",
+    "ProofPhaseResult",
+    "ProofPolicy",
+    "ProofResult",
+    "ProofVerdict",
+    "PromotionEngine",
+    "PromotionPlan",
+    "PromotionRecovery",
+    "PromotionReport",
     "ProviderError",
     "ProviderResponse",
     "RemediationAdvisor",
@@ -87,11 +126,20 @@ __all__ = [
     "RiskLevel",
     "RollbackEngine",
     "RunInspector",
+    "RunStore",
+    "RuntimeBackend",
+    "RuntimeCapability",
+    "RuntimeControlLevel",
+    "RuntimeResult",
+    "SafetyController",
+    "SafetyReport",
     "SkillCardGenerator",
     "SkillContract",
     "ToolCallBlockedError",
     "ToolCallDecision",
     "TransactionResult",
+    "WorkspaceLease",
+    "WorkspaceMaterializer",
     "create_provider",
     "load_policy",
     "load_policy_file",
