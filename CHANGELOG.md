@@ -2,15 +2,23 @@
 
 AgentDiff is pre-release software. APIs and artifact schemas may change before the first stable release.
 
-## Unreleased
+## 0.2.0
 
 ### Added
 
-- Outcome-first CLI summaries with expected, unexpected, and protected mutation counts.
-- `python -m agentdiff` as a conventional CLI entry point.
-- Python 3.12 and 3.13 support alongside Python 3.14.
-- Built-site validation for internal links, anchors, scripts, stylesheets, and images.
-- Explicit Beta, Experimental, and Planned feature labels.
+- **Proof Trust Provenance (P0 Security)**: Base-snapshot verification plan auto-discovery with deterministic tamper rejection when patches modify build or test configuration files (`package.json`, `pyproject.toml`, `conftest.py`, `Makefile`, etc.) without an explicit policy override.
+- **Crash-Consistent Promotion Gate**: Multi-file promotion with advisory workspace lease locking (`WorkspaceLease`), write-ahead transaction logging (`PromotionJournal`), two-phase staging with `fsync` validation (`PromotionStager`), and automatic crash recovery (`PromotionRecovery`).
+- **Policy Schema v2**: Added first-class `proof:` section supporting container image, network mode, setup, build, and test command sequences.
+- **Capsule Spec v2 & Merkle Validation**: Structured integrity manifests, content-addressed blob references, deterministic Merkle root hashing, and backward compatibility with v1 flat capsules.
+- **Hybrid Safety Watcher**: Blends filesystem notification hints with deterministic snapshot validation and budget enforcement.
+- **High-Speed Workspace Materializer**: Fast copy-on-write / reflink / copy directory materializer for isolated container workspaces.
+
+### Changed
+
+- Deprecated legacy prototype modules (`agentdiff.diff_engine`, `agentdiff.evaluator`, `agentdiff.trajectory`) with `DeprecationWarning` notices pointing to `agentdiff.state`, `agentdiff.scoring`, `agentdiff.analyzers`, and `agentdiff.transaction`.
+- Exported all core Trust Pipeline engines directly in top-level `agentdiff` namespace.
+
+## 0.1.0
 
 ### Changed
 

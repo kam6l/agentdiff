@@ -8,6 +8,7 @@ for later evaluation and debugging.
 import json
 import time
 import uuid
+import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -16,6 +17,13 @@ from pathlib import Path
 from typing import Any
 
 from typing_extensions import Self
+
+warnings.warn(
+    "agentdiff.trajectory is deprecated and will be removed in a future release. "
+    "Use agentdiff.transaction.RunStore for structured run evidence and event logging.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class AgentFramework(Enum):
