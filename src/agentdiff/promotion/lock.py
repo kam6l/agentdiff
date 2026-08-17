@@ -6,6 +6,7 @@ import contextlib
 import json
 import os
 import platform
+import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -36,15 +37,14 @@ class WorkspaceLease:
             try:
                 flags = os.O_RDWR | os.O_CREAT
                 self._fd = os.open(str(self.lock_file), flags, 0o600)
-                if os.name == "nt":
+                if sys.platform == "win32":
                     import msvcrt
 
-                    # Lock 1 byte at position 0 in non-blocking mode
                     msvcrt.locking(self._fd, msvcrt.LK_NBLCK, 1)
                 else:
                     import fcntl
 
-                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
+                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
                 # Write lease metadata
                 metadata = {
@@ -74,7 +74,7 @@ class WorkspaceLease:
         """Release the advisory lock and clean up lease metadata."""
         if self._fd is not None:
             try:
-                if os.name == "nt":
+                if sys.platform == "win32":
                     import msvcrt
 
                     os.lseek(self._fd, 0, os.SEEK_SET)
@@ -84,7 +84,7 @@ class WorkspaceLease:
                     import fcntl
 
                     with contextlib.suppress(OSError):
-                        fcntl.flock(self._fd, fcntl.LOCK_UN)  # type: ignore[attr-defined]
+                        fcntl.flock(self._fd, fcntl.LOCK_UN)
 
                 os.close(self._fd)
             finally:

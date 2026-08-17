@@ -256,7 +256,11 @@ class LocalRuntime:
                     owned_pid == parent_pid and create_time >= owned_created
                     for owned_pid, owned_created in owned
                 )
-                if matching_parent:
+                matching_session = False
+                if os.name == "posix" and hasattr(os, "getsid"):
+                    with suppress(OSError):
+                        matching_session = os.getsid(pid) == root_pid
+                if matching_parent or matching_session:
                     owned.setdefault(
                         (pid, create_time),
                         OwnedProcess(
