@@ -149,8 +149,9 @@ class PromotionEngine:
             journal.persist()
 
             # 4. Atomic application phase
-            for journal_entry, planned in zip(journal.entries, ready):
+            for journal_entry, planned in zip(journal.entries, ready, strict=True):
                 patch_entry = entries_by_path[planned.path]
+
                 try:
                     action = self._apply_one(bundle, patch_entry)
                     journal_entry.applied = True

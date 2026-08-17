@@ -51,13 +51,17 @@ class PromotionStager:
 
         digest = hasher.hexdigest()
         if entry.result_sha256 is not None and digest != entry.result_sha256:
-            raise ValueError(f"staged digest mismatch for {entry.path}: expected {entry.result_sha256}, got {digest}")
+            msg = (
+                f"staged digest mismatch for {entry.path}: "
+                f"expected {entry.result_sha256}, got {digest}"
+            )
+            raise ValueError(msg)
 
         mode = entry.result_mode if entry.result_mode is not None else 0o644
-        try:
+        import contextlib
+
+        with contextlib.suppress(OSError):
             target_staged.chmod(stat.S_IMODE(mode))
-        except OSError:
-            pass
 
         return target_staged
 

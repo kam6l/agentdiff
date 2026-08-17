@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import socket
 import subprocess  # nosec B404
 import time
 from contextlib import suppress
@@ -23,6 +22,7 @@ from .base import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+
     from agentdiff.safety import SafetyController
 
 _TIMEOUT_RETURN_CODE = 124
@@ -149,33 +149,32 @@ class LocalRuntime:
             now = time.monotonic()
             elapsed = now - started
 
-            if self._safety_controller is not None:
-                if self._safety_controller.observe(
-                    root=self.root,
+            if self._safety_controller is not None and self._safety_controller.observe(
+                root=self.root,
+                duration_seconds=elapsed,
+                processes_spawned=len(owned),
+                runtime_active=True,
+            ):
+                evidence = tuple(owned.values())
+                self.cleanup(evidence, grace_period_seconds=0.2)
+                self._stop_direct_process(process)
+                after_ports, after_port_error = self._snapshot_ports()
+                return RuntimeResult(
+                    argv=command,
+                    cwd=str(self.root),
+                    returncode=125,
+                    timed_out=False,
                     duration_seconds=elapsed,
-                    processes_spawned=len(owned),
-                    runtime_active=True,
-                ):
-                    evidence = tuple(owned.values())
-                    self.cleanup(evidence, grace_period_seconds=0.2)
-                    self._stop_direct_process(process)
-                    after_ports, after_port_error = self._snapshot_ports()
-                    return RuntimeResult(
-                        argv=command,
-                        cwd=str(self.root),
-                        returncode=125,
-                        timed_out=False,
-                        duration_seconds=elapsed,
-                        owned_processes=evidence,
-                        cleanup=self.cleanup(evidence),
-                        safety=self._safety_controller.report.to_dict(),
-                        port_observation=self._port_observation(
-                            before_ports,
-                            after_ports,
-                            before_port_error,
-                            after_port_error,
-                        ),
-                    )
+                    owned_processes=evidence,
+                    cleanup=self.cleanup(evidence),
+                    safety=self._safety_controller.report.to_dict(),
+                    port_observation=self._port_observation(
+                        before_ports,
+                        after_ports,
+                        before_port_error,
+                        after_port_error,
+                    ),
+                )
 
             if deadline is not None and now >= deadline:
                 # Preserve the identities as evidence before cleanup changes process state.
@@ -253,14 +252,15 @@ class LocalRuntime:
                 pid = int(process.info["pid"])
                 parent_pid = process.info.get("ppid")
                 create_time = float(process.info["create_time"])
-                matching_parent = (
-                    parent_pid is not None
-                    and any(
-                        owned_pid == parent_pid and create_time >= owned_created
-                        for owned_pid, owned_created in owned
-                    )
+                matching_parent = parent_pid is not None and any(
+                    owned_pid == parent_pid and create_time >= owned_created
+                    for owned_pid, owned_created in owned
                 )
-                if matching_parent:
+                matching_session = False
+                if os.name == "posix" and hasattr(os, "getsid"):
+                    with suppress(OSError):
+                        matching_session = os.getsid(pid) == root_pid
+                if matching_parent or matching_session:
                     owned.setdefault(
                         (pid, create_time),
                         OwnedProcess(
@@ -324,10 +324,9 @@ class LocalRuntime:
 
         if signaled:
             wait_fn = getattr(psutil, "wait_procs", None)
-            gone: list[Any] = []
             alive: list[Any] = []
             if wait_fn is not None:
-                gone, alive = wait_fn([proc for _, proc in signaled], timeout=grace_period_seconds)
+                _gone, alive = wait_fn([proc for _, proc in signaled], timeout=grace_period_seconds)
             else:
                 deadline = time.monotonic() + max(0.0, grace_period_seconds)
                 while time.monotonic() < deadline:
@@ -343,10 +342,8 @@ class LocalRuntime:
             alive_set = set(alive)
             for identity, proc in signaled:
                 if proc in alive_set:
-                    try:
+                    with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                         proc.kill()
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
                     outcomes.append(CleanupOutcome(identity, "still_running"))
                 else:
                     outcomes.append(CleanupOutcome(identity, "terminated"))
@@ -406,8 +403,6 @@ class LocalRuntime:
             closed=closed,
             error=error,
         )
-
-
 
     def _stop_direct_process(self, process: subprocess.Popen[Any]) -> None:
         with suppress(OSError):

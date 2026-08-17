@@ -22,4 +22,3 @@ __all__ = [
     "capture_source_snapshot",
     "validate_source_snapshot",
 ]
-

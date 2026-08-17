@@ -277,21 +277,6 @@ body:not(:has(.ad-home)) .ad-doc-header {
   fill: currentColor;
 }
 
-[data-md-color-scheme="slate"] .ad-doc-theme-toggle .icon-moon {
-  display: none !important;
-}
-
-[data-md-color-scheme="slate"] .ad-doc-theme-toggle .icon-sun {
-  display: block !important;
-}
-
-[data-md-color-scheme="default"] .ad-doc-theme-toggle .icon-sun {
-  display: none !important;
-}
-
-[data-md-color-scheme="default"] .ad-doc-theme-toggle .icon-moon {
-  display: block !important;
-}
 
 .ad-doc-topnav {
   height: 48px;

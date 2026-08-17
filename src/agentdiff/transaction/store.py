@@ -356,7 +356,16 @@ class RunStore:
 
     def _discover_sealed_files(self) -> list[tuple[str, Path]]:
         self._ensure_run_dir_identity()
-        _EXTENSION_DIRS = frozenset({"proof", "promotion", "recovery", "staging", "backups", ".agentdiff"})
+        _EXTENSION_DIRS = frozenset(
+            {
+                "proof",
+                "promotion",
+                "recovery",
+                "staging",
+                "backups",
+                ".agentdiff",
+            }
+        )
         discovered: list[tuple[str, Path]] = []
         for directory, directory_names, file_names in os.walk(self.run_dir, followlinks=False):
             base = Path(directory)
@@ -370,7 +379,10 @@ class RunStore:
             for name in file_names:
                 path = base / name
                 relative = path.relative_to(self.run_dir).as_posix()
-                if relative in {"integrity.json", "integrity/manifest.json"} or relative in _MUTABLE_AFTER_SEAL:
+                if (
+                    relative in {"integrity.json", "integrity/manifest.json"}
+                    or relative in _MUTABLE_AFTER_SEAL
+                ):
                     continue
                 if name.startswith(".") and name.endswith(".tmp"):
                     continue
@@ -378,8 +390,8 @@ class RunStore:
                 if parts[0] in _EXTENSION_DIRS:
                     continue
                 discovered.append((relative, path))
-        return sorted(discovered)
 
+        return sorted(discovered)
 
     @staticmethod
     def _hash_regular_artifact(path: Path) -> tuple[str, int]:
@@ -715,7 +727,7 @@ class RunStore:
         issues: list[IntegrityIssue] = []
         try:
             manifest = self.read_json_path(f"{normalized_name}/integrity.json")
-        except Exception as error:
+        except (OSError, ValueError, TypeError) as error:
             return IntegrityReport(
                 present=True,
                 ok=False,
@@ -764,8 +776,17 @@ class RunStore:
             try:
                 digest, size = self._hash_regular_artifact(path)
                 checked += 1
-                if not isinstance(expected, dict) or expected.get("sha256") != digest or expected.get("size") != size:
+                if (
+                    not isinstance(expected, dict)
+                    or expected.get("sha256") != digest
+                    or expected.get("size") != size
+                ):
                     issues.append(IntegrityIssue(f"{name}/{filename}", "digest or size mismatch"))
-            except Exception as error:
+            except (OSError, ValueError, TypeError) as error:
                 issues.append(IntegrityIssue(f"{name}/{filename}", str(error)))
-        return IntegrityReport(present=True, ok=not issues, files_checked=checked, issues=tuple(issues))
+        return IntegrityReport(
+            present=True,
+            ok=not issues,
+            files_checked=checked,
+            issues=tuple(issues),
+        )

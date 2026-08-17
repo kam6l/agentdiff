@@ -56,7 +56,7 @@ class DockerProofEnvironment:
             user,
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=128m",
+            "/tmp:rw,noexec,nosuid,nodev,size=128m",  # nosec B108
             "--cap-drop",
             "ALL",
             "--security-opt",
@@ -144,15 +144,16 @@ class DockerProofEnvironment:
 
         def drain_output() -> None:
             nonlocal output_bytes
-            with process.stdout:
-                while chunk := process.stdout.read(64 * 1024):
-                    digest.update(chunk)
-                    output_bytes += len(chunk)
-                    remaining = _MAX_OUTPUT_BYTES - len(bounded)
-                    if remaining > 0:
-                        bounded.extend(chunk[:remaining])
-                    if output_bytes > _MAX_OUTPUT_BYTES:
-                        output_limit_reached.set()
+            if process.stdout is not None:
+                with process.stdout:
+                    while chunk := process.stdout.read(64 * 1024):
+                        digest.update(chunk)
+                        output_bytes += len(chunk)
+                        remaining = _MAX_OUTPUT_BYTES - len(bounded)
+                        if remaining > 0:
+                            bounded.extend(chunk[:remaining])
+                        if output_bytes > _MAX_OUTPUT_BYTES:
+                            output_limit_reached.set()
 
         reader = threading.Thread(target=drain_output, daemon=True)
         reader.start()

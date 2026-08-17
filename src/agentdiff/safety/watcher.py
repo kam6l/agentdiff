@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Callable
 
-from agentdiff.policy import Policy
-from agentdiff.state import FilesystemManifest
+if TYPE_CHECKING:
+    from agentdiff.policy import Policy
+    from agentdiff.state import FilesystemManifest
 
 from .controller import SafetyController
 
