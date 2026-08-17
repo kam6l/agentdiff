@@ -535,7 +535,7 @@ body:not(:has(.ad-home)) .md-sidebar--primary {
   position: fixed;
   inset: 112px auto 0 0;
   width: 276px;
-  height: calc(100vh - 112px);
+  height: calc(100vh - 112px) !important;
   padding: 20px 10px 48px 14px;
   background: var(--ad-doc-sidebar);
   border-right: 1px solid var(--ad-doc-line);
@@ -551,7 +551,11 @@ body:not(:has(.ad-home)) .md-sidebar--primary::-webkit-scrollbar {
 }
 
 body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__scrollwrap {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 100%;
   margin: 0;
+  overflow: visible !important;
   scrollbar-width: none;
 }
 
@@ -560,6 +564,7 @@ body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__scrollwrap::-webkit-s
 }
 
 body:not(:has(.ad-home)) .md-sidebar--primary .md-sidebar__inner {
+  height: auto !important;
   padding: 0;
 }
 
@@ -695,11 +700,13 @@ body:not(:has(.ad-home)) .md-sidebar--secondary {
   position: sticky;
   top: 42px;
   width: 216px;
-  height: auto;
+  height: auto !important;
   padding: 0;
 }
 
 body:not(:has(.ad-home)) .md-sidebar--secondary .md-sidebar__scrollwrap {
+  height: auto !important;
+  max-height: calc(100vh - 170px) !important;
   margin: 0;
   padding: 0;
 }
@@ -1436,7 +1443,7 @@ body:not(:has(.ad-home)) :focus-visible {
   body:not(:has(.ad-home)) .md-sidebar--primary {
     inset: 112px auto 0 0;
     width: min(320px, 86vw);
-    height: calc(100vh - 112px);
+    height: calc(100vh - 112px) !important;
     transform: translateX(-100%);
     transition: transform 180ms ease;
     box-shadow: 24px 0 60px rgba(0, 0, 0, 0.3);
