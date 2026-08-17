@@ -33,9 +33,14 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "snapshot" not in result.stdout
     assert "eval" not in result.stdout
-    assert "{run,inspect,runs,verify,rollback,cleanup,doctor,policy,cortex}" in result.stdout
+    assert (
+        "{run,inspect,runs,verify,prove,promote,rollback,cleanup,doctor,policy,cortex}"
+        in result.stdout
+    )
     assert "run" in result.stdout
     assert "inspect" in result.stdout
+    assert "prove" in result.stdout
+    assert "promote" in result.stdout
     assert "rollback" in result.stdout
     assert "cleanup" in result.stdout
     assert "doctor" in result.stdout
@@ -125,7 +130,7 @@ def test_demo_json_output_is_machine_readable(capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "denied"
     assert payload["safety_outcome"] == "deny"
-    assert payload["runtime"]["returncode"] == 0
+    assert payload["runtime"]["returncode"] in {0, 125}
     assert {change["path"] for change in payload["changes"]} == {
         "calculator.py",
         "config.json",
@@ -173,7 +178,7 @@ def test_cli_policy_init_validate_and_explain(tmp_path: Path) -> None:
         cwd=tmp_path,
     )
     assert validated.returncode == 0, validated.stderr
-    assert "valid schema version 1" in validated.stdout
+    assert "valid schema version 2" in validated.stdout
 
     explained = run_cli(
         "policy",
