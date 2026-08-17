@@ -68,10 +68,10 @@ class WorkspaceLease:
                 return
             except (BlockingIOError, OSError, PermissionError):
                 if descriptor is not None:
-                    try:
+                    import contextlib
+
+                    with contextlib.suppress(OSError):
                         os.close(descriptor)
-                    except OSError:
-                        pass
                 if time.monotonic() >= deadline:
                     raise PromotionLockError(
                         f"could not acquire promotion lease on {self.lock_file}: "
@@ -86,7 +86,7 @@ class WorkspaceLease:
             import msvcrt
 
             os.lseek(descriptor, 0, os.SEEK_SET)
-            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
         else:
             import fcntl
 
@@ -103,27 +103,23 @@ class WorkspaceLease:
         self._fd = None
         if descriptor is None:
             return
+        import contextlib
+
         try:
             if os.name == "nt":
                 import msvcrt
 
                 os.lseek(descriptor, 0, os.SEEK_SET)
-                try:
-                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
-                except OSError:
-                    pass
+                with contextlib.suppress(OSError):
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
             else:
                 import fcntl
 
-                try:
+                with contextlib.suppress(OSError):
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
-                except OSError:
-                    pass
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(descriptor)
-            except OSError:
-                pass
 
     @contextmanager
     def hold(self, timeout_seconds: float = 5.0) -> Generator[WorkspaceLease, None, None]:

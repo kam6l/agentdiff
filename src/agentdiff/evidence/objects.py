@@ -29,7 +29,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Iterable
+from typing import BinaryIO, Iterable, cast
 
 _CHUNK_SIZE = 1024 * 1024
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -83,9 +83,9 @@ class ObjectStore:
             if isinstance(source, (bytes, bytearray)):
                 stream: BinaryIO = io.BytesIO(bytes(source))
             elif hasattr(source, "read"):
-                stream = source  # type: ignore[assignment]
+                stream = cast("BinaryIO", source)
             else:
-                path = Path(source)  # type: ignore[arg-type]
+                path = Path(cast("str | os.PathLike[str]", source))
                 info = path.lstat()
                 if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
                     raise ObjectStoreError("object source must be a regular file")

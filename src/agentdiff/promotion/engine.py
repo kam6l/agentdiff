@@ -179,7 +179,7 @@ class PromotionEngine:
                     journal.persist()
                     try:
                         PromotionRecovery(self.root).check_and_recover()
-                    except PromotionRecoveryError as recovery_error:
+                    except PromotionRecoveryError:
                         report.status = "RECOVERY_FAILED"
                         self._persist_result(report)
                         raise

@@ -187,7 +187,7 @@ class ProofEngine:
                     # 4. Baseline verification: patched product code against
                     #    the ORIGINAL trusted tests, independent of any
                     #    agent-modified verifier files.
-                    baseline_verifier, baseline_phases, baseline_reasons = (
+                    baseline_verifier, baseline_phases, baseline_reasons, overlay_digest = (
                         self._run_baseline_verification(
                             environment,
                             workspace,
@@ -201,6 +201,7 @@ class ProofEngine:
                     reasons.extend(baseline_reasons)
                     environment_payload["baseline_verifier"] = baseline_verifier
                     environment_payload["baseline_available"] = baseline_available
+                    environment_payload["baseline_overlay_sha256"] = overlay_digest
                 finally:
                     environment.close()
             except (OSError, RuntimeError, TypeError, ValueError) as error:
@@ -216,9 +217,8 @@ class ProofEngine:
         has_test_phase = any(phase.phase == "tests" for phase in phases)
         baseline_verifier = str(environment_payload.get("baseline_verifier", "SKIPPED"))
         baseline_required = verifier_mutations.any_modification
-        baseline_confirms = (
-            not baseline_required
-            or (baseline_available and baseline_verifier == "PASS")
+        baseline_confirms = not baseline_required or (
+            baseline_available and baseline_verifier == "PASS"
         )
         if baseline_required and not baseline_confirms:
             if not baseline_available:
@@ -247,9 +247,7 @@ class ProofEngine:
             phases=tuple(phases),
         )
         tests_phase = next((phase for phase in phases if phase.phase == "tests"), None)
-        baseline_phase = next(
-            (phase for phase in phases if phase.phase == "baseline_tests"), None
-        )
+        baseline_phase = next((phase for phase in phases if phase.phase == "baseline_tests"), None)
         level, label, independence = compute_proof_strength(
             clean_environment=clean_environment,
             trusted_plan=plan.trusted,
@@ -312,21 +310,21 @@ class ProofEngine:
         *,
         timeout_seconds: float,
         baseline_available: bool,
-    ) -> tuple[str, list[ProofPhaseResult], list[str]]:
+    ) -> tuple[str, list[ProofPhaseResult], list[str], str]:
         """Overlay base verifier files and re-run the trusted test commands.
 
-        Returns ``(status, phases, reasons)`` where status is PASS, FAIL, or
-        SKIPPED. The overlay is applied in place: verifier-related files are
-        restored to their sealed pre-run versions (including files the patch
-        deleted or created), so the baseline run executes the original tests
-        against the patched product code.
+        Returns ``(status, phases, reasons, overlay_digest)`` where status is
+        PASS, FAIL, or SKIPPED. The overlay is applied in place:
+        verifier-related files are restored to their sealed pre-run versions
+        (including files the patch deleted or created), so the baseline run
+        executes the original tests against the patched product code.
         """
         if not baseline_available or not test_commands:
-            return "SKIPPED", [], []
+            return "SKIPPED", [], [], ""
         try:
             overlay_digest = self._overlay_baseline_verifier_files(workspace, bundle)
         except (OSError, RuntimeError, ValueError) as error:
-            return "FAIL", [], [f"baseline verifier overlay failed: {error}"]
+            return "FAIL", [], [f"baseline verifier overlay failed: {error}"], ""
         phases: list[ProofPhaseResult] = []
         reasons: list[str] = []
         for command in test_commands:
@@ -337,12 +335,10 @@ class ProofEngine:
             )
             phases.append(phase)
             if not phase.passed:
-                reasons.append(
-                    f"baseline_tests failed with return code {phase.returncode}"
-                )
+                reasons.append(f"baseline_tests failed with return code {phase.returncode}")
                 break
         status = "PASS" if phases and all(phase.passed for phase in phases) else "FAIL"
-        return status, phases, reasons
+        return status, phases, reasons, overlay_digest
 
     def _overlay_baseline_verifier_files(
         self,
@@ -426,9 +422,7 @@ class ProofEngine:
         except (OSError, ValueError, TypeError, FileNotFoundError):
             return False
         captured = raw.get("captured", []) if isinstance(raw, dict) else []
-        return any(
-            isinstance(path, str) and is_verifier_related(path) for path in captured
-        )
+        return any(isinstance(path, str) and is_verifier_related(path) for path in captured)
 
     @staticmethod
     def _score(result: dict[str, Any], name: str) -> int:

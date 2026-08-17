@@ -13,9 +13,12 @@ checks between authoritative full captures.
 from __future__ import annotations
 
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agentdiff.policy import Policy, PolicyAction, PolicyEngine
+
+if TYPE_CHECKING:
+    from pathlib import Path
 from agentdiff.state import FilesystemManifest, FilesystemScanner, diff_manifests
 
 from .models import ControlLevel, SafetyEvent, SafetyReport

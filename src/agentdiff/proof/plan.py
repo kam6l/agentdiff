@@ -5,12 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
 from .verifier_files import is_verifier_related
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from agentdiff.evidence import PatchBundle, PatchEntry
     from agentdiff.policy import Policy
 
@@ -95,7 +96,9 @@ def select_trusted_verification_plan(
             trusted=has_tests,
             plan_digest=digest,
             tampered_files=(),
-            reason="explicit trusted policy configuration" if has_tests else "policy specifies no test commands",
+            reason="explicit trusted policy configuration"
+            if has_tests
+            else "policy specifies no test commands",
         )
 
     # Auto-discovery inspects the base_root (pre-run state).
@@ -107,16 +110,15 @@ def select_trusted_verification_plan(
     tampered = _tampered_verifier_files(modified_paths)
     trusted = len(tampered) == 0
     tamper_reason = (
-        f"patch modified test/build infrastructure without policy override: "
-        f"{', '.join(tampered)}"
+        f"patch modified test/build infrastructure without policy override: {', '.join(tampered)}"
         if tampered
         else ""
     )
 
     if (base_root / "uv.lock").is_file():
         setup: tuple[tuple[str, ...], ...] = (("uv", "sync", "--frozen", "--no-cache"),)
-        build = (("uv", "build"),)
-        tests = (("uv", "run", "pytest", "-q"),)
+        build: tuple[tuple[str, ...], ...] = (("uv", "build"),)
+        tests: tuple[tuple[str, ...], ...] = (("uv", "run", "pytest", "-q"),)
         return TrustedVerificationPlan(
             image=policy.proof.image or "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
             network=policy.proof.network,

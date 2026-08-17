@@ -88,14 +88,27 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
     root = _mapping(data, "policy")
     _reject_unknown(
         root,
-        frozenset({"version", "filesystem", "process", "network", "limits", "rollback", "scoring", "proof"}),
+        frozenset(
+            {
+                "version",
+                "filesystem",
+                "process",
+                "network",
+                "limits",
+                "rollback",
+                "scoring",
+                "proof",
+            }
+        ),
     )
     version = root.get("version")
     if isinstance(version, bool) or not isinstance(version, int):
         raise PolicyValidationError("version is required and must be an integer (1 or 2)")
     if version not in SUPPORTED_POLICY_VERSIONS:
         supported = ", ".join(str(v) for v in sorted(SUPPORTED_POLICY_VERSIONS))
-        raise PolicyValidationError(f"unsupported policy version: {version}; supported versions: {supported}")
+        raise PolicyValidationError(
+            f"unsupported policy version: {version}; supported versions: {supported}"
+        )
 
     filesystem_data = _mapping(root.get("filesystem", {}), "filesystem")
     process_data = _mapping(root.get("process", {}), "process")
@@ -189,13 +202,17 @@ def load_policy(data: Mapping[str, Any]) -> Policy:
             allow_write=_patterns(filesystem_data.get("allow_write", []), "filesystem.allow_write"),
             review=_patterns(filesystem_data.get("review", []), "filesystem.review"),
             deny=_patterns(filesystem_data.get("deny", []), "filesystem.deny"),
-            default=_action(filesystem_data.get("default", PolicyAction.REVIEW.value), "filesystem.default"),
+            default=_action(
+                filesystem_data.get("default", PolicyAction.REVIEW.value), "filesystem.default"
+            ),
         ),
         process=ProcessPolicy(
             allow=_patterns(process_data.get("allow", []), "process.allow"),
             review=_patterns(process_data.get("review", []), "process.review"),
             deny=_patterns(process_data.get("deny", []), "process.deny"),
-            default=_action(process_data.get("default", PolicyAction.REVIEW.value), "process.default"),
+            default=_action(
+                process_data.get("default", PolicyAction.REVIEW.value), "process.default"
+            ),
         ),
         network=NetworkPolicy(mode=network_mode),
         limits=LimitsPolicy(
@@ -224,19 +241,21 @@ def load_policy_file(path: str | Path) -> Policy:
         raise FileNotFoundError(f"policy file not found: {path}")
     raw = candidate.read_text(encoding="utf-8")
     try:
-        import yaml  # lazy import
+        import yaml  # type: ignore[import-untyped]  # lazy import
+
         if yaml is None:
             raise ImportError("PyYAML not installed")
         parsed = yaml.safe_load(raw)
     except (ImportError, ModuleNotFoundError) as exc:
         import json
+
         try:
             parsed = json.loads(raw)
-        except Exception:
+        except (TypeError, ValueError, json.JSONDecodeError):
             raise PolicyLoadError(
                 "PyYAML is required to load policy files; install it with 'pip install PyYAML'"
             ) from exc
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:
         raise PolicyLoadError(f"failed to parse policy file {path}: {exc}") from exc
 
     if not isinstance(parsed, dict):

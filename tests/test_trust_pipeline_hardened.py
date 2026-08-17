@@ -2,27 +2,28 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 import json
-from pathlib import Path
 
 import pytest
 
-from agentdiff.evidence import BlobReference, CapsuleReader, PatchBundle, PatchEntry
-from agentdiff.policy import Policy, PolicyAction, PolicyDecision, ProofPolicy, load_policy
-from agentdiff.proof import ProofEngine, ProofVerdict
-from agentdiff.proof.plan import TrustedVerificationPlan, select_trusted_verification_plan
+from agentdiff.evidence import CapsuleReader, PatchEntry
+from agentdiff.policy import Policy, ProofPolicy, load_policy
 from agentdiff.promotion import (
     EntryState,
     JournalEntry,
     JournalState,
-    PromotionEngine,
     PromotionJournal,
     PromotionLockError,
     PromotionRecovery,
     WorkspaceLease,
 )
+from agentdiff.proof.plan import select_trusted_verification_plan
 from agentdiff.runtime import MaterializationStrategy, WorkspaceMaterializer
-from agentdiff.safety import HybridSafetyWatcher, SafetyController
+from agentdiff.safety import HybridSafetyWatcher
 from agentdiff.state import FilesystemScanner
 
 
@@ -162,9 +163,11 @@ def test_workspace_lease_concurrency(tmp_path: Path) -> None:
     lease1 = WorkspaceLease(tmp_path, run_id="run-1")
     with lease1.hold():
         lease2 = WorkspaceLease(tmp_path, run_id="run-2")
-        with pytest.raises(PromotionLockError, match="another process is promoting"):
-            with lease2.hold():
-                pass
+        with (
+            pytest.raises(PromotionLockError, match=r"another process is promoting"),
+            lease2.hold(),
+        ):
+            pass
 
 
 def test_capsule_reader_and_merkle_root(tmp_path: Path) -> None:
@@ -226,4 +229,16 @@ def test_hybrid_safety_watcher(tmp_path: Path) -> None:
 
     terminated = watcher.poll(duration_seconds=1.0, processes_spawned=1)
     assert terminated is False
+    # Dirty hints accelerate with targeted checks; authoritative full
+    # reconciliation runs on schedule/overflow/force.
+    assert watcher.stats.targeted_checks_performed == 1
+    assert (
+        watcher.observe(
+            root=tmp_path,
+            duration_seconds=1.0,
+            processes_spawned=1,
+            force_filesystem=True,
+        )
+        is False
+    )
     assert watcher.stats.full_scans_performed == 1

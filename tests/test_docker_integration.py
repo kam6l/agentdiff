@@ -6,13 +6,16 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from agentdiff.policy import load_policy
-from agentdiff.proof import ProofEngine, ProofVerdict
 from agentdiff.promotion import PromotionEngine
+from agentdiff.proof import ProofEngine, ProofVerdict
 from agentdiff.runtime import DockerRuntime
 from agentdiff.transaction import AgentRunTransaction
 

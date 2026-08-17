@@ -88,9 +88,7 @@ def is_verifier_related(relative_path: str) -> bool:
         return True
     if any(fnmatch.fnmatchcase(basename, pattern) for pattern in _VERIFIER_PATTERNS):
         return True
-    if any(fnmatch.fnmatchcase(basename, pattern) for pattern in _TEST_FILE_PATTERNS):
-        return True
-    return False
+    return any(fnmatch.fnmatchcase(basename, pattern) for pattern in _TEST_FILE_PATTERNS)
 
 
 @dataclass(frozen=True, slots=True)

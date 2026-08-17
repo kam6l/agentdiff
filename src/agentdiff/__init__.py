@@ -37,7 +37,6 @@ from .policy import (
     load_policy,
     load_policy_file,
 )
-from .proof import ProofEngine, ProofPhaseResult, ProofResult, ProofVerdict
 from .promotion import (
     PromotionEngine,
     PromotionPlan,
@@ -45,6 +44,7 @@ from .promotion import (
     PromotionReport,
     WorkspaceLease,
 )
+from .proof import ProofEngine, ProofPhaseResult, ProofResult, ProofVerdict
 from .providers import (
     AIProvider,
     AnthropicMessagesProvider,
@@ -59,6 +59,7 @@ from .runtime import (
     DockerRuntime,
     LocalRuntime,
     RuntimeBackend,
+    RuntimeCapabilities,
     RuntimeCapability,
     RuntimeControlLevel,
     RuntimeResult,
@@ -72,7 +73,13 @@ from .scoring import (
     MutationRisk,
     RiskLevel,
 )
-from .transaction import AgentRunTransaction, RollbackEngine, RunInspector, RunStore, TransactionResult
+from .transaction import (
+    AgentRunTransaction,
+    RollbackEngine,
+    RunInspector,
+    RunStore,
+    TransactionResult,
+)
 
 __all__ = [
     "AIProvider",
@@ -110,15 +117,15 @@ __all__ = [
     "PolicyAction",
     "PolicyDecision",
     "PolicyEngine",
+    "PromotionEngine",
+    "PromotionPlan",
+    "PromotionRecovery",
+    "PromotionReport",
     "ProofEngine",
     "ProofPhaseResult",
     "ProofPolicy",
     "ProofResult",
     "ProofVerdict",
-    "PromotionEngine",
-    "PromotionPlan",
-    "PromotionRecovery",
-    "PromotionReport",
     "ProviderError",
     "ProviderResponse",
     "RemediationAdvisor",
@@ -128,6 +135,7 @@ __all__ = [
     "RunInspector",
     "RunStore",
     "RuntimeBackend",
+    "RuntimeCapabilities",
     "RuntimeCapability",
     "RuntimeControlLevel",
     "RuntimeResult",

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
+if TYPE_CHECKING:
+    from pathlib import Path
+import json
 
 from agentdiff.evidence import CapsuleReader
 from agentdiff.transaction import RunStore
@@ -40,9 +41,7 @@ def v1_manifest(store: RunStore) -> dict[str, object]:
 
 def test_v1_capsule_verifies_under_original_guarantees(tmp_path: Path) -> None:
     store = build_capsule(tmp_path)
-    (store.run_dir / "integrity.json").write_text(
-        json.dumps(v1_manifest(store)), encoding="utf-8"
-    )
+    (store.run_dir / "integrity.json").write_text(json.dumps(v1_manifest(store)), encoding="utf-8")
 
     report = store.verify_integrity()
     assert report.present is True
@@ -70,9 +69,7 @@ def test_v2_capsule_verifies_with_structured_manifest(tmp_path: Path) -> None:
 
 def test_v1_capsule_tampering_is_detected(tmp_path: Path) -> None:
     store = build_capsule(tmp_path)
-    (store.run_dir / "integrity.json").write_text(
-        json.dumps(v1_manifest(store)), encoding="utf-8"
-    )
+    (store.run_dir / "integrity.json").write_text(json.dumps(v1_manifest(store)), encoding="utf-8")
     (store.run_dir / "result.json").write_text('{"status": "tampered"}\n', encoding="utf-8")
 
     report = store.verify_integrity()

@@ -185,4 +185,3 @@ def policy_to_dict(policy: Policy) -> dict[str, Any]:
             "trusted_digests": list(policy.proof.trusted_digests),
         },
     }
-

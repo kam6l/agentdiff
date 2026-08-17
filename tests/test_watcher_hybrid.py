@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
-
+if TYPE_CHECKING:
+    from pathlib import Path
 from agentdiff.policy import load_policy
-from agentdiff.safety import HybridSafetyWatcher, SafetyController
-from agentdiff.safety.watchers.base import EventSource
+from agentdiff.safety import HybridSafetyWatcher
 from agentdiff.state import FilesystemScanner
 
 
@@ -121,13 +120,16 @@ def test_watcher_drains_events_from_source(tmp_path: Path) -> None:
 
 def test_watcher_observe_interface_matches_controller(tmp_path: Path) -> None:
     w = watcher(tmp_path)
-    assert w.observe(
-        root=tmp_path,
-        duration_seconds=1.0,
-        processes_spawned=1,
-        force_filesystem=True,
-        runtime_active=True,
-    ) is False
+    assert (
+        w.observe(
+            root=tmp_path,
+            duration_seconds=1.0,
+            processes_spawned=1,
+            force_filesystem=True,
+            runtime_active=True,
+        )
+        is False
+    )
     assert w.terminated is False
     assert w.report is w.controller.report
 

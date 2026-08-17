@@ -29,6 +29,7 @@ absent: promotion and recovery must fail closed instead of treating it like
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -127,7 +128,9 @@ class JournalEntry:
         # state machine closes for new journals.
         raw_state = data.get("state")
         if raw_state is None and "applied" in data:
-            raw_state = EntryState.APPLIED.value if bool(data["applied"]) else EntryState.PREPARED.value
+            raw_state = (
+                EntryState.APPLIED.value if bool(data["applied"]) else EntryState.PREPARED.value
+            )
         if raw_state is None:
             raw_state = EntryState.PREPARED.value
         try:
@@ -249,7 +252,7 @@ class PromotionJournal:
                 )
             try:
                 state = JournalState(str(state_value))
-            except (TypeError, ValueError) as error:
+            except (TypeError, ValueError):
                 return JournalLoadResult(
                     JournalLoadOutcome.CORRUPT_JOURNAL,
                     error=f"invalid promotion journal state: {state_value!r}",
@@ -303,10 +306,8 @@ class PromotionJournal:
     def clean(self) -> None:
         """Remove a completed journal file (only safe after COMMITTED/ROLLED_BACK)."""
         if self.path.is_file():
-            try:
+            with contextlib.suppress(OSError):
                 self.path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _fsync_directory(directory: Path) -> None:

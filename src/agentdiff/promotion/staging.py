@@ -85,7 +85,8 @@ class PromotionStager:
         digest = hasher.hexdigest()
         if entry.result_sha256 is not None and digest != entry.result_sha256:
             raise ValueError(
-                f"staged digest mismatch for {entry.path}: expected {entry.result_sha256}, got {digest}"
+                f"staged digest mismatch for {entry.path}: "
+                f"expected {entry.result_sha256}, got {digest}"
             )
         if entry.size is not None and target_staged.stat().st_size != entry.size:
             raise ValueError(f"staged size mismatch for {entry.path}")

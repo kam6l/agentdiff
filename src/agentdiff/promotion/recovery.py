@@ -39,9 +39,9 @@ from agentdiff.state import FilesystemScanner
 
 from .journal import (
     EntryState,
+    JournalEntry,
     JournalLoadOutcome,
     JournalState,
-    JournalEntry,
     PromotionJournal,
 )
 
@@ -94,8 +94,7 @@ class PromotionRecovery:
             return None
         if loaded.outcome is JournalLoadOutcome.CORRUPT_JOURNAL:
             raise PromotionRecoveryError(
-                "promotion journal exists but recovery state cannot be established: "
-                f"{loaded.error}"
+                f"promotion journal exists but recovery state cannot be established: {loaded.error}"
             )
         journal = loaded.journal
         assert journal is not None
@@ -169,7 +168,9 @@ class PromotionRecovery:
             elif entry.change_type in {"modified", "deleted"}:
                 self._recover_present_or_deleted(entry, current, report)
             else:  # pragma: no cover - guarded by journal validation
-                raise PromotionRecoveryError(f"unsupported journal change type: {entry.change_type}")
+                raise PromotionRecoveryError(
+                    f"unsupported journal change type: {entry.change_type}"
+                )
 
     def _recover_created(self, entry: JournalEntry, current: Any, report: RecoveryReport) -> None:
         """A created file is rolled back by unlinking the promoted result.
@@ -203,7 +204,9 @@ class PromotionRecovery:
             entry.state = EntryState.RECOVERED
             report.cleaned.append(entry.path)
 
-    def _recover_present_or_deleted(self, entry: JournalEntry, current: Any, report: RecoveryReport) -> None:
+    def _recover_present_or_deleted(
+        self, entry: JournalEntry, current: Any, report: RecoveryReport
+    ) -> None:
         """A modified or deleted file is rolled back by restoring the base copy.
 
         Content-only base matches are treated as a partially completed
@@ -365,9 +368,7 @@ class PromotionRecovery:
                     f"journal parent directory is missing: {current}"
                 ) from error
             if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
-                raise PromotionRecoveryError(
-                    f"journal parent is not a real directory: {current}"
-                )
+                raise PromotionRecoveryError(f"journal parent is not a real directory: {current}")
         return target
 
     # ------------------------------------------------------------------
@@ -384,7 +385,9 @@ class PromotionRecovery:
         try:
             target.unlink()
         except OSError as error:
-            raise PromotionRecoveryError(f"failed to remove created file {entry.path}: {error}") from error
+            raise PromotionRecoveryError(
+                f"failed to remove created file {entry.path}: {error}"
+            ) from error
 
     def _cleanup_promote_temps(self, entry: JournalEntry) -> None:
         """Remove leftover promotion temp files next to a recovered created file.
@@ -427,9 +430,7 @@ class PromotionRecovery:
 
         backup_info = backup_path.lstat()
         if not stat.S_ISREG(backup_info.st_mode) or stat.S_ISLNK(backup_info.st_mode):
-            raise PromotionRecoveryError(
-                f"backup is not a regular file: {entry.path}"
-            )
+            raise PromotionRecoveryError(f"backup is not a regular file: {entry.path}")
         if backup_info.st_nlink != 1:
             raise PromotionRecoveryError(f"backup has unexpected link count: {entry.path}")
 
@@ -452,9 +453,7 @@ class PromotionRecovery:
                 or opened.st_dev != backup_info.st_dev
                 or opened.st_ino != backup_info.st_ino
             ):
-                raise PromotionRecoveryError(
-                    f"backup identity changed while opening: {entry.path}"
-                )
+                raise PromotionRecoveryError(f"backup identity changed while opening: {entry.path}")
             temp_descriptor, temp_name = tempfile.mkstemp(
                 prefix=_PROMOTE_TEMP_PREFIX,
                 suffix=".restore",
@@ -480,9 +479,7 @@ class PromotionRecovery:
                 or finished.st_size != opened.st_size
                 or finished.st_mtime_ns != opened.st_mtime_ns
             ):
-                raise PromotionRecoveryError(
-                    f"backup changed while restoring: {entry.path}"
-                )
+                raise PromotionRecoveryError(f"backup changed while restoring: {entry.path}")
             if entry.base_sha256 is not None and digest.hexdigest() != entry.base_sha256:
                 raise PromotionRecoveryError(
                     f"backup digest mismatch for {entry.path}; refusing to overwrite host state"
@@ -517,13 +514,10 @@ class PromotionRecovery:
             ]
         else:  # ROLLED_BACK
             progressed = [
-                entry.path
-                for entry in journal.entries
-                if entry.state is not EntryState.RECOVERED
+                entry.path for entry in journal.entries if entry.state is not EntryState.RECOVERED
             ]
         if progressed:
             raise PromotionRecoveryError(
                 "promotion journal is internally inconsistent: "
-                f"{journal.state.value} contains unconfirmed entries: "
-                + ", ".join(progressed)
+                f"{journal.state.value} contains unconfirmed entries: " + ", ".join(progressed)
             )

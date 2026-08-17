@@ -13,6 +13,8 @@ class EventSource(Protocol):
     it must never silently stop observing.
     """
 
+    backend: str
+
     def start(self) -> None:
         """Begin delivering events to :meth:`drain`."""
         ...

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-from agentdiff.policy import ProofPolicy, load_policy
+from agentdiff.policy import load_policy
 from agentdiff.proof import (
     ProofEngine,
     ProofPhaseResult,
@@ -20,8 +19,8 @@ from agentdiff.proof import (
     is_verifier_related,
 )
 from agentdiff.proof.plan import select_trusted_verification_plan
-from agentdiff.runtime import CleanupReport, RuntimeCapability, RuntimeControlLevel, RuntimeResult
-from agentdiff.transaction import AgentRunTransaction, RunStore
+from agentdiff.runtime import CleanupReport, RuntimeControlLevel, RuntimeResult
+from agentdiff.transaction import AgentRunTransaction
 
 
 def trust_policy() -> object:
@@ -47,7 +46,7 @@ class IsolatedRuntime:
 
     @property
     def capabilities(self):
-        from agentdiff.runtime import RuntimeCapabilities, RuntimeControlLevel
+        from agentdiff.runtime import RuntimeCapabilities
 
         return RuntimeCapabilities(
             backend="test-isolated",
@@ -66,9 +65,6 @@ class IsolatedRuntime:
         self.source = source
 
     def configure_safety(self, _watcher) -> None:
-        return None
-
-    def configure_safety(self, _controller) -> None:
         return None
 
     def run(self, argv, **_kwargs) -> RuntimeResult:
@@ -140,9 +136,9 @@ class RecordingProofEnvironment:
         if phase == "baseline_tests":
             self.baseline_seen = True
             if self.expect_overlay is not None:
-                assert (
-                    self.workspace / self.expect_overlay
-                ).read_text(encoding="utf-8") == self.expected_overlay_content, (
+                assert (self.workspace / self.expect_overlay).read_text(
+                    encoding="utf-8"
+                ) == self.expected_overlay_content, (
                     f"baseline did not restore {self.expect_overlay}"
                 )
             status = "PASS" if self.baseline_passes else "FAIL"
@@ -364,7 +360,7 @@ def test_baseline_verifier_runs_against_restored_base_tests(tmp_path: Path) -> N
             "def test_value():\n    assert True  # weakened?\n", encoding="utf-8"
         )
 
-    run_id, proof = run_and_prove(
+    _, proof = run_and_prove(
         tmp_path,
         mutator,
         expect_overlay="tests/test_app.py",
@@ -395,7 +391,7 @@ def test_baseline_failure_blocks_proven_when_tests_tampered(tmp_path: Path) -> N
             "def test_value():\n    assert True  # weakened\n", encoding="utf-8"
         )
 
-    run_id, proof = run_and_prove(tmp_path, mutator, baseline_passes=False)
+    _, proof = run_and_prove(tmp_path, mutator, baseline_passes=False)
     assert proof.verdict is ProofVerdict.NOT_PROVEN
     assert proof.promotion == "BLOCKED"
     assert any("baseline verifier" in reason for reason in proof.reasons)
@@ -414,7 +410,7 @@ def test_unmodified_verifier_files_still_run_baseline(tmp_path: Path) -> None:
     def mutator(workspace: Path) -> None:
         (workspace / "src" / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
 
-    run_id, proof = run_and_prove(tmp_path, mutator)
+    _, proof = run_and_prove(tmp_path, mutator)
     assert proof.verdict is ProofVerdict.PROVEN
     assert proof.verifier_files_changed == 0
     assert proof.baseline_verifier == "PASS"
@@ -435,7 +431,7 @@ def test_patch_added_verifier_file_removed_for_baseline(tmp_path: Path) -> None:
     # Baseline is unavailable because the base had no verifier files; the
     # added test still must not be promoted silently (reported + NOT_PROVEN
     # because baseline cannot confirm).
-    run_id, proof = run_and_prove(tmp_path, mutator)
+    _, proof = run_and_prove(tmp_path, mutator)
     assert proof.baseline_available is False
     assert proof.verifier_files_changed == 0
     assert "tests/fake_extra_test.py" in proof.verifier_changes

@@ -8,13 +8,16 @@ convergent, and fails closed on ambiguity or corruption.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 import hashlib
 import json
 import os
 import stat
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -106,11 +109,16 @@ def write_backup(root: Path, relpath: str, content: str, run_id: str = "run-cras
         "{ not json",
         "[]",
         '{"schema_version": 3}',
-        '{"schema_version": 3, "run_id": 1, "patch_digest": "x", "state": "APPLYING", "entries": []}',
-        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "BOGUS", "entries": []}',
-        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "APPLYING", "entries": [{"path": "a.txt"}]}',
-        '{"schema_version": 99, "run_id": "r", "patch_digest": "x", "state": "APPLYING", "entries": []}',
-        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "APPLYING", "entries": [{"path": "a.txt", "change_type": "explode", "state": "PREPARED"}]}',
+        '{"schema_version": 3, "run_id": 1, "patch_digest": "x", "state": "APPLYING", '
+        '"entries": []}',
+        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "BOGUS", '
+        '"entries": []}',
+        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "APPLYING", '
+        '"entries": [{"path": "a.txt"}]}',
+        '{"schema_version": 99, "run_id": "r", "patch_digest": "x", "state": "APPLYING", '
+        '"entries": []}',
+        '{"schema_version": 3, "run_id": "r", "patch_digest": "x", "state": "APPLYING", '
+        '"entries": [{"path": "a.txt", "change_type": "explode", "state": "PREPARED"}]}',
     ],
 )
 def test_corrupt_journal_fails_closed(tmp_path: Path, payload: str) -> None:
@@ -120,7 +128,7 @@ def test_corrupt_journal_fails_closed(tmp_path: Path, payload: str) -> None:
     loaded = PromotionJournal.load(tmp_path)
     assert loaded.outcome is JournalLoadOutcome.CORRUPT_JOURNAL
 
-    with pytest.raises(PromotionRecoveryError, match="recovery state cannot be established"):
+    with pytest.raises(PromotionRecoveryError, match=r"recovery state cannot be established"):
         PromotionRecovery(tmp_path).check_and_recover()
 
 
@@ -151,7 +159,7 @@ def test_journal_path_traversal_fails_closed(tmp_path: Path) -> None:
         "../outside.txt", "created", result_content="x", state=EntryState.APPLY_INTENT
     )
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
-    with pytest.raises(PromotionRecoveryError, match="unsafe|path"):
+    with pytest.raises(PromotionRecoveryError, match=r"unsafe|path"):
         PromotionRecovery(tmp_path).check_and_recover()
     assert outside.read_text(encoding="utf-8") == "do not touch"
 
@@ -205,12 +213,10 @@ def test_host_parent_symlink_fails_closed(tmp_path: Path) -> None:
     outside.mkdir()
     (outside / "target.txt").write_text("result", encoding="utf-8")
     os.symlink(outside, tmp_path / "link")
-    entry = base_entry(
-        "link/target.txt", "modified", base_content="base", result_content="result"
-    )
+    entry = base_entry("link/target.txt", "modified", base_content="base", result_content="result")
     write_backup(tmp_path, "link/target.txt", "base")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
-    with pytest.raises(PromotionRecoveryError, match="parent|directory"):
+    with pytest.raises(PromotionRecoveryError, match=r"parent|directory"):
         PromotionRecovery(tmp_path).check_and_recover()
 
 
@@ -222,9 +228,7 @@ def test_host_parent_symlink_fails_closed(tmp_path: Path) -> None:
 def test_backup_digest_mismatch_fails_closed(tmp_path: Path) -> None:
     host = tmp_path / "target.txt"
     host.write_text("result", encoding="utf-8")
-    entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result"
-    )
+    entry = base_entry("target.txt", "modified", base_content="base", result_content="result")
     write_backup(tmp_path, "target.txt", "TAMPERED BACKUP CONTENT")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
 
@@ -236,9 +240,7 @@ def test_backup_digest_mismatch_fails_closed(tmp_path: Path) -> None:
 def test_backup_symlink_fails_closed(tmp_path: Path) -> None:
     host = tmp_path / "target.txt"
     host.write_text("result", encoding="utf-8")
-    entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result"
-    )
+    entry = base_entry("target.txt", "modified", base_content="base", result_content="result")
     backup_dir = tmp_path / ".agentdiff" / "backups" / "run-crash"
     backup_dir.mkdir(parents=True)
     outside = tmp_path / "outside.txt"
@@ -254,9 +256,7 @@ def test_backup_symlink_fails_closed(tmp_path: Path) -> None:
 def test_backup_hardlink_fails_closed(tmp_path: Path) -> None:
     host = tmp_path / "target.txt"
     host.write_text("result", encoding="utf-8")
-    entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result"
-    )
+    entry = base_entry("target.txt", "modified", base_content="base", result_content="result")
     backup = write_backup(tmp_path, "target.txt", "base")
     os.link(backup, tmp_path / "extra-link")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
@@ -293,8 +293,12 @@ def test_crash_after_first_file_recovers_all(tmp_path: Path) -> None:
     first.write_text("first-result", encoding="utf-8")
     second.write_text("second-result", encoding="utf-8")
     entries = [
-        base_entry("first.txt", "modified", base_content="first-base", result_content="first-result"),
-        base_entry("second.txt", "modified", base_content="second-base", result_content="second-result"),
+        base_entry(
+            "first.txt", "modified", base_content="first-base", result_content="first-result"
+        ),
+        base_entry(
+            "second.txt", "modified", base_content="second-base", result_content="second-result"
+        ),
         base_entry("third.txt", "created", result_content="third-result"),
     ]
     write_backup(tmp_path, "first.txt", "first-base")
@@ -322,7 +326,11 @@ def test_crash_after_mutation_before_journal_update_is_recovered(tmp_path: Path)
     host = tmp_path / "target.txt"
     host.write_text("result", encoding="utf-8")
     entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result", state=EntryState.APPLY_INTENT
+        "target.txt",
+        "modified",
+        base_content="base",
+        result_content="result",
+        state=EntryState.APPLY_INTENT,
     )
     write_backup(tmp_path, "target.txt", "base")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
@@ -337,7 +345,11 @@ def test_crash_after_mutation_before_journal_update_noop(tmp_path: Path) -> None
     host = tmp_path / "target.txt"
     host.write_text("base", encoding="utf-8")
     entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result", state=EntryState.APPLY_INTENT
+        "target.txt",
+        "modified",
+        base_content="base",
+        result_content="result",
+        state=EntryState.APPLY_INTENT,
     )
     write_backup(tmp_path, "target.txt", "base")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
@@ -353,7 +365,11 @@ def test_ambiguous_state_fails_closed(tmp_path: Path) -> None:
     host = tmp_path / "target.txt"
     host.write_text("UNRELATED HOST EDIT", encoding="utf-8")
     entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result", state=EntryState.APPLY_INTENT
+        "target.txt",
+        "modified",
+        base_content="base",
+        result_content="result",
+        state=EntryState.APPLY_INTENT,
     )
     write_backup(tmp_path, "target.txt", "base")
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
@@ -415,7 +431,9 @@ def test_created_file_recovery_cleans_promote_temps(tmp_path: Path) -> None:
     created.write_text("result", encoding="utf-8")
     leftover = tmp_path / ".agentdiff-promote-abc123.tmp"
     leftover.write_text("result", encoding="utf-8")
-    entry = base_entry("created.txt", "created", result_content="result", state=EntryState.APPLY_INTENT)
+    entry = base_entry(
+        "created.txt", "created", result_content="result", state=EntryState.APPLY_INTENT
+    )
     make_journal(tmp_path, state=JournalState.APPLYING, entries=[entry])
 
     report = PromotionRecovery(tmp_path).check_and_recover()
@@ -451,9 +469,7 @@ def test_recover_intent_retry_after_crash_between_replace_and_chmod(tmp_path: Pa
 
 
 def test_stale_committed_journal_is_cleaned(tmp_path: Path) -> None:
-    entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result"
-    )
+    entry = base_entry("target.txt", "modified", base_content="base", result_content="result")
     journal = make_journal(tmp_path, state=JournalState.COMMITTED, entries=[entry])
     report = PromotionRecovery(tmp_path).check_and_recover()
     assert report is not None
@@ -463,7 +479,11 @@ def test_stale_committed_journal_is_cleaned(tmp_path: Path) -> None:
 
 def test_committed_journal_with_unconfirmed_entry_fails_closed(tmp_path: Path) -> None:
     entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result", state=EntryState.APPLY_INTENT
+        "target.txt",
+        "modified",
+        base_content="base",
+        result_content="result",
+        state=EntryState.APPLY_INTENT,
     )
     make_journal(tmp_path, state=JournalState.COMMITTED, entries=[entry])
     with pytest.raises(PromotionRecoveryError, match="inconsistent"):
@@ -494,7 +514,11 @@ def test_unapplied_staged_journal_is_cleaned(tmp_path: Path) -> None:
 
 def test_staged_journal_with_progressed_entry_fails_closed(tmp_path: Path) -> None:
     entry = base_entry(
-        "target.txt", "modified", base_content="base", result_content="result", state=EntryState.APPLIED
+        "target.txt",
+        "modified",
+        base_content="base",
+        result_content="result",
+        state=EntryState.APPLIED,
     )
     make_journal(tmp_path, state=JournalState.STAGED, entries=[entry])
     with pytest.raises(PromotionRecoveryError, match="inconsistent"):
@@ -552,10 +576,13 @@ def test_lock_file_is_never_unlinked(tmp_path: Path) -> None:
 
 
 def test_lease_excludes_second_holder(tmp_path: Path) -> None:
-    with WorkspaceLease(tmp_path, run_id="run-1").hold():
-        with pytest.raises(PromotionLockError, match="another process is promoting"):
-            with WorkspaceLease(tmp_path, run_id="run-2").hold():
-                pass
+    lease2 = WorkspaceLease(tmp_path, run_id="run-2")
+    with (
+        WorkspaceLease(tmp_path, run_id="run-1").hold(),
+        pytest.raises(PromotionLockError, match=r"another process is promoting"),
+        lease2.hold(),
+    ):
+        pass
 
 
 def test_lease_cross_process_exclusion(tmp_path: Path) -> None:

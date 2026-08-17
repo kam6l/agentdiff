@@ -37,7 +37,7 @@ from agentdiff.state import (
     diff_manifests,
 )
 
-from .store import RunStore
+from .store import InvalidRunIdError, RunStore
 
 if TYPE_CHECKING:
     import os
@@ -192,7 +192,7 @@ def _validate_recovery_backups(
                 size=record.size,
             )
             verified_files[path] = record
-        except Exception as error:
+        except (InvalidRunIdError, OSError, ValueError, TypeError, KeyError) as error:
             verified_unsupported[path] = f"backup validation failed: {error}"
             verified_files[path] = replace(
                 record,
@@ -285,7 +285,7 @@ class AgentRunTransaction:
 
             isolated_workspace = selected_runtime.capabilities.private_workspace
             backend = selected_runtime.capabilities.backend
-            event_source = None
+            event_source: Any = None
             if not isolated_workspace:
                 # Local runs can accelerate with OS event hints; isolated
                 # backends observe their private workspace, which does not
@@ -521,4 +521,3 @@ class AgentRunTransaction:
         if selected_runtime is not None:
             selected_runtime.close()
         return result
-

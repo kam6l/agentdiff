@@ -18,6 +18,7 @@ must never leak into the private workspace.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import stat
@@ -167,9 +168,7 @@ class WorkspaceMaterializer:
         """Copy from an open source descriptor using the configured strategy."""
         requested = self.strategy
         if requested is MaterializationStrategy.CLONE:
-            return self._try_clone(source_fd, dst, size) or self._stream_copy(
-                source_fd, dst, size
-            )
+            return self._try_clone(source_fd, dst, size) or self._stream_copy(source_fd, dst, size)
         if requested is MaterializationStrategy.FAST_COPY:
             try:
                 return self._fast_copy(source_fd, dst, size)
@@ -206,10 +205,8 @@ class WorkspaceMaterializer:
         except OSError:
             # Clone unsupported: remove the empty probe file so the
             # fallback strategy can create the destination itself.
-            try:
+            with contextlib.suppress(OSError):
                 dst.unlink(missing_ok=True)
-            except OSError:
-                pass
             return None
         finally:
             os.close(dst_fd)
@@ -234,10 +231,8 @@ class WorkspaceMaterializer:
             os.fsync(dst_fd)
             return "fast_copy"
         except OSError:
-            try:
+            with contextlib.suppress(OSError):
                 dst.unlink(missing_ok=True)
-            except OSError:
-                pass
             raise
         finally:
             os.close(dst_fd)
@@ -267,11 +262,9 @@ class WorkspaceMaterializer:
     def _copy_directory_mode(self, src_dir: Path, dst_dir: Path) -> None:
         if os.name == "nt":
             return
-        try:
+        with contextlib.suppress(OSError):
             mode = stat.S_IMODE(src_dir.lstat().st_mode)
             dst_dir.chmod(mode)
-        except OSError:
-            pass
 
     @staticmethod
     def _assert_real_directory(path: Path) -> None:
@@ -286,4 +279,4 @@ def _dominant_strategy(requested: MaterializationStrategy, seen: list[str]) -> s
     counts: dict[str, int] = {}
     for name in seen:
         counts[name] = counts.get(name, 0) + 1
-    return max(counts, key=counts.get)
+    return max(counts, key=lambda name: counts[name])

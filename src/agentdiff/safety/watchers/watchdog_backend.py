@@ -10,6 +10,7 @@ computed from authoritative full captures.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 
 class WatchdogEventSource:
@@ -19,21 +20,21 @@ class WatchdogEventSource:
 
     def __init__(self, root: str | Path) -> None:
         try:
-            from watchdog.observers import Observer  # type: ignore[import-untyped]
-            from watchdog.events import FileSystemEventHandler  # type: ignore[import-untyped]
+            from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
         except ImportError as error:  # pragma: no cover - depends on environment
             raise RuntimeError("watchdog is not installed") from error
         self._observer_class = Observer
         self._handler_class = FileSystemEventHandler
         self.root = Path(root).resolve()
-        self._observer = None
+        self._observer: Any | None = None
         self._pending: list[str | None] = []
 
     def _make_handler(self, sink):
         handler_class = self._handler_class
 
-        class _Handler(handler_class):  # type: ignore[misc, valid-type]
-            def on_any_event(self, event) -> None:  # type: ignore[no-untyped-def]
+        class _Handler(handler_class):
+            def on_any_event(self, event) -> None:
                 source = getattr(event, "src_path", None)
                 if isinstance(source, str):
                     sink.append(source)

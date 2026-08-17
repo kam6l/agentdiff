@@ -32,14 +32,18 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from agentdiff.policy import Policy
-from agentdiff.state import FilesystemManifest, FilesystemScanner
+from agentdiff.state import FilesystemScanner
 
 from .controller import SafetyController
-from .watchers.base import EventSource
 from .watchers.polling import PollingEventSource
+
+if TYPE_CHECKING:
+    from agentdiff.policy import Policy
+    from agentdiff.state import FilesystemManifest
+
+    from .watchers.base import EventSource
 
 
 @dataclass

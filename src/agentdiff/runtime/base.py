@@ -10,6 +10,7 @@ from agentdiff.redaction import redact_argv
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from pathlib import Path
 
 
 class RuntimeControlLevel(str, Enum):
