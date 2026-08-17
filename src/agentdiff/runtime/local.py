@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 import socket
-
-# Exact argv execution is this runtime's explicit purpose.
 import subprocess  # nosec B404
 import time
 from contextlib import suppress
@@ -25,6 +23,7 @@ from .base import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from agentdiff.safety import SafetyController
 
 _TIMEOUT_RETURN_CODE = 124
 
@@ -38,6 +37,7 @@ class LocalRuntime:
         *,
         poll_interval_seconds: float = 0.02,
         observe_ports: bool = True,
+        safety_controller: SafetyController | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         if not self.root.is_dir():
@@ -46,6 +46,10 @@ class LocalRuntime:
             raise ValueError("poll_interval_seconds must be greater than zero")
         self.poll_interval_seconds = poll_interval_seconds
         self.observe_ports = observe_ports
+        self._safety_controller = safety_controller
+
+    def configure_safety(self, controller: SafetyController) -> None:
+        self._safety_controller = controller
 
     def run(
         self,
@@ -128,6 +132,11 @@ class LocalRuntime:
                     duration_seconds=time.monotonic() - started,
                     owned_processes=evidence,
                     cleanup=cleanup,
+                    safety=(
+                        self._safety_controller.report.to_dict()
+                        if self._safety_controller is not None
+                        else None
+                    ),
                     port_observation=self._port_observation(
                         before_ports,
                         after_ports,
@@ -138,6 +147,36 @@ class LocalRuntime:
             self._observe_process_tree(process.pid, owned)
 
             now = time.monotonic()
+            elapsed = now - started
+
+            if self._safety_controller is not None:
+                if self._safety_controller.observe(
+                    root=self.root,
+                    duration_seconds=elapsed,
+                    processes_spawned=len(owned),
+                    runtime_active=True,
+                ):
+                    evidence = tuple(owned.values())
+                    self.cleanup(evidence, grace_period_seconds=0.2)
+                    self._stop_direct_process(process)
+                    after_ports, after_port_error = self._snapshot_ports()
+                    return RuntimeResult(
+                        argv=command,
+                        cwd=str(self.root),
+                        returncode=125,
+                        timed_out=False,
+                        duration_seconds=elapsed,
+                        owned_processes=evidence,
+                        cleanup=self.cleanup(evidence),
+                        safety=self._safety_controller.report.to_dict(),
+                        port_observation=self._port_observation(
+                            before_ports,
+                            after_ports,
+                            before_port_error,
+                            after_port_error,
+                        ),
+                    )
+
             if deadline is not None and now >= deadline:
                 # Preserve the identities as evidence before cleanup changes process state.
                 evidence = tuple(owned.values())
@@ -150,9 +189,14 @@ class LocalRuntime:
                     cwd=str(self.root),
                     returncode=_TIMEOUT_RETURN_CODE,
                     timed_out=True,
-                    duration_seconds=time.monotonic() - started,
+                    duration_seconds=elapsed,
                     owned_processes=evidence,
                     cleanup=cleanup,
+                    safety=(
+                        self._safety_controller.report.to_dict()
+                        if self._safety_controller is not None
+                        else None
+                    ),
                     port_observation=self._port_observation(
                         before_ports,
                         after_ports,
@@ -161,133 +205,42 @@ class LocalRuntime:
                     ),
                 )
 
-            sleep_seconds = self.poll_interval_seconds
-            if deadline is not None:
-                sleep_seconds = min(sleep_seconds, max(0.0, deadline - now))
-            time.sleep(sleep_seconds)
+            time.sleep(self.poll_interval_seconds)
 
-    @staticmethod
-    def _stop_direct_process(process: subprocess.Popen[Any]) -> None:
-        if process.poll() is not None:
-            return
-        with suppress(OSError):
-            process.terminate()
-        try:
-            process.wait(timeout=0.5)
-        except subprocess.TimeoutExpired:
-            with suppress(OSError):
-                process.kill()
-            with suppress(subprocess.TimeoutExpired):
-                process.wait(timeout=0.5)
-
-    def cleanup(
+    def _observe_process_tree(
         self,
-        processes: Iterable[OwnedProcess],
-        *,
-        grace_period_seconds: float = 1.0,
-    ) -> CleanupReport:
-        """Terminate only PIDs whose current creation time matches recorded evidence."""
-        if grace_period_seconds < 0:
-            raise ValueError("grace_period_seconds must not be negative")
-
-        unique = {(record.pid, record.create_time): record for record in processes}
-        records = sorted(unique.values(), key=lambda item: item.relation == "direct")
-        outcomes: dict[tuple[int, float], CleanupOutcome] = {}
-        signaled: list[tuple[OwnedProcess, psutil.Process]] = []
-
-        for record in records:
-            key = (record.pid, record.create_time)
-            try:
-                current = psutil.Process(record.pid)
-                if not self._creation_time_matches(current, record.create_time):
-                    outcomes[key] = CleanupOutcome(
-                        process=record,
-                        action="pid_reused",
-                        detail="current process creation time does not match recorded evidence",
-                    )
-                    continue
-                current.terminate()
-            except psutil.NoSuchProcess:
-                outcomes[key] = CleanupOutcome(process=record, action="already_exited")
-            except psutil.AccessDenied as error:
-                outcomes[key] = CleanupOutcome(
-                    process=record,
-                    action="access_denied",
-                    detail=str(error),
-                )
-            else:
-                outcomes[key] = CleanupOutcome(process=record, action="terminated")
-                signaled.append((record, current))
-
-        if signaled:
-            _, alive = psutil.wait_procs(
-                [current for _, current in signaled],
-                timeout=grace_period_seconds,
+        root_pid: int,
+        owned: dict[tuple[int, float], OwnedProcess],
+    ) -> None:
+        try:
+            root_process = psutil.Process(root_pid)
+            root_created = root_process.create_time()
+            owned.setdefault(
+                (root_pid, root_created),
+                OwnedProcess(
+                    pid=root_pid,
+                    create_time=root_created,
+                    parent_pid=None,
+                    relation="root",
+                ),
             )
-            alive_pids = {current.pid for current in alive}
-            force_signaled: list[tuple[OwnedProcess, psutil.Process]] = []
-            for record, current in signaled:
-                if current.pid not in alive_pids:
-                    continue
-                key = (record.pid, record.create_time)
-                try:
-                    if not self._creation_time_matches(current, record.create_time):
-                        outcomes[key] = CleanupOutcome(
-                            process=record,
-                            action="pid_reused",
-                            detail="process identity changed before forceful cleanup",
-                        )
-                        continue
-                    current.kill()
-                except psutil.NoSuchProcess:
-                    continue
-                except psutil.AccessDenied as error:
-                    outcomes[key] = CleanupOutcome(
-                        process=record,
-                        action="access_denied",
-                        detail=str(error),
+            for child in root_process.children(recursive=True):
+                with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+                    child_pid = child.pid
+                    child_created = child.create_time()
+                    parent = child.parent()
+                    parent_pid = parent.pid if parent is not None else None
+                    owned.setdefault(
+                        (child_pid, child_created),
+                        OwnedProcess(
+                            pid=child_pid,
+                            create_time=child_created,
+                            parent_pid=parent_pid,
+                            relation="descendant",
+                        ),
                     )
-                else:
-                    outcomes[key] = CleanupOutcome(process=record, action="killed")
-                    force_signaled.append((record, current))
-
-            if force_signaled:
-                _, still_alive = psutil.wait_procs(
-                    [current for _, current in force_signaled],
-                    timeout=grace_period_seconds,
-                )
-                still_alive_pids = {current.pid for current in still_alive}
-                for record, current in force_signaled:
-                    if current.pid not in still_alive_pids:
-                        continue
-                    key = (record.pid, record.create_time)
-                    try:
-                        identity_matches = self._creation_time_matches(
-                            current,
-                            record.create_time,
-                        )
-                    except psutil.NoSuchProcess:
-                        continue
-                    except psutil.AccessDenied as error:
-                        outcomes[key] = CleanupOutcome(
-                            process=record,
-                            action="access_denied",
-                            detail=f"could not verify exit after kill: {error}",
-                        )
-                    else:
-                        outcomes[key] = CleanupOutcome(
-                            process=record,
-                            action="still_running" if identity_matches else "pid_reused",
-                            detail=(
-                                "process remained alive after kill"
-                                if identity_matches
-                                else "process identity changed after forceful cleanup"
-                            ),
-                        )
-
-        return CleanupReport(
-            outcomes=tuple(outcomes[(item.pid, item.create_time)] for item in records)
-        )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
 
     def _observe_execution_domain(
         self,
@@ -295,114 +248,173 @@ class LocalRuntime:
         owned: dict[tuple[int, float], OwnedProcess],
     ) -> None:
         self._observe_process_tree(root_pid, owned)
-        self._observe_process_session(root_pid, owned)
+        for process in psutil.process_iter(["pid", "create_time", "ppid"]):
+            with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+                pid = int(process.info["pid"])
+                parent_pid = process.info.get("ppid")
+                create_time = float(process.info["create_time"])
+                matching_parent = (
+                    parent_pid is not None
+                    and any(
+                        owned_pid == parent_pid and create_time >= owned_created
+                        for owned_pid, owned_created in owned
+                    )
+                )
+                if matching_parent:
+                    owned.setdefault(
+                        (pid, create_time),
+                        OwnedProcess(
+                            pid=pid,
+                            create_time=create_time,
+                            parent_pid=parent_pid,
+                            relation="reparented_descendant",
+                        ),
+                    )
 
-    @staticmethod
-    def _observe_process_session(
-        session_id: int,
-        owned: dict[tuple[int, float], OwnedProcess],
-    ) -> None:
-        """Find reparented POSIX children that remain in the dedicated session."""
+    def cleanup(
+        self,
+        processes: Iterable[OwnedProcess],
+        *,
+        grace_period_seconds: float = 1.0,
+    ) -> CleanupReport:
+        """Terminate and reap matching process identities.
 
-        get_session_id = getattr(os, "getsid", None)
-        if get_session_id is None:
-            return
-        for process in psutil.process_iter():
+        A process is signaled ONLY if ``create_time`` matches the observed identity.
+        """
+        targets = list(processes)
+        outcomes: list[CleanupOutcome] = []
+        signaled: list[tuple[OwnedProcess, Any]] = []
+
+        for identity in targets:
             try:
-                if get_session_id(process.pid) != session_id:
-                    continue
-                create_time = process.create_time()
-                parent_pid = process.ppid()
-            except (OSError, psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                candidate = psutil.Process(identity.pid)
+            except psutil.NoSuchProcess:
+                outcomes.append(CleanupOutcome(identity, "already_exited"))
                 continue
-            record = OwnedProcess(
-                pid=process.pid,
-                create_time=create_time,
-                parent_pid=parent_pid,
-                relation="direct" if process.pid == session_id else "descendant",
-            )
-            owned[(record.pid, record.create_time)] = record
+            except psutil.AccessDenied:
+                outcomes.append(CleanupOutcome(identity, "access_denied"))
+                continue
 
-    @staticmethod
-    def _observe_process_tree(
-        root_pid: int,
-        owned: dict[tuple[int, float], OwnedProcess],
-    ) -> None:
-        try:
-            root = psutil.Process(root_pid)
-            root_create_time = root.create_time()
-            direct_records = [item for item in owned.values() if item.relation == "direct"]
-            if direct_records and root_create_time != direct_records[0].create_time:
-                return
-            observed = [
-                (root, "direct"),
-                *((child, "descendant") for child in root.children(recursive=True)),
-            ]
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            return
-
-        for process, relation in observed:
             try:
-                create_time = process.create_time()
-                parent_pid = process.ppid()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                candidate_created = candidate.create_time()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                outcomes.append(CleanupOutcome(identity, "already_exited"))
                 continue
-            record = OwnedProcess(
-                pid=process.pid,
-                create_time=create_time,
-                parent_pid=parent_pid,
-                relation=relation,
-            )
-            owned[(record.pid, record.create_time)] = record
 
-    @staticmethod
-    def _creation_time_matches(process: psutil.Process, expected: float) -> bool:
-        return process.create_time() == expected
+            if candidate_created != identity.create_time:
+                outcomes.append(
+                    CleanupOutcome(
+                        identity,
+                        "pid_reused",
+                        detail="create_time does not match recorded process identity",
+                    )
+                )
+                continue
+
+            try:
+                candidate.terminate()
+            except psutil.NoSuchProcess:
+                outcomes.append(CleanupOutcome(identity, "already_exited"))
+                continue
+            except psutil.AccessDenied:
+                outcomes.append(CleanupOutcome(identity, "access_denied"))
+                continue
+
+            signaled.append((identity, candidate))
+
+        if signaled:
+            wait_fn = getattr(psutil, "wait_procs", None)
+            gone: list[Any] = []
+            alive: list[Any] = []
+            if wait_fn is not None:
+                gone, alive = wait_fn([proc for _, proc in signaled], timeout=grace_period_seconds)
+            else:
+                deadline = time.monotonic() + max(0.0, grace_period_seconds)
+                while time.monotonic() < deadline:
+                    alive = [
+                        p
+                        for _, p in signaled
+                        if (p.is_running() if hasattr(p, "is_running") else True)
+                    ]
+                    if not alive:
+                        break
+                    time.sleep(self.poll_interval_seconds)
+
+            alive_set = set(alive)
+            for identity, proc in signaled:
+                if proc in alive_set:
+                    try:
+                        proc.kill()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                    outcomes.append(CleanupOutcome(identity, "still_running"))
+                else:
+                    outcomes.append(CleanupOutcome(identity, "terminated"))
+
+        return CleanupReport(outcomes=tuple(outcomes))
 
     def _snapshot_ports(self) -> tuple[set[PortEndpoint], str | None]:
         if not self.observe_ports:
             return set(), None
-        try:
-            connections = psutil.net_connections(kind="inet")
-        except (OSError, psutil.Error) as error:
-            return set(), f"{type(error).__name__}: {error}"
-
         endpoints: set[PortEndpoint] = set()
-        for connection in connections:
-            if (
-                connection.status != psutil.CONN_LISTEN
-                or connection.type != socket.SOCK_STREAM
-                or connection.family not in {socket.AF_INET, socket.AF_INET6}
-                or not connection.laddr
-            ):
-                continue
-            host = getattr(connection.laddr, "ip", connection.laddr[0])
-            port = getattr(connection.laddr, "port", connection.laddr[1])
-            endpoints.add(PortEndpoint(host=str(host), port=int(port), pid=connection.pid))
-        return endpoints, None
+        try:
+            for connection in psutil.net_connections(kind="inet"):
+                if connection.status != psutil.CONN_LISTEN or not connection.laddr:
+                    continue
+                laddr = connection.laddr
+                if isinstance(laddr, tuple):
+                    host = str(laddr[0])
+                    port = int(laddr[1])
+                elif hasattr(laddr, "ip"):
+                    host = str(laddr.ip)
+                    port = int(laddr.port)
+                else:
+                    continue
+                endpoints.add(
+                    PortEndpoint(
+                        host=host,
+                        port=port,
+                        pid=connection.pid,
+                    )
+                )
+            return endpoints, None
+        except (psutil.AccessDenied, PermissionError) as error:
+            return set(), f"permission denied: {error}"
+        except OSError as error:
+            return set(), f"network observation unavailable: {error}"
 
-    @staticmethod
     def _port_observation(
+        self,
         before: set[PortEndpoint],
         after: set[PortEndpoint],
         before_error: str | None,
         after_error: str | None,
     ) -> PortObservation:
-        errors = [
-            f"before snapshot: {before_error}" if before_error else "",
-            f"after snapshot: {after_error}" if after_error else "",
-        ]
-        error = "; ".join(item for item in errors if item) or None
+        if not self.observe_ports:
+            return PortObservation()
+        error: str | None = None
+        if before_error:
+            error = f"before snapshot error: {before_error}"
+        elif after_error:
+            error = f"after snapshot error: {after_error}"
         if error is not None:
-            # A set difference against a failed snapshot would invent machine-wide
-            # opens or closes. Preserve the collection error without inferring a delta.
-            return PortObservation(error=error)
-
-        def key(item: PortEndpoint) -> tuple[str, int, int]:
-            return (item.host, item.port, item.pid if item.pid is not None else -1)
-
+            return PortObservation(opened=(), closed=(), error=error)
+        opened = tuple(sorted(after - before, key=lambda item: (item.host, item.port)))
+        closed = tuple(sorted(before - after, key=lambda item: (item.host, item.port)))
         return PortObservation(
-            opened=tuple(sorted(after - before, key=key)),
-            closed=tuple(sorted(before - after, key=key)),
+            opened=opened,
+            closed=closed,
             error=error,
         )
+
+
+
+    def _stop_direct_process(self, process: subprocess.Popen[Any]) -> None:
+        with suppress(OSError):
+            process.terminate()
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=0.5)
+        with suppress(OSError):
+            process.kill()
+        with suppress(OSError):
+            process.wait(timeout=0.5)
