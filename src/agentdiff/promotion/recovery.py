@@ -272,7 +272,13 @@ class PromotionRecovery:
             return False
         if record.sha256 is None or sha256 is None:
             return False
-        return record.sha256 == sha256 and (mode is None or record.mode == mode)
+        if record.sha256 != sha256:
+            return False
+        # Mode is only meaningful/restorable on POSIX; Windows st_mode is not
+        # a security property and is not preserved by restore.
+        if mode is None or os.name == "nt":
+            return True
+        return record.mode == mode
 
     @staticmethod
     def _content_matches(record: Any, sha256: str | None) -> bool:
