@@ -1,7 +1,14 @@
 """Fail-closed, crash-consistent host promotion."""
 
 from .engine import PromotionEngine
-from .journal import JournalEntry, JournalState, PromotionJournal
+from .journal import (
+    EntryState,
+    JournalEntry,
+    JournalLoadOutcome,
+    JournalLoadResult,
+    JournalState,
+    PromotionJournal,
+)
 from .lock import PromotionLockError, WorkspaceLease
 from .models import (
     PromotionAction,
@@ -10,11 +17,14 @@ from .models import (
     PromotionPlanEntry,
     PromotionReport,
 )
-from .recovery import PromotionRecovery, RecoveryReport
+from .recovery import PromotionRecovery, PromotionRecoveryError, RecoveryReport
 from .staging import PromotionStager
 
 __all__ = [
+    "EntryState",
     "JournalEntry",
+    "JournalLoadOutcome",
+    "JournalLoadResult",
     "JournalState",
     "PromotionAction",
     "PromotionConflict",
@@ -24,6 +34,7 @@ __all__ = [
     "PromotionPlan",
     "PromotionPlanEntry",
     "PromotionRecovery",
+    "PromotionRecoveryError",
     "PromotionReport",
     "PromotionStager",
     "RecoveryReport",
