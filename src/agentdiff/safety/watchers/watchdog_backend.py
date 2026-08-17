@@ -20,8 +20,8 @@ class WatchdogEventSource:
 
     def __init__(self, root: str | Path) -> None:
         try:
-            from watchdog.events import FileSystemEventHandler
-            from watchdog.observers import Observer
+            from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
+            from watchdog.observers import Observer  # type: ignore[import-not-found]
         except ImportError as error:  # pragma: no cover - depends on environment
             raise RuntimeError("watchdog is not installed") from error
         self._observer_class = Observer
