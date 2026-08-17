@@ -1,0 +1,102 @@
+name: AgentDiff Trust Report
+description: Prove a sealed AgentDiff run and publish deterministic check evidence
+inputs:
+  run-id:
+    description: AgentDiff run ID already produced by an isolated run
+    required: true
+  root:
+    description: Repository root containing .agentdiff/runs
+    required: false
+    default: .
+  timeout:
+    description: Per-phase clean-room proof timeout in seconds
+    required: false
+    default: "900"
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: "3.12"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+      with:
+        version: "0.11.12"
+        enable-cache: true
+
+    - name: Install locked AgentDiff action source
+      shell: bash
+      run: uv sync --project "$GITHUB_ACTION_PATH" --locked --no-dev
+
+    - name: Verify immutable run evidence
+      id: verify
+      continue-on-error: true
+      shell: bash
+      env:
+        AGENTDIFF_ACTION_RUN_ID: ${{ inputs.run-id }}
+        AGENTDIFF_ACTION_ROOT: ${{ inputs.root }}
+      run: >-
+        uv run --project "$GITHUB_ACTION_PATH" --no-sync agentdiff
+        verify "$AGENTDIFF_ACTION_RUN_ID" --root "$AGENTDIFF_ACTION_ROOT"
+
+    - name: Prove patch in a clean room
+      id: prove
+      continue-on-error: true
+      shell: bash
+      env:
+        AGENTDIFF_ACTION_RUN_ID: ${{ inputs.run-id }}
+        AGENTDIFF_ACTION_ROOT: ${{ inputs.root }}
+        AGENTDIFF_ACTION_TIMEOUT: ${{ inputs.timeout }}
+      run: >-
+        uv run --project "$GITHUB_ACTION_PATH" --no-sync agentdiff
+        prove "$AGENTDIFF_ACTION_RUN_ID"
+        --root "$AGENTDIFF_ACTION_ROOT"
+        --timeout "$AGENTDIFF_ACTION_TIMEOUT"
+
+    - name: Render trust report
+      id: report
+      continue-on-error: true
+      shell: bash
+      env:
+        AGENTDIFF_ACTION_RUN_ID: ${{ inputs.run-id }}
+        AGENTDIFF_ACTION_ROOT: ${{ inputs.root }}
+      run: >-
+        uv run --project "$GITHUB_ACTION_PATH" --no-sync
+        python -m agentdiff.integrations.github_report "$AGENTDIFF_ACTION_RUN_ID"
+        --root "$AGENTDIFF_ACTION_ROOT"
+        --json-output agentdiff-trust-report.json
+        --markdown-output agentdiff-trust-report.md
+
+    - name: Upload machine trust report
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: agentdiff-trust-report
+        path: |
+          agentdiff-trust-report.json
+          agentdiff-trust-report.md
+        if-no-files-found: warn
+        retention-days: 14
+
+    - name: Upload verified capsule
+      if: always() && steps.verify.outcome == 'success'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: agentdiff-${{ inputs.run-id }}
+        path: ${{ inputs.root }}/.agentdiff/runs/${{ inputs.run-id }}/
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Enforce trust verdict
+      if: always()
+      shell: bash
+      env:
+        AGENTDIFF_VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        AGENTDIFF_PROVE_OUTCOME: ${{ steps.prove.outcome }}
+        AGENTDIFF_REPORT_OUTCOME: ${{ steps.report.outcome }}
+      run: >-
+        test "$AGENTDIFF_VERIFY_OUTCOME" = success
+        && test "$AGENTDIFF_PROVE_OUTCOME" = success
+        && test "$AGENTDIFF_REPORT_OUTCOME" = success
