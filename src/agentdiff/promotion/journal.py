@@ -118,13 +118,13 @@ class PromotionJournal:
                 updated_at=str(data.get("updated_at", "")),
                 entries=[JournalEntry.from_dict(item) for item in data.get("entries", [])],
             )
-        except Exception:
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return None
 
     def clean(self) -> None:
         """Remove completed journal file."""
         if self.path.is_file():
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 self.path.unlink(missing_ok=True)
-            except OSError:
-                pass

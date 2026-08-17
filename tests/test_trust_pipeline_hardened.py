@@ -3,25 +3,27 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from agentdiff.evidence import BlobReference, CapsuleReader, PatchBundle, PatchEntry
-from agentdiff.policy import Policy, PolicyAction, PolicyDecision, ProofPolicy, load_policy
-from agentdiff.proof import ProofEngine, ProofVerdict
-from agentdiff.proof.plan import TrustedVerificationPlan, select_trusted_verification_plan
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+from agentdiff.evidence import CapsuleReader, PatchEntry
+from agentdiff.policy import Policy, ProofPolicy, load_policy
 from agentdiff.promotion import (
     JournalEntry,
     JournalState,
-    PromotionEngine,
     PromotionJournal,
     PromotionLockError,
     PromotionRecovery,
     WorkspaceLease,
 )
+from agentdiff.proof.plan import select_trusted_verification_plan
 from agentdiff.runtime import MaterializationStrategy, WorkspaceMaterializer
-from agentdiff.safety import HybridSafetyWatcher, SafetyController
+from agentdiff.safety import HybridSafetyWatcher
 from agentdiff.state import FilesystemScanner
 
 
@@ -149,11 +151,13 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
 def test_workspace_lease_concurrency(tmp_path: Path) -> None:
     """Test advisory lock lease prevents overlapping promotion locks."""
     lease1 = WorkspaceLease(tmp_path, run_id="run-1")
-    with lease1.hold():
-        lease2 = WorkspaceLease(tmp_path, run_id="run-2")
-        with pytest.raises(PromotionLockError, match="another process is promoting"):
-            with lease2.hold():
-                pass
+    lease2 = WorkspaceLease(tmp_path, run_id="run-2")
+    with (
+        lease1.hold(),
+        pytest.raises(PromotionLockError, match="another process is promoting"),
+        lease2.hold(),
+    ):
+        pass
 
 
 def test_capsule_reader_and_merkle_root(tmp_path: Path) -> None:

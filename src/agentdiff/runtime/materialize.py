@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 _CHUNK_SIZE = 1024 * 1024
 
@@ -89,24 +89,30 @@ class WorkspaceMaterializer:
             return 0
 
         # Reflink attempt on POSIX if requested/auto
-        if self.strategy in {MaterializationStrategy.AUTO, MaterializationStrategy.REFLINK}:
-            if hasattr(os, "copy_file_range"):
+        if self.strategy in {
+            MaterializationStrategy.AUTO,
+            MaterializationStrategy.REFLINK,
+        } and hasattr(os, "copy_file_range"):
+            try:
+                src_fd = os.open(src, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+                dst_fd = os.open(
+                    dst,
+                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0),
+                    0o644,
+                )
                 try:
-                    src_fd = os.open(src, os.O_RDONLY | getattr(os, "O_BINARY", 0))
-                    dst_fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o644)
-                    try:
-                        total = 0
-                        while total < info.st_size:
-                            copied = os.copy_file_range(src_fd, dst_fd, info.st_size - total)
-                            if copied == 0:
-                                break
-                            total += copied
-                        return total
-                    finally:
-                        os.close(src_fd)
-                        os.close(dst_fd)
-                except OSError:
-                    pass
+                    total = 0
+                    while total < info.st_size:
+                        copied = os.copy_file_range(src_fd, dst_fd, info.st_size - total)
+                        if copied == 0:
+                            break
+                        total += copied
+                    return total
+                finally:
+                    os.close(src_fd)
+                    os.close(dst_fd)
+            except OSError:
+                pass
 
         # Robust streaming fallback
         with open(src, "rb") as input_f, open(dst, "wb") as output_f:
@@ -114,9 +120,9 @@ class WorkspaceMaterializer:
 
         mode = stat.S_IMODE(info.st_mode)
         if os.name != "nt":
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 dst.chmod(mode)
-            except OSError:
-                pass
 
         return info.st_size

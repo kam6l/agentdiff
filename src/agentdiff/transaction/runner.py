@@ -192,13 +192,14 @@ def _validate_recovery_backups(
                 size=record.size,
             )
             verified_files[path] = record
-        except Exception as error:
+        except (OSError, ValueError, TypeError) as error:
             verified_unsupported[path] = f"backup validation failed: {error}"
             verified_files[path] = replace(
                 record,
                 backup_path=None,
                 backup_error=f"backup validation failed: {error}",
             )
+
     return FilesystemManifest(
         schema_version=manifest.schema_version,
         captured_at=manifest.captured_at,
@@ -400,19 +401,12 @@ class AgentRunTransaction:
         unsupported_paths = sorted(set(before.unsupported) | set(after.unsupported))
         observation_warnings = [
             ObservationWarning(
-                path=path,
-                reason=after.unsupported.get(path)
-                or before.unsupported.get(path)
+                path=unsupported_path,
+                reason=after.unsupported.get(unsupported_path)
+                or before.unsupported.get(unsupported_path)
                 or "unsupported entry",
             )
-        ] if False else [
-            ObservationWarning(
-                path=path,
-                reason=after.unsupported.get(path)
-                or before.unsupported.get(path)
-                or "unsupported entry",
-            )
-            for path in unsupported_paths
+            for unsupported_path in unsupported_paths
         ]
         files_deleted = sum(change.change_type == "deleted" for change in changes)
         processes_spawned = len(runtime_result.owned_processes) if runtime_result is not None else 0
@@ -423,6 +417,7 @@ class AgentRunTransaction:
             processes_spawned=processes_spawned,
             duration_seconds=duration,
         )
+
         orphan_processes = 0
         opened_ports = 0
         if runtime_result is not None:
@@ -473,7 +468,9 @@ class AgentRunTransaction:
         else:
             status = "passed"
 
-        safety_report = safety_controller.report.to_dict() if safety_controller is not None else None
+        safety_report = (
+            safety_controller.report.to_dict() if safety_controller is not None else None
+        )
         result = TransactionResult(
             run_id=store.run_id,
             status=status,
@@ -504,4 +501,3 @@ class AgentRunTransaction:
         if selected_runtime is not None and hasattr(selected_runtime, "close"):
             selected_runtime.close()
         return result
-

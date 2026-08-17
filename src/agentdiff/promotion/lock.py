@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
@@ -37,11 +38,13 @@ class WorkspaceLease:
                 self._fd = os.open(str(self.lock_file), flags, 0o600)
                 if os.name == "nt":
                     import msvcrt
+
                     # Lock 1 byte at position 0 in non-blocking mode
                     msvcrt.locking(self._fd, msvcrt.LK_NBLCK, 1)
                 else:
                     import fcntl
-                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
 
                 # Write lease metadata
                 metadata = {
@@ -56,15 +59,15 @@ class WorkspaceLease:
                 return
             except (BlockingIOError, OSError, PermissionError) as exc:
                 if self._fd is not None:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.close(self._fd)
-                    except OSError:
-                        pass
                     self._fd = None
                 if time.monotonic() >= deadline:
-                    raise PromotionLockError(
-                        f"could not acquire promotion lease on {self.lock_file}: another process is promoting"
-                    ) from exc
+                    msg = (
+                        f"could not acquire promotion lease on {self.lock_file}: "
+                        "another process is promoting"
+                    )
+                    raise PromotionLockError(msg) from exc
                 time.sleep(0.1)
 
     def release(self) -> None:
@@ -73,25 +76,22 @@ class WorkspaceLease:
             try:
                 if os.name == "nt":
                     import msvcrt
+
                     os.lseek(self._fd, 0, os.SEEK_SET)
-                    try:
+                    with contextlib.suppress(OSError):
                         msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)
-                    except OSError:
-                        pass
                 else:
                     import fcntl
-                    try:
-                        fcntl.flock(self._fd, fcntl.LOCK_UN)
-                    except OSError:
-                        pass
+
+                    with contextlib.suppress(OSError):
+                        fcntl.flock(self._fd, fcntl.LOCK_UN)  # type: ignore[attr-defined]
+
                 os.close(self._fd)
             finally:
                 self._fd = None
-                try:
+                with contextlib.suppress(OSError):
                     if self.lock_file.is_file():
                         self.lock_file.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
     @contextmanager
     def hold(self, timeout_seconds: float = 5.0) -> Generator[WorkspaceLease, None, None]:

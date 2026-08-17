@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

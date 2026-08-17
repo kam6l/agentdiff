@@ -18,9 +18,7 @@ def build_trust_report(root: str | Path, run_id: str) -> dict[str, Any]:
     result = inspected["result"]
     proof_bundle = inspected.get("proof", {})
     proof = proof_bundle.get("result", {}) if isinstance(proof_bundle, dict) else {}
-    proof_integrity = (
-        proof_bundle.get("integrity", {}) if isinstance(proof_bundle, dict) else {}
-    )
+    proof_integrity = proof_bundle.get("integrity", {}) if isinstance(proof_bundle, dict) else {}
     immediate = result.get("blast_radius", {}) if isinstance(result, dict) else {}
     future = result.get("future_blast_radius", {}) if isinstance(result, dict) else {}
     capsule_integrity = bool(inspected["integrity"].get("ok"))
@@ -60,9 +58,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     mark = "✓" if passed else "✗"
     tests = report["tests"]
     test_text = (
-        f"{tests['passed']}/{tests['total']}"
-        if tests["total"] is not None
-        else tests["status"]
+        f"{tests['passed']}/{tests['total']}" if tests["total"] is not None else tests["status"]
     )
     return "\n".join(
         (
