@@ -110,6 +110,20 @@ def _json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True)
 
 
+def _emit_report(payload: Any, *, machine_format: str) -> None:
+    """Emit a machine-readable report with recursive redaction applied.
+
+    Machine JSON output is evidence that may be shared or uploaded, so it is
+    passed through :func:`agentdiff.redaction.redact_data` to redact
+    sensitive-looking fields before serialization.
+    """
+
+    if machine_format == "json":
+        from agentdiff.redaction import redact_data
+
+        print(_json(redact_data(payload)))
+
+
 def _load_runtime_policy(root: Path, requested: str | None) -> Policy:
     if requested is not None:
         return load_policy_file(requested)
@@ -551,7 +565,7 @@ def cmd_prove(args: argparse.Namespace) -> int:
 
     proof = ProofEngine(args.root, args.run_id).prove(timeout_seconds=args.timeout)
     if args.format == "json":
-        print(_json(proof.to_dict()))
+        _emit_report(proof.to_dict(), machine_format="json")
         return 0 if proof.verdict.value == "PROVEN" else 7
 
     tests_phase = next((phase for phase in proof.phases if phase.phase == "tests"), None)
@@ -622,7 +636,7 @@ def cmd_promote(args: argparse.Namespace) -> int:
         print(f"agentdiff: promotion blocked: {safe_display(str(error))}", file=sys.stderr)
         return 9
     if args.format == "json":
-        print(_json(report.to_dict()))
+        _emit_report(report.to_dict(), machine_format="json")
     else:
         print(f"Promotion run: {report.run_id}")
         print(f"Status: {report.status}")
