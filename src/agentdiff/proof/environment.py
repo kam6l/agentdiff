@@ -137,6 +137,7 @@ class DockerProofEnvironment:
         )
         if process.stdout is None:  # pragma: no cover - guaranteed by PIPE
             raise RuntimeError("proof output pipe is unavailable")
+        stdout_pipe: Any = process.stdout
         digest = hashlib.sha256()
         bounded = bytearray()
         output_bytes = 0
@@ -144,8 +145,8 @@ class DockerProofEnvironment:
 
         def drain_output() -> None:
             nonlocal output_bytes
-            with process.stdout:
-                while chunk := process.stdout.read(64 * 1024):
+            with stdout_pipe:
+                while chunk := stdout_pipe.read(64 * 1024):
                     digest.update(chunk)
                     output_bytes += len(chunk)
                     remaining = _MAX_OUTPUT_BYTES - len(bounded)
@@ -212,7 +213,9 @@ class DockerProofEnvironment:
         detail: str,
     ) -> ProofPhaseResult:
         text = bounded_output.decode("utf-8", "replace")
-        tests_passed, tests_total = parse_test_counts(text) if phase == "tests" else (None, None)
+        tests_passed, tests_total = (
+            parse_test_counts(text) if phase in {"tests", "baseline_tests"} else (None, None)
+        )
         return ProofPhaseResult(
             phase=phase,
             command=tuple(command),

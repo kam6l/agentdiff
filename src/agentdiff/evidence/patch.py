@@ -341,6 +341,7 @@ class PatchBundle:
                 f"source/files/{normalize_relative_path(path)}",
                 target_root,
                 path,
+                mode=int(expected.get("mode", 0o644)),
             )
 
     def apply(self, destination: str | Path) -> None:
@@ -358,9 +359,17 @@ class PatchBundle:
             if os.name != "nt" and entry.result_mode is not None:
                 target.chmod(entry.result_mode)
 
-    def _copy_capsule_file(self, artifact: str, root: Path, relative: str) -> None:
+    def _copy_capsule_file(
+        self,
+        artifact: str,
+        root: Path,
+        relative: str,
+        *,
+        mode: int | None = None,
+    ) -> None:
         target = self._safe_target(root, relative, create_parents=True)
         source = self.store.artifact_path(artifact)
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
         info = source.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise RuntimeError("capsule payload is not a single-link regular file")
@@ -369,13 +378,28 @@ class PatchBundle:
         temporary = target.parent / (
             f".agentdiff-{hashlib.sha256(relative.encode()).hexdigest()}.tmp"
         )
+        source_fd = os.open(source, flags)
         try:
-            with source.open("rb") as input_stream, temporary.open("xb") as output_stream:
+            opened = os.fstat(source_fd)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or opened.st_dev != info.st_dev
+                or opened.st_ino != info.st_ino
+            ):
+                raise RuntimeError("capsule payload changed while opening")
+            with (
+                os.fdopen(source_fd, "rb", closefd=False) as input_stream,
+                temporary.open("xb") as output_stream,
+            ):
                 shutil.copyfileobj(input_stream, output_stream, length=1024 * 1024)
                 output_stream.flush()
                 os.fsync(output_stream.fileno())
             os.replace(temporary, target)
+            if os.name != "nt" and mode is not None:
+                target.chmod(stat.S_IMODE(mode))
         finally:
+            os.close(source_fd)
             temporary.unlink(missing_ok=True)
 
     @staticmethod
