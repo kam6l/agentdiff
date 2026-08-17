@@ -56,7 +56,7 @@ class DockerProofEnvironment:
             user,
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=128m",
+            "/tmp:rw,noexec,nosuid,nodev,size=128m",  # nosec B108
             "--cap-drop",
             "ALL",
             "--security-opt",

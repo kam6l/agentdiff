@@ -225,7 +225,7 @@ class DockerRuntime:
             user,
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=64m",
+            "/tmp:rw,noexec,nosuid,nodev,size=64m",  # nosec B108
             "--cap-drop",
             "ALL",
             "--security-opt",
