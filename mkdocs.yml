@@ -22,15 +22,9 @@ theme:
     - scheme: slate
       primary: black
       accent: deep orange
-      toggle:
-        icon: material/weather-sunny
-        name: Use light mode
     - scheme: default
       primary: white
       accent: deep orange
-      toggle:
-        icon: material/weather-night
-        name: Use dark mode
   features:
     - navigation.expand
     - navigation.footer
