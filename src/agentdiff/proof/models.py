@@ -104,7 +104,7 @@ class ProofResult:
     reasons: tuple[str, ...]
     verification_source: str = "unconfigured"
     verification_digest: str = ""
-    trusted_plan: bool = True
+    verification_confirmed: bool = True
     baseline_verifier: str = "SKIPPED"
     baseline_tests_passed: int | None = None
     baseline_tests_total: int | None = None
@@ -136,7 +136,7 @@ class ProofResult:
             "reasons": list(self.reasons),
             "verification_source": self.verification_source,
             "verification_digest": self.verification_digest,
-            "trusted_plan": self.trusted_plan,
+            "verification_confirmed": self.verification_confirmed,
             "baseline_verifier": self.baseline_verifier,
             "baseline_tests_passed": self.baseline_tests_passed,
             "baseline_tests_total": self.baseline_tests_total,

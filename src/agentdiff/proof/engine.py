@@ -52,7 +52,7 @@ _CHUNK_SIZE = 1024 * 1024
 def compute_proof_strength(
     *,
     clean_environment: str,
-    trusted_plan: bool,
+    verification_confirmed: bool,
     baseline_verifier: str,
     baseline_available: bool,
     verifier_files_changed: int,
@@ -65,7 +65,7 @@ def compute_proof_strength(
     level = ProofStrengthLevel.L0_EXECUTION_ONLY
     if clean_environment == "PASS":
         level = ProofStrengthLevel.L1_CLEAN_ROOM
-    if trusted_plan:
+    if verification_confirmed:
         level = ProofStrengthLevel.L2_TRUSTED_COMMAND
     baseline_confirms = baseline_available and baseline_verifier == "PASS"
     if baseline_confirms:
@@ -250,7 +250,7 @@ class ProofEngine:
         baseline_phase = next((phase for phase in phases if phase.phase == "baseline_tests"), None)
         level, label, independence = compute_proof_strength(
             clean_environment=clean_environment,
-            trusted_plan=plan.trusted,
+            verification_confirmed=plan.trusted,
             baseline_verifier=baseline_verifier,
             baseline_available=baseline_available,
             verifier_files_changed=verifier_mutations.modified_count,
@@ -275,7 +275,7 @@ class ProofEngine:
             reasons=tuple(dict.fromkeys(reasons)),
             verification_source=plan.source,
             verification_digest=plan.plan_digest,
-            trusted_plan=plan.trusted,
+            verification_confirmed=plan.trusted,
             baseline_verifier=baseline_verifier,
             baseline_tests_passed=(
                 baseline_phase.tests_passed if baseline_phase is not None else None

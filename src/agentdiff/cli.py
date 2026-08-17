@@ -593,7 +593,7 @@ def cmd_prove(args: argparse.Namespace) -> int:
         f"  Future Blast         {proof.future_blast_radius} / "
         f"{blast_level(proof.future_blast_radius)}"
     )
-    print(f"  Trusted Plan         {'YES' if proof.trusted_plan else 'NO'}")
+    print(f"  Trusted Plan         {'YES' if proof.verification_confirmed else 'NO'}")
     print(f"  Baseline Tests       {baseline_tests}")
     print(f"  Patched Tests        {patched_tests}")
     print(f"  Verifier Changes     {proof.verifier_files_changed}")

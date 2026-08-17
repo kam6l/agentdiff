@@ -301,7 +301,7 @@ def test_plan_untrusted_when_test_files_modified(tmp_path: Path) -> None:
 def test_proof_strength_matrix() -> None:
     assert compute_proof_strength(
         clean_environment="FAIL",
-        trusted_plan=False,
+        verification_confirmed=False,
         baseline_verifier="SKIPPED",
         baseline_available=False,
         verifier_files_changed=0,
@@ -312,14 +312,14 @@ def test_proof_strength_matrix() -> None:
     )
     assert compute_proof_strength(
         clean_environment="PASS",
-        trusted_plan=False,
+        verification_confirmed=False,
         baseline_verifier="SKIPPED",
         baseline_available=False,
         verifier_files_changed=0,
     ) == (ProofStrengthLevel.L1_CLEAN_ROOM, ProofStrengthLabel.WEAK, VerifierIndependence.WEAK)
     assert compute_proof_strength(
         clean_environment="PASS",
-        trusted_plan=True,
+        verification_confirmed=True,
         baseline_verifier="SKIPPED",
         baseline_available=False,
         verifier_files_changed=0,
@@ -330,7 +330,7 @@ def test_proof_strength_matrix() -> None:
     )
     assert compute_proof_strength(
         clean_environment="PASS",
-        trusted_plan=True,
+        verification_confirmed=True,
         baseline_verifier="PASS",
         baseline_available=True,
         verifier_files_changed=0,
