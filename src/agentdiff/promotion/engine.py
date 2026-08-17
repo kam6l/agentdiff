@@ -14,6 +14,8 @@ from agentdiff.pathing import normalize_relative_path
 from agentdiff.state import FileRecord, FilesystemScanner
 from agentdiff.transaction.store import RunStore
 
+from .journal import JournalEntry, JournalState, PromotionJournal
+from .lock import WorkspaceLease
 from .models import (
     PromotionAction,
     PromotionConflict,
@@ -21,6 +23,8 @@ from .models import (
     PromotionPlanEntry,
     PromotionReport,
 )
+from .recovery import PromotionRecovery
+from .staging import PromotionStager
 
 
 class PromotionEngine:
@@ -30,6 +34,8 @@ class PromotionEngine:
         self.store = RunStore.open(root, run_id)
         self.root = self.store.root
         self.scanner = FilesystemScanner(self.root)
+        self.lease = WorkspaceLease(self.root, run_id)
+        self.stager = PromotionStager(self.root, run_id)
 
     @classmethod
     def open(cls, root: str | Path, run_id: str) -> "PromotionEngine":
@@ -42,76 +48,133 @@ class PromotionEngine:
         safe_only: bool = False,
         paths: list[str] | None = None,
     ) -> PromotionReport:
-        integrity = self.store.verify_integrity()
-        if not integrity.ok:
-            raise PermissionError("sealed capsule integrity verification failed")
-        proof_integrity = self.store.verify_extension("proof")
-        if not proof_integrity.ok:
-            raise PermissionError("sealed proof evidence is required")
-        proof = self.store.read_json_path("proof/result.json")
-        if not isinstance(proof, dict) or proof.get("verdict") != "PROVEN":
-            raise PermissionError("promotion is blocked until clean-room proof is PROVEN")
-        bundle = PatchBundle(self.store)
-        if proof.get("patch_digest") != bundle.manifest.digest:
-            raise PermissionError("proof does not match the sealed patch")
-        if proof.get("immutable_manifest_sha256") != self.store.immutable_manifest_sha256():
-            raise PermissionError("proof does not match immutable run evidence")
-        selected = self._normalize_selection(paths)
-        plan = self._plan(bundle, safe_only=safe_only, selected=selected)
-        self.store.write_json_path("promotion/plan.json", plan.to_dict())
-        report = PromotionReport(
-            run_id=self.store.run_id,
-            status="CONFLICT",
-            dry_run=dry_run,
-            patch_digest=bundle.manifest.digest,
-        )
-        for entry in plan.entries:
-            if entry.disposition == "conflict":
-                report.conflicts.append(PromotionConflict(entry.path, entry.reason))
-            elif entry.disposition in {"skip", "already_applied"}:
-                report.skipped.append(entry.path)
-        if not plan.ready:
-            report.status = "CONFLICT"
-            self._persist_result(report)
-            return report
-        if dry_run:
-            report.status = "DRY_RUN_SAFE"
-            report.actions.extend(
-                PromotionAction(entry.path, "would_apply", entry.change_type)
-                for entry in plan.entries
-                if entry.disposition == "ready"
-            )
-            self._persist_result(report)
-            return report
+        with self.lease.hold():
+            # Pre-flight: recover any stale crashed journal if present
+            PromotionRecovery(self.root).check_and_recover()
 
-        entries_by_path = {entry.path: entry for entry in bundle.manifest.entries}
-        ready = [entry for entry in plan.entries if entry.disposition == "ready"]
-        # Re-plan the entire selected set immediately before the first write.
-        latest = self._plan(bundle, safe_only=safe_only, selected=selected)
-        if not latest.ready or [item.to_dict() for item in latest.entries] != [
-            item.to_dict() for item in plan.entries
-        ]:
-            report.status = "CONFLICT"
-            report.conflicts.append(
-                PromotionConflict("<host>", "host state changed after promotion planning")
+            integrity = self.store.verify_integrity()
+            if not integrity.ok:
+                raise PermissionError("sealed capsule integrity verification failed")
+            proof_integrity = self.store.verify_extension("proof")
+            if not proof_integrity.ok:
+                raise PermissionError("sealed proof evidence is required")
+            proof = self.store.read_json_path("proof/result.json")
+            if not isinstance(proof, dict) or proof.get("verdict") != "PROVEN":
+                raise PermissionError("promotion is blocked until clean-room proof is PROVEN")
+            bundle = PatchBundle(self.store)
+            if proof.get("patch_digest") != bundle.manifest.digest:
+                raise PermissionError("proof does not match the sealed patch")
+            if proof.get("immutable_manifest_sha256") != self.store.immutable_manifest_sha256():
+                raise PermissionError("proof does not match immutable run evidence")
+            selected = self._normalize_selection(paths)
+            plan = self._plan(bundle, safe_only=safe_only, selected=selected)
+            self.store.write_json_path("promotion/plan.json", plan.to_dict())
+            report = PromotionReport(
+                run_id=self.store.run_id,
+                status="CONFLICT",
+                dry_run=dry_run,
+                patch_digest=bundle.manifest.digest,
             )
+            for entry in plan.entries:
+                if entry.disposition == "conflict":
+                    report.conflicts.append(PromotionConflict(entry.path, entry.reason))
+                elif entry.disposition in {"skip", "already_applied"}:
+                    report.skipped.append(entry.path)
+            if not plan.ready:
+                report.status = "CONFLICT"
+                self._persist_result(report)
+                return report
+            if dry_run:
+                report.status = "DRY_RUN_SAFE"
+                report.actions.extend(
+                    PromotionAction(entry.path, "would_apply", entry.change_type)
+                    for entry in plan.entries
+                    if entry.disposition == "ready"
+                )
+                self._persist_result(report)
+                return report
+
+            entries_by_path = {entry.path: entry for entry in bundle.manifest.entries}
+            ready = [entry for entry in plan.entries if entry.disposition == "ready"]
+            # Re-plan the entire selected set immediately before write-ahead log
+            latest = self._plan(bundle, safe_only=safe_only, selected=selected)
+            if not latest.ready or [item.to_dict() for item in latest.entries] != [
+                item.to_dict() for item in plan.entries
+            ]:
+                report.status = "CONFLICT"
+                report.conflicts.append(
+                    PromotionConflict("<host>", "host state changed after promotion planning")
+                )
+                self._persist_result(report)
+                return report
+
+            # 1. Initialize staging & journal
+            self.stager.prepare()
+            journal = PromotionJournal(
+                root=self.root,
+                run_id=self.store.run_id,
+                patch_digest=bundle.manifest.digest,
+                state=JournalState.STAGED,
+            )
+
+            # 2. Stage all modifications and backups
+            for planned in ready:
+                patch_entry = entries_by_path[planned.path]
+                staged_rel = None
+                backup_rel = None
+                if patch_entry.change_type != "deleted":
+                    staged_path = self.stager.stage_entry(bundle, patch_entry)
+                    staged_rel = str(staged_path.relative_to(self.root).as_posix())
+                if patch_entry.change_type in {"modified", "deleted"}:
+                    backup_path = self.stager.backup_host_file(patch_entry.path)
+                    if backup_path is not None:
+                        backup_rel = str(backup_path.relative_to(self.root).as_posix())
+
+                journal.entries.append(
+                    JournalEntry(
+                        path=patch_entry.path,
+                        change_type=patch_entry.change_type,
+                        base_sha256=patch_entry.base_sha256,
+                        result_sha256=patch_entry.result_sha256,
+                        base_mode=patch_entry.base_mode,
+                        result_mode=patch_entry.result_mode,
+                        staged_relpath=staged_rel,
+                        backup_relpath=backup_rel,
+                        applied=False,
+                    )
+                )
+
+            # 3. Write-ahead log journal commit
+            journal.state = JournalState.APPLYING
+            journal.persist()
+
+            # 4. Atomic application phase
+            for journal_entry, planned in zip(journal.entries, ready):
+                patch_entry = entries_by_path[planned.path]
+                try:
+                    action = self._apply_one(bundle, patch_entry)
+                    journal_entry.applied = True
+                    journal.persist()
+                except (OSError, RuntimeError, ValueError) as error:
+                    report.conflicts.append(
+                        PromotionConflict(patch_entry.path, str(error) or type(error).__name__)
+                    )
+                    report.status = "PARTIAL_CONFLICT" if report.actions else "CONFLICT"
+                    # Interrupted -> trigger recovery
+                    journal.state = JournalState.RECOVERY_REQUIRED
+                    journal.persist()
+                    PromotionRecovery(self.root).check_and_recover()
+                    break
+                report.actions.append(action)
+            else:
+                report.status = "PROMOTED"
+                journal.state = JournalState.COMMITTED
+                journal.persist()
+                journal.clean()
+                self.stager.clean()
+
             self._persist_result(report)
             return report
-        for planned in ready:
-            patch_entry = entries_by_path[planned.path]
-            try:
-                action = self._apply_one(bundle, patch_entry)
-            except (OSError, RuntimeError, ValueError) as error:
-                report.conflicts.append(
-                    PromotionConflict(patch_entry.path, str(error) or type(error).__name__)
-                )
-                report.status = "PARTIAL_CONFLICT" if report.actions else "CONFLICT"
-                break
-            report.actions.append(action)
-        else:
-            report.status = "PROMOTED"
-        self._persist_result(report)
-        return report
 
     def _persist_result(self, report: PromotionReport) -> None:
         self.store.write_json_path("promotion/result.json", report.to_dict())
