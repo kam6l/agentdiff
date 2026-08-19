@@ -33,7 +33,7 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "snapshot" not in result.stdout
     assert "eval" not in result.stdout
-    assert "{run,inspect,runs,verify,rollback,cleanup,doctor,policy,cortex}" in result.stdout
+    assert "{run,inspect,runs,verify,rollback,cleanup,doctor,policy,cortex," in result.stdout
     assert "run" in result.stdout
     assert "inspect" in result.stdout
     assert "rollback" in result.stdout
@@ -41,9 +41,15 @@ def test_cli_help_only_lists_implemented_commands(tmp_path: Path) -> None:
     assert "doctor" in result.stdout
     assert "policy" in result.stdout
     assert "cortex" in result.stdout
+    assert "bootstrap" in result.stdout
+    assert "prove" in result.stdout
+    assert "promote" in result.stdout
+    assert "repair" in result.stdout
+    assert "wrap" in result.stdout
+    assert "serve" in result.stdout
     assert "heal" not in result.stdout
     assert "replay" not in result.stdout
-    assert "init" not in result.stdout
+    assert "init" in result.stdout
 
 
 def test_package_module_runs_the_cli(tmp_path: Path) -> None:

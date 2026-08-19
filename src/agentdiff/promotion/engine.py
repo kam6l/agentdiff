@@ -30,9 +30,18 @@ from .staging import PromotionStager
 class PromotionEngine:
     """Plan and atomically apply only unchanged-base, proven regular-file changes."""
 
-    def __init__(self, root: str | Path, run_id: str) -> None:
-        self.store = RunStore.open(root, run_id)
-        self.root = self.store.root
+    def __init__(
+        self,
+        root: str | Path,
+        run_id: str,
+        *,
+        store_root: str | Path | None = None,
+    ) -> None:
+        # The capsule may live in a private workspace while the host repository
+        # is the promotion target (warm workspace flows).
+        self.host_root = Path(root).expanduser().resolve(strict=True)
+        self.store = RunStore.open(store_root or self.host_root, run_id)
+        self.root = self.host_root
         self.scanner = FilesystemScanner(self.root)
         self.lease = WorkspaceLease(self.root, run_id)
         self.stager = PromotionStager(self.root, run_id)

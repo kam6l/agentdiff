@@ -9,6 +9,20 @@ description: Record a real AgentDiff transaction and selectively recover collate
 
 <div class="ad-doc-lede">Run an intentionally risky command, inspect its independent evidence, and remove only unchanged collateral while preserving the allowed edit.</div>
 
+## Zero-touch in one line
+
+For coding agents, `agentdiff init` compiles the canonical trust configuration
+and `agentdiff wrap` runs the full pipeline automatically:
+
+```bash
+agentdiff init
+agentdiff wrap -- codex exec "Fix authentication timeout"
+```
+
+See [Zero-touch automation](concepts/zero-touch.md) for the AUTO / RETRY /
+HUMAN routing contract. The rest of this quickstart walks through the
+transaction primitives underneath.
+
 ## 1. Install from source
 
 You need Python 3.14 (or 3.12+) and [`uv`](https://docs.astral.sh/uv/).

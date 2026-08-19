@@ -81,9 +81,20 @@ Use `--fail-on never` to report policy only, or `--fail-on review` to make both 
 
 ```text
 agentdiff
+├── init / bootstrap            # zero-touch trust configuration
+├── wrap                        # run one agent through the full pipeline
+├── serve / status / stop / hook# local sidecar daemon + adapters
 ├── run
 ├── inspect / runs / verify
+├── prove / promote / repair    # trust pipeline automation
 ├── rollback / cleanup / doctor
+├── trust
+│   └── graph / status
+├── impact                      # minimum strong proof for changed paths
+├── proof
+│   └── cache-status
+├── workspace
+│   └── status / warm / prune
 ├── policy
 │   └── init / validate / explain
 └── cortex                    # experimental, secondary surface
@@ -97,6 +108,8 @@ agentdiff
     │   └── pack
     └── advise
 ```
+
+Zero-touch automation is documented in [Zero-touch commands](automation.md).
 
 !!! tip "Trust the installed help"
     The command surface is beta and may evolve. `agentdiff <command> --help` is generated directly from the installed implementation.

@@ -112,6 +112,21 @@ class PatchManifest:
             "entries": [entry.to_dict() for entry in self.entries],
         }
 
+    def content_digest(self) -> str:
+        """Run-independent digest of the exact mutation set and payloads.
+
+        The sealed manifest digest includes the run id; the content digest
+        deliberately does not, so identical patches produced by different runs
+        share a proof-cache identity.
+        """
+        return _canonical_digest(
+            {
+                "schema_version": self.schema_version,
+                "complete": self.complete,
+                "entries": [entry.to_dict() for entry in self.entries],
+            }
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {**self.unsigned_dict(), "digest": self.digest}
 

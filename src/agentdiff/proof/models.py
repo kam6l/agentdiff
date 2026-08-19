@@ -59,6 +59,8 @@ class ProofResult:
     verification_source: str = "unconfigured"
     verification_digest: str = ""
     trusted_plan: bool = True
+    cache_hit: bool = False
+    cached_from_run: str = ""
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -80,4 +82,6 @@ class ProofResult:
             "verification_source": self.verification_source,
             "verification_digest": self.verification_digest,
             "trusted_plan": self.trusted_plan,
+            "cache_hit": self.cache_hit,
+            "cached_from_run": self.cached_from_run,
         }

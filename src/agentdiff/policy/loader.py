@@ -241,7 +241,7 @@ def load_policy_file(path: str | Path) -> Policy:
         raise FileNotFoundError(f"policy file not found: {path}")
     raw = candidate.read_text(encoding="utf-8")
     try:
-        import yaml  # type: ignore[import-untyped]  # lazy import
+        import yaml  # lazy import
 
         if yaml is None:
             raise ImportError("PyYAML not installed")

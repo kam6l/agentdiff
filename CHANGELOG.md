@@ -2,6 +2,28 @@
 
 AgentDiff is pre-release software. APIs and artifact schemas may change before the first stable release.
 
+## 0.3.0 (unreleased)
+
+### Added
+
+- **Zero-touch sidecar (`agentdiff serve` / `wrap` / `hook`)**: a small local HTTP daemon (127.0.0.1, bearer-token auth, no hosted service) that manages transactions, evidence, policy, sandbox selection, proof, retries, promotion, and notifications. `agentdiff wrap -- <agent argv>` runs any coding-agent CLI through the full pipeline; `agentdiff init` bootstraps trust configuration and can start the sidecar.
+- **Repository trust compiler (`agentdiff bootstrap` / `init`)**: deterministic inspection of languages, package managers, tests, builds, CI, CODEOWNERS, monorepo layout, agent configs, and lockfiles, compiled into one canonical `agentdiff.yaml`, `.agentdiff/trust.lock`, `.agentdiff/repo-graph.json`, `.agentdiff/proof-plan.json`, and compiled agent instructions (`agentdiff/adapters/*.md`).
+- **Impact-aware proof + content-addressed cache**: deterministic import graph (Python/JS-TS/Go/Rust) mapping changed files to affected modules, tests, and build targets; `static`/`targeted`/`full` proof planning with high-risk widening (dependencies, CI, Dockerfiles, build config, agent configs, security paths); integrity-sealed proof cache under `.agentdiff/cache/proof` keyed by base/patch/lock/image/plan digests.
+- **Automatic repair loop (`agentdiff repair`)**: deterministic failure packets, bounded retries (max attempts + max runtime), fresh-workspace repair attempts, no silent scope expansion, and a `HumanAttentionRouter` classifying every outcome as AUTO / RETRY / HUMAN.
+- **Trusted warm workspace factory (`agentdiff workspace`)**: immutable content-addressed base snapshots keyed by workspace identity (git/locks/image/toolchain/plan digests), private copy-on-write per-agent workspaces, stale/tampered base detection, and automatic pruning.
+- **CLI wiring for the previously documented-but-missing `agentdiff prove` and `agentdiff promote` commands**, plus `repair`, `trust`, `impact`, `proof cache-status`, and `workspace` subcommands.
+
+### Changed
+
+- `PromotionEngine` accepts an optional `store_root` so a proven patch living in a private workspace capsule can be promoted to the host repository.
+- `ProofEngine` accepts an optional content-addressed `cache`, a `base_preparer` (warm snapshot), and a proof `target`; proof results surface `cache_hit`/`cached_from_run`.
+- `PatchManifest` exposes a run-independent `content_digest()` so identical patches share proof-cache identity.
+
+### Security
+
+- Trust decisions (policy, risk, proof, promotion, repair routing) remain fully deterministic; Cortex stays outside deterministic trust decisions.
+- The host repository is never writable inside the agent sandbox; the proof cache is content-addressed, integrity-sealed, and invalidated by any input change; warm base snapshots are immutable.
+
 ## 0.2.0
 
 ### Added

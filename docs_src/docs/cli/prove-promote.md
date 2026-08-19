@@ -8,10 +8,13 @@ description: CLI reference for deterministic clean-room proof and conflict-safe 
 ## `agentdiff prove`
 
 ```bash
-agentdiff prove RUN_ID [--root PATH] [--timeout SECONDS] [--format summary|json]
+agentdiff prove RUN_ID [--root PATH] [--timeout SECONDS] [--target static|targeted|full]
+              [--no-cache] [--format summary|json]
 ```
 
 Exit `0` means `PROVEN`; exit `7` means `NOT_PROVEN`. Setup, build, and test commands use exact argv and one timeout per phase.
+
+`--target` selects the impact-aware proof level (`full` by default, `targeted`/`static` for smaller patches). The content-addressed proof cache is consulted automatically unless `--no-cache` is passed; cached verdicts are sealed per run and surfaced as `cache_hit` in the result.
 
 ## `agentdiff promote`
 

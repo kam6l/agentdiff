@@ -20,6 +20,7 @@ from .cortex import (
     SkillContract,
 )
 from .evidence import CapsuleReader, PatchBundle, PatchEntry, PatchManifest
+from .impact import ImpactEngine, ProofCache, ProofCacheEntry, ProofCacheKey
 from .integrations import (
     AgentDiffConfig,
     AgentDiffSession,
@@ -55,6 +56,13 @@ from .providers import (
     ProviderResponse,
     create_provider,
 )
+from .repair import (
+    FailurePacket,
+    HumanAttentionRouter,
+    RepairLoop,
+    RepairOutcome,
+    RoutingDecision,
+)
 from .runtime import (
     DockerRuntime,
     LocalRuntime,
@@ -72,12 +80,29 @@ from .scoring import (
     MutationRisk,
     RiskLevel,
 )
+from .sidecar import (
+    Notification,
+    Notifier,
+    SidecarClient,
+    SidecarError,
+    WrapRunner,
+    WrapSummary,
+    ensure_sidecar,
+)
 from .transaction import (
     AgentRunTransaction,
     RollbackEngine,
     RunInspector,
     RunStore,
     TransactionResult,
+)
+from .trust import RepoImpactGraph, RepositoryInspection, RepositoryInspector, TrustCompiler
+from .workspace import (
+    AgentWorkspace,
+    BaseWorkspace,
+    WarmWorkspaceFactory,
+    WorkspaceIdentity,
+    compute_identity,
 )
 
 __all__ = [
@@ -86,8 +111,10 @@ __all__ = [
     "AgentDiffSession",
     "AgentMemoryStore",
     "AgentRunTransaction",
+    "AgentWorkspace",
     "AnthropicMessagesProvider",
     "BaseAgentDiffAdapter",
+    "BaseWorkspace",
     "BlastRadiusResult",
     "BlastRadiusScorer",
     "BlastRadiusWeights",
@@ -99,13 +126,18 @@ __all__ = [
     "CortexResult",
     "CortexRouter",
     "DockerRuntime",
+    "FailurePacket",
     "FutureBlastEngine",
     "FutureBlastResult",
+    "HumanAttentionRouter",
     "HybridSafetyWatcher",
+    "ImpactEngine",
     "LocalRuntime",
     "MCPPolicyHook",
     "MemoryHit",
     "MutationRisk",
+    "Notification",
+    "Notifier",
     "OllamaChatProvider",
     "OllamaEmbeddingProvider",
     "OpenAIResponsesProvider",
@@ -120,6 +152,9 @@ __all__ = [
     "PromotionPlan",
     "PromotionRecovery",
     "PromotionReport",
+    "ProofCache",
+    "ProofCacheEntry",
+    "ProofCacheKey",
     "ProofEngine",
     "ProofPhaseResult",
     "ProofPolicy",
@@ -128,9 +163,15 @@ __all__ = [
     "ProviderError",
     "ProviderResponse",
     "RemediationAdvisor",
+    "RepairLoop",
+    "RepairOutcome",
+    "RepoImpactGraph",
+    "RepositoryInspection",
+    "RepositoryInspector",
     "RepositoryMemoryProvider",
     "RiskLevel",
     "RollbackEngine",
+    "RoutingDecision",
     "RunInspector",
     "RunStore",
     "RuntimeBackend",
@@ -139,14 +180,23 @@ __all__ = [
     "RuntimeResult",
     "SafetyController",
     "SafetyReport",
+    "SidecarClient",
+    "SidecarError",
     "SkillCardGenerator",
     "SkillContract",
     "ToolCallBlockedError",
     "ToolCallDecision",
     "TransactionResult",
+    "TrustCompiler",
+    "WarmWorkspaceFactory",
+    "WorkspaceIdentity",
     "WorkspaceLease",
     "WorkspaceMaterializer",
+    "WrapRunner",
+    "WrapSummary",
+    "compute_identity",
     "create_provider",
+    "ensure_sidecar",
     "load_policy",
     "load_policy_file",
 ]
