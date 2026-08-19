@@ -7,8 +7,8 @@
 <h1 align="center">AgentDiff</h1>
 
 <p align="center">
-  <strong>See what the agent changed. Undo only the collateral.</strong><br>
-  Independent state observation, deterministic intent policy, explainable blast radius, and conflict-safe selective recovery for AI-agent commands.
+  <strong>Zero-touch trust automation for coding agents.</strong><br>
+  Understand the repository, run the agent safely, prove the minimum strong result, retry in scope, and ask the human only when the trust boundary changes.
 </p>
 
 <p align="center">
@@ -38,7 +38,41 @@ The documentation shell is responsive across desktop and mobile, with an indexed
 
 ## Why install it?
 
-A command can exit successfully while leaving one intended edit, one dependency change, and one protected secret file. AgentDiff records the real workspace state independently of the agent, classifies every mutation with deterministic policy, explains the risk score, and can recover eligible collateral without resetting allowed work.
+A command can exit successfully while leaving one intended edit, one dependency change, and one protected secret file. AgentDiff records the real workspace state independently of the agent, classifies every mutation with deterministic policy, explains the risk score, proves the patch in a clean room, retries failures in scope, and promotes only proven changes — interrupting the human only when the trust boundary changes.
+
+## Zero-touch automation
+
+Normal use can become:
+
+```bash
+agentdiff init                          # compile canonical trust configuration
+agentdiff wrap -- codex exec "Fix authentication timeout"
+```
+
+AgentDiff then automatically understands the repository, prepares a private
+warm workspace, observes and enforces the agent's work, runs the minimum
+strong proof (impact-aware, cache-backed), retries failures while the repair
+stays in scope, and promotes the proven result. Or run the sidecar and call
+your agent directly:
+
+```bash
+agentdiff init --daemon
+codex exec "Fix authentication timeout"
+```
+
+| Outcome | Action |
+|---|---|
+| Normal source change + proof passes | **AUTO** promote + notify |
+| Proof fails, repair stays in scope | **RETRY** bounded automatic repair |
+| Dependency added / CI changed / config changed | **HUMAN** review |
+| Agent requests new scope / high future risk | **HUMAN** |
+
+The [trust pipeline](https://kam6l.github.io/agentdiff/docs/concepts/trust-pipeline/)
+remains the security foundation. New systems: [trust compiler](https://kam6l.github.io/agentdiff/docs/concepts/trust-compiler/),
+[impact-aware proof + cache](https://kam6l.github.io/agentdiff/docs/concepts/impact-proof/),
+[automatic repair loop](https://kam6l.github.io/agentdiff/docs/concepts/repair-loop/),
+[warm workspaces](https://kam6l.github.io/agentdiff/docs/concepts/warm-workspaces/), and the
+[zero-touch sidecar](https://kam6l.github.io/agentdiff/docs/concepts/zero-touch/).
 
 ## Start in under a minute
 
@@ -94,21 +128,28 @@ agentdiff rollback <run-id> --safe-only
 
 | Status | Surface |
 |---|---|
-| **Beta** | Local transactions, policy, capsules, verification, scoring, and regular-file recovery (tested on Python 3.12-3.14) |
-| **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, and LangChain callback |
+| **Beta** | Local transactions, policy, capsules, verification, scoring, regular-file recovery, trust compiler, impact-aware proof + cache, warm workspaces, repair loop, sidecar (tested on Python 3.12-3.14) |
+| **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, LangChain callback, and the in-repository composite Action |
 | **Planned** | PyPI/binary releases, authenticated evidence, telemetry export, and a maintained hosted sandbox integration |
 
-There is no HTTP server, hosted dashboard, Docker backend, bundled sandbox, or claimed PyPI release today.
+There is no hosted dashboard or hosted service: the sidecar is a local daemon, and all state stays under `<root>/.agentdiff`.
 
 ## CLI
 
 | Command | Purpose |
 |---|---|
+| `agentdiff init` / `bootstrap` | Compile canonical trust configuration |
+| `agentdiff wrap -- <agent>` | Run one agent through the full zero-touch pipeline |
+| `agentdiff serve` / `status` / `stop` / `hook` | Local sidecar daemon + agent adapters |
+| `agentdiff prove <id>` / `promote <id>` | Clean-room proof and conflict-safe promotion |
+| `agentdiff repair <id>` | Verified automatic repair until proof passes |
 | `agentdiff run -- <cmd>` | Wrap an explicit argv in a transaction |
 | `agentdiff runs` / `inspect` / `verify` | Find and validate local evidence capsules |
 | `agentdiff rollback <id> --safe-only` | Recover eligible `review` and `deny` changes |
 | `agentdiff cleanup <id>` | Signal exact PID/create-time identities recorded for a run |
 | `agentdiff doctor` | Report implemented capabilities and limits |
+| `agentdiff trust` / `impact` / `proof cache-status` | Trust graph, impact plan, proof cache |
+| `agentdiff workspace status/warm/prune` | Trusted warm workspace snapshots |
 | `agentdiff policy init/validate/explain` | Create and inspect versioned policy |
 | `agentdiff cortex ...` | Open the optional evidence-memory, skill-card, and provider tool namespace |
 

@@ -21,6 +21,8 @@ from agentdiff.cortex import (
 from agentdiff.diff_engine import DiffEngine, EnvironmentSnapshot, FilesystemSnapshot
 from agentdiff.doctor import doctor_report
 from agentdiff.evaluator import AgentDiffEvaluator
+from agentdiff.impact.cache import ProofCache
+from agentdiff.impact.impact import ImpactEngine
 from agentdiff.policy import (
     Policy,
     PolicyAction,
@@ -30,6 +32,8 @@ from agentdiff.policy import (
     load_policy,
     load_policy_file,
 )
+from agentdiff.promotion import PromotionEngine
+from agentdiff.proof import ProofEngine, ProofVerdict
 from agentdiff.providers import (
     PROVIDER_NAMES,
     OllamaEmbeddingProvider,
@@ -37,7 +41,14 @@ from agentdiff.providers import (
     create_provider,
 )
 from agentdiff.redaction import safe_display
+from agentdiff.repair import RepairLoop
 from agentdiff.runtime import SandboxRuntime
+from agentdiff.sidecar import (
+    SidecarClient,
+    SidecarError,
+    WrapRunner,
+    ensure_sidecar,
+)
 from agentdiff.trajectory import AgentFramework, TrajectoryTracker
 from agentdiff.transaction import (
     AgentRunTransaction,
@@ -46,6 +57,8 @@ from agentdiff.transaction import (
     RunStore,
     list_runs,
 )
+from agentdiff.trust import RepoImpactGraph, TrustCompiler
+from agentdiff.workspace import WarmWorkspaceFactory, compute_identity
 
 _DEFAULT_POLICY: dict[str, Any] = {
     "version": 1,
@@ -616,6 +629,392 @@ def cmd_policy_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Zero-touch automation layer: bootstrap / prove / promote / repair / wrap
+# ---------------------------------------------------------------------------
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Bootstrap the canonical trust configuration (zero-touch entry point).
+
+    ``init`` is idempotent: an existing configuration is recompiled in place.
+    """
+    root = Path(args.root).resolve()
+    compiler = TrustCompiler(root, write_agents=args.agents)
+    report = compiler.compile(force=True)
+    print(f"Trust configuration compiled for {safe_display(root)}")
+    print(f"  Primary language: {report.primary_language}")
+    print(f"  Package manager:  {report.package_manager or '-'}")
+    print(f"  Test tooling:     {', '.join(report.test_tools) or '-'}")
+    for path in report.written:
+        print(f"  wrote {safe_display(path)}")
+    if args.daemon:
+        ensure_sidecar(root)
+        print(f"Sidecar started for {safe_display(root)}")
+    print("Next: run your agent through AgentDiff, e.g.")
+    print('  agentdiff wrap -- codex exec "your task"')
+    print('or alias it:  alias codex="agentdiff wrap -- codex"')
+    return 0
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Compile repository trust configuration from deterministic inspection."""
+    root = Path(args.root).resolve()
+    compiler = TrustCompiler(root, write_agents=args.agents)
+    try:
+        report = compiler.compile(force=args.force, dry_run=args.dry_run)
+    except FileExistsError as error:
+        print(f"agentdiff: {safe_display(error)}", file=sys.stderr)
+        return 2
+    if args.format == "json":
+        print(_json(report.to_dict()))
+        return 0
+    print(f"Trust configuration compiled for {safe_display(root)}")
+    print(f"  Primary language: {report.primary_language}")
+    print(f"  Package manager:  {report.package_manager or '-'}")
+    print(f"  Policy digest:    {report.policy_sha256}")
+    print(f"  Graph digest:     {report.graph_sha256}")
+    print(f"  Proof plan digest:{report.proof_plan_sha256}")
+    for path in report.written:
+        print(f"  wrote {safe_display(path)}")
+    return 0
+
+
+def cmd_prove(args: argparse.Namespace) -> int:
+    """Run deterministic clean-room proof for a sealed run capsule."""
+    root = Path(args.root).resolve()
+    cache = ProofCache(root) if not args.no_cache else None
+    target = args.target or "full"
+    proof = ProofEngine(root, args.run_id, cache=cache, target=target).prove(
+        timeout_seconds=args.timeout
+    )
+    if args.format == "json":
+        print(_json(proof.to_dict()))
+    else:
+        verdict = proof.verdict.value
+        print(f"Proof verdict: {verdict}")
+        print(f"Promotion:     {proof.promotion}")
+        print(f"Agent run:     {proof.agent_run}")
+        print(f"Policy:        {proof.policy}")
+        print(f"Clean room:    {proof.clean_environment}")
+        print(
+            "Blast radius:  "
+            f"immediate={proof.immediate_blast_radius} "
+            f"future={proof.future_blast_radius}"
+        )
+        print(f"Patch digest:  {proof.patch_digest}")
+        print(f"Verification:  {proof.verification_source} ({proof.verification_digest})")
+        if proof.cache_hit:
+            print(f"Cache:         HIT (from run {proof.cached_from_run})")
+        for phase in proof.phases:
+            print(
+                f"  {phase.phase:16} {phase.status} rc={phase.returncode} "
+                f"{phase.duration_seconds:.1f}s tests={phase.tests_passed}/{phase.tests_total}"
+            )
+        for reason in proof.reasons:
+            print(f"  reason: {safe_display(reason)}")
+    return 0 if proof.verdict is ProofVerdict.PROVEN else 7
+
+
+def cmd_promote(args: argparse.Namespace) -> int:
+    """Promote a proven patch to the host repository with conflict checks."""
+    root = Path(args.root).resolve()
+    engine = PromotionEngine(
+        root,
+        args.run_id,
+        store_root=Path(args.store_root).resolve() if args.store_root else None,
+    )
+    report = engine.promote(
+        dry_run=args.dry_run,
+        safe_only=args.safe_only,
+        paths=args.path,
+    )
+    if args.format == "json":
+        print(_json(report.to_dict()))
+    else:
+        print(f"Promotion: {report.status}")
+        print(f"Patch digest: {report.patch_digest}")
+        for action in report.actions:
+            print(f"  {action.action:12} {safe_display(action.path)}")
+        for conflict in report.conflicts:
+            print(f"  CONFLICT {safe_display(conflict.path)}: {safe_display(conflict.reason)}")
+        for path in report.skipped:
+            print(f"  skipped  {safe_display(path)}")
+    return 0 if report.status in {"PROMOTED", "DRY_RUN_SAFE"} else 8
+
+
+def cmd_repair(args: argparse.Namespace) -> int:
+    """Run verified automatic repair until proof passes or scope changes."""
+    root = Path(args.root).resolve()
+    policy = None
+    if args.policy:
+        policy = load_policy_file(args.policy)
+    loop = RepairLoop(
+        root,
+        args.run_id,
+        policy=policy,
+        max_attempts=args.max_attempts,
+        max_runtime_seconds=args.max_runtime,
+        cache=ProofCache(root) if not args.no_cache else None,
+        repair_command_builder=(None if args.no_agent else _agent_repair_builder(args)),
+    )
+    outcome = loop.run()
+    if args.format == "json":
+        print(_json(outcome.to_dict()))
+    else:
+        print(f"Repair outcome: {outcome.status}")
+        if outcome.human_reason:
+            print(f"Human reason:   {safe_display(outcome.human_reason)}")
+        for attempt in outcome.attempts:
+            print(f"  attempt {attempt.attempt} run={attempt.run_id} verdict={attempt.verdict}")
+    return {
+        "REPAIRED": 0,
+        "FAILED": 9,
+        "NEEDS_HUMAN": 10,
+        "NEEDS_AGENT": 11,
+        "BLOCKED": 12,
+    }[outcome.status]
+
+
+def _agent_repair_builder(args: argparse.Namespace):
+    """Re-invoke the same agent CLI for bounded repair attempts."""
+    from agentdiff.repair import default_repair_command_builder
+
+    if args.agent_argv:
+        return default_repair_command_builder(list(args.agent_argv))
+    metadata = RunStore.open(Path(args.root).resolve(), args.run_id).read_json("metadata.json")
+    original = list(metadata.get("command", []))
+    if original:
+        return default_repair_command_builder(original)
+    return None
+
+
+def cmd_wrap(args: argparse.Namespace) -> int:
+    """Run one agent command through the zero-touch pipeline."""
+    root = Path(args.root).resolve()
+    command = list(args.argv)
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise ValueError("wrap requires a command after '--'")
+    runner = WrapRunner(
+        root,
+        policy_file=args.policy,
+        enable_proof=not args.no_proof,
+        enable_repair=not args.no_repair,
+        enable_promote=not args.no_promote,
+        max_attempts=args.max_attempts,
+        max_repair_runtime=args.max_repair_runtime,
+        use_cache=not args.no_cache,
+        notify=not args.quiet,
+        session_id=args.session,
+    )
+    summary = runner.wrap(command, task=args.task or "")
+    if args.format == "json":
+        print(_json(summary.to_dict()))
+    else:
+        print(f"Wrap status:    {summary.status}")
+        print(f"Routing:        {summary.routing}")
+        print(f"Run:            {summary.run_id}")
+        if summary.proof_verdict:
+            print(f"Proof:          {summary.proof_verdict}")
+        if summary.repair_outcome:
+            print(f"Repair:         {summary.repair_outcome}")
+        if summary.promotion_status:
+            print(f"Promotion:      {summary.promotion_status}")
+        if summary.human_reason:
+            print(f"Human reason:   {safe_display(summary.human_reason)}")
+    return 0 if summary.routing in {"AUTO", "RETRY"} else 1
+
+
+# ---------------------------------------------------------------------------
+# Sidecar daemon commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Start the local AgentDiff sidecar daemon."""
+    from agentdiff.sidecar.server import serve
+
+    serve(args.root, port=args.port, foreground=not args.daemon)
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Show the sidecar status."""
+    root = Path(args.root).resolve()
+    try:
+        client = SidecarClient(root)
+        status = client.status()
+    except SidecarError as error:
+        print(f"agentdiff: sidecar not running: {safe_display(error)}", file=sys.stderr)
+        return 1
+    if args.format == "json":
+        print(_json(status))
+    else:
+        print(f"Sidecar: running (pid={status['pid']})")
+        print(f"Root:    {safe_display(status['root'])}")
+        print(f"Version: {status['version']}")
+    return 0
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    """Stop the local AgentDiff sidecar daemon."""
+    root = Path(args.root).resolve()
+    try:
+        client = SidecarClient(root)
+        client.request("POST", "/v1/stop")
+    except SidecarError as error:
+        print(f"agentdiff: {safe_display(error)}", file=sys.stderr)
+        return 1
+    print("Sidecar stopped.")
+    return 0
+
+
+def cmd_hook(args: argparse.Namespace) -> int:
+    """Send one lifecycle/tool event to the sidecar (agent adapters)."""
+    root = Path(args.root).resolve()
+    client = ensure_sidecar(root)
+    data = json.loads(args.data) if args.data else {}
+    if args.event == "session-begin":
+        response = client.session_begin(task=args.task or "", agent=data.get("agent", ""))
+    elif args.event == "tool-call":
+        response = client.session_event(
+            session_id=args.session_id or "",
+            event_type="tool_call",
+            data=data,
+        )
+    elif args.event == "session-end":
+        response = client.session_end(session_id=args.session_id or "")
+    else:
+        raise ValueError(f"unknown hook event: {args.event}")
+    if args.format == "json":
+        print(_json(response))
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Trust, impact, and workspace commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_trust_graph(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    graph = RepoImpactGraph.from_inspection(root)
+    if args.format == "json":
+        print(_json(graph.serialize()))
+    else:
+        serialized = graph.serialize()
+        print(f"Impact graph for {safe_display(root)}")
+        print(f"  nodes: {len(serialized['nodes'])}")
+        print(f"  edges: {len(serialized['edges'])}")
+    return 0
+
+
+def cmd_trust_status(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    lock_path = root / ".agentdiff" / "trust.lock"
+    if not lock_path.is_file():
+        print("No trust lock found. Run `agentdiff bootstrap` first.")
+        return 1
+    lock = _json(json.loads(lock_path.read_text(encoding="utf-8")))
+    if args.format == "json":
+        print(lock)
+    else:
+        print(f"Trust lock: {safe_display(lock_path)}")
+        print(lock)
+    return 0
+
+
+def cmd_impact(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    changed = [path.strip() for path in args.paths.split(",") if path.strip()] if args.paths else []
+    if not changed:
+        raise ValueError("impact requires --paths (comma-separated relative paths)")
+    graph = RepoImpactGraph.from_inspection(root)
+    proof_plan = {}
+    plan_path = root / ".agentdiff" / "proof-plan.json"
+    if plan_path.is_file():
+        proof_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    impact = ImpactEngine(root, graph=graph, proof_plan=proof_plan).plan(changed)
+    if args.format == "json":
+        print(_json(impact.to_dict()))
+    else:
+        print(f"Impact level: {impact.level}")
+        print(f"Triggers:     {', '.join(impact.triggers) or '-'}")
+        print(f"Modules:      {', '.join(impact.modules) or '-'}")
+        print(f"Tests:        {', '.join(impact.tests) or '-'}")
+        print(f"Targets:      {', '.join(impact.build_targets) or '-'}")
+        for command in impact.test_commands:
+            print(f"  test: {' '.join(command)}")
+    return 0
+
+
+def cmd_proof_cache_status(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    stats = ProofCache(root).stats()
+    if args.format == "json":
+        print(_json(stats))
+    else:
+        print(f"Proof cache entries: {stats['count']}")
+        for entry in stats["entries"]:
+            print(
+                f"  {entry['key_digest'][:12]} {entry['verdict']:10} "
+                f"target={entry['target']} run={entry['cached_from_run']}"
+            )
+    return 0
+
+
+def cmd_workspace_status(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    stats = WarmWorkspaceFactory(root).stats()
+    if args.format == "json":
+        print(_json(stats))
+    else:
+        print(f"Warm base snapshots: {stats['count']}")
+        for base in stats["bases"]:
+            print(
+                f"  {base['identity_digest'][:12]} files={base['files']} "
+                f"strategy={base['materialization']['strategy']}"
+            )
+    return 0
+
+
+def cmd_workspace_warm(args: argparse.Namespace) -> int:
+    """Materialize the trusted warm base for the current repository identity."""
+    root = Path(args.root).resolve()
+    policy = _load_runtime_policy(root, args.policy)
+    factory = WarmWorkspaceFactory(root)
+    identity = compute_identity(root, policy=policy)
+    base = factory.ensure_base(identity)
+    ok, reason = factory.verify_base(identity)
+    if args.format == "json":
+        print(
+            _json(
+                {
+                    "identity": identity.to_dict(),
+                    "identity_digest": identity.digest(),
+                    "base": str(base.path),
+                    "verified": ok,
+                    "reason": reason,
+                }
+            )
+        )
+    else:
+        print(f"Workspace identity: {identity.digest()}")
+        print(f"Base snapshot:      {safe_display(base.path)}")
+        print(f"Verified:           {ok} ({reason})")
+    return 0 if ok else 1
+
+
+def cmd_workspace_prune(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    factory = WarmWorkspaceFactory(root, max_bases=args.keep)
+    removed = factory.prune()
+    print(f"Removed {removed} stale warm base snapshot(s).")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentdiff",
@@ -807,6 +1206,156 @@ def build_parser() -> argparse.ArgumentParser:
     p_advise.add_argument("--root", default=".")
     p_advise.add_argument("--format", choices=["json", "summary"], default="summary")
     p_advise.set_defaults(func=cmd_advise)
+
+    # --- zero-touch automation layer ----------------------------------------
+
+    p_init = subparsers.add_parser(
+        "init", help="Bootstrap trust configuration (zero-touch entry point)"
+    )
+    p_init.add_argument("--root", default=".")
+    p_init.add_argument(
+        "--agents", action="store_true", help="append the trust pointer to AGENTS.md"
+    )
+    p_init.add_argument("--daemon", action="store_true", help="start the sidecar daemon afterwards")
+    p_init.set_defaults(func=cmd_init)
+
+    p_bootstrap = subparsers.add_parser(
+        "bootstrap", help="Compile canonical trust configuration from repository inspection"
+    )
+    p_bootstrap.add_argument("--root", default=".")
+    p_bootstrap.add_argument("--force", action="store_true")
+    p_bootstrap.add_argument("--dry-run", action="store_true")
+    p_bootstrap.add_argument("--agents", action="store_true")
+    p_bootstrap.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_bootstrap.set_defaults(func=cmd_bootstrap)
+
+    p_prove = subparsers.add_parser(
+        "prove", help="Run deterministic clean-room proof for a sealed run"
+    )
+    p_prove.add_argument("run_id")
+    p_prove.add_argument("--root", default=".")
+    p_prove.add_argument("--timeout", type=float, default=900.0)
+    p_prove.add_argument("--target", choices=["static", "targeted", "full"], default=None)
+    p_prove.add_argument("--no-cache", action="store_true")
+    p_prove.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_prove.set_defaults(func=cmd_prove)
+
+    p_promote = subparsers.add_parser(
+        "promote", help="Promote a proven patch to the host repository"
+    )
+    p_promote.add_argument("run_id")
+    p_promote.add_argument("--root", default=".")
+    p_promote.add_argument("--store-root", help="Capsule root when the run lives in a workspace")
+    p_promote.add_argument("--dry-run", action="store_true")
+    p_promote.add_argument("--safe-only", action="store_true")
+    p_promote.add_argument("--path", action="append", help="Explicit REVIEW path selection")
+    p_promote.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_promote.set_defaults(func=cmd_promote)
+
+    p_repair = subparsers.add_parser(
+        "repair", help="Run verified automatic repair until proof passes or scope changes"
+    )
+    p_repair.add_argument("run_id")
+    p_repair.add_argument("--root", default=".")
+    p_repair.add_argument("--policy", help="Policy file to hold fixed during repair")
+    p_repair.add_argument("--max-attempts", type=int, default=2)
+    p_repair.add_argument("--max-runtime", type=float, default=1800.0)
+    p_repair.add_argument("--no-cache", action="store_true")
+    p_repair.add_argument("--no-agent", action="store_true", help="write the failure packet only")
+    p_repair.add_argument("--agent-argv", nargs=argparse.REMAINDER, help="Agent argv after --")
+    p_repair.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_repair.set_defaults(func=cmd_repair)
+
+    p_wrap = subparsers.add_parser(
+        "wrap", help="Run one agent command through the zero-touch pipeline"
+    )
+    p_wrap.add_argument("--root", default=".")
+    p_wrap.add_argument("--policy", help="Policy file (default: ROOT/agentdiff.yaml)")
+    p_wrap.add_argument("--task", help="Human-readable task")
+    p_wrap.add_argument("--session", help="Optional session id for warm workspace reuse")
+    p_wrap.add_argument("--no-proof", action="store_true")
+    p_wrap.add_argument("--no-repair", action="store_true")
+    p_wrap.add_argument("--no-promote", action="store_true")
+    p_wrap.add_argument("--no-cache", action="store_true")
+    p_wrap.add_argument("--max-attempts", type=int, default=2)
+    p_wrap.add_argument("--max-repair-runtime", type=float, default=1800.0)
+    p_wrap.add_argument("--quiet", action="store_true", help="disable local notifications")
+    p_wrap.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_wrap.add_argument("argv", nargs=argparse.REMAINDER, help="Agent command after --")
+    p_wrap.set_defaults(func=cmd_wrap)
+
+    p_serve = subparsers.add_parser("serve", help="Start the local AgentDiff sidecar daemon")
+    p_serve.add_argument("--root", default=".")
+    p_serve.add_argument("--port", type=int, default=0)
+    p_serve.add_argument("--daemon", action="store_true")
+    p_serve.set_defaults(func=cmd_serve)
+
+    p_status = subparsers.add_parser("status", help="Show sidecar status")
+    p_status.add_argument("--root", default=".")
+    p_status.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_status.set_defaults(func=cmd_status)
+
+    p_stop = subparsers.add_parser("stop", help="Stop the local sidecar daemon")
+    p_stop.add_argument("--root", default=".")
+    p_stop.set_defaults(func=cmd_stop)
+
+    p_hook = subparsers.add_parser(
+        "hook", help="Send one lifecycle/tool event to the sidecar (agent adapters)"
+    )
+    p_hook.add_argument("event", choices=["session-begin", "tool-call", "session-end"])
+    p_hook.add_argument("--root", default=".")
+    p_hook.add_argument("--session-id")
+    p_hook.add_argument("--task")
+    p_hook.add_argument("--data", help="JSON payload for the event")
+    p_hook.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_hook.set_defaults(func=cmd_hook)
+
+    p_trust = subparsers.add_parser("trust", help="Inspect the compiled trust configuration")
+    trust_commands = p_trust.add_subparsers(dest="trust_command", required=True)
+    p_trust_graph = trust_commands.add_parser("graph", help="Show the deterministic impact graph")
+    p_trust_graph.add_argument("--root", default=".")
+    p_trust_graph.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_trust_graph.set_defaults(func=cmd_trust_graph)
+    p_trust_status = trust_commands.add_parser("status", help="Show the trust lock")
+    p_trust_status.add_argument("--root", default=".")
+    p_trust_status.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_trust_status.set_defaults(func=cmd_trust_status)
+
+    p_impact = subparsers.add_parser(
+        "impact", help="Compute the minimum strong proof for changed paths"
+    )
+    p_impact.add_argument("--paths", required=True, help="Comma-separated relative paths")
+    p_impact.add_argument("--root", default=".")
+    p_impact.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_impact.set_defaults(func=cmd_impact)
+
+    p_proof = subparsers.add_parser("proof", help="Proof cache tooling")
+    proof_commands = p_proof.add_subparsers(dest="proof_command", required=True)
+    p_cache = proof_commands.add_parser(
+        "cache-status", help="Show the content-addressed proof cache"
+    )
+    p_cache.add_argument("--root", default=".")
+    p_cache.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_cache.set_defaults(func=cmd_proof_cache_status)
+
+    p_workspace = subparsers.add_parser("workspace", help="Trusted warm workspace tooling")
+    workspace_commands = p_workspace.add_subparsers(dest="workspace_command", required=True)
+    p_ws_status = workspace_commands.add_parser("status", help="List warm base snapshots")
+    p_ws_status.add_argument("--root", default=".")
+    p_ws_status.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_ws_status.set_defaults(func=cmd_workspace_status)
+    p_ws_warm = workspace_commands.add_parser(
+        "warm", help="Materialize the warm base for the current identity"
+    )
+    p_ws_warm.add_argument("--root", default=".")
+    p_ws_warm.add_argument("--policy", help="Policy file (default: ROOT/agentdiff.yaml)")
+    p_ws_warm.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_ws_warm.set_defaults(func=cmd_workspace_warm)
+    p_ws_prune = workspace_commands.add_parser("prune", help="Remove stale warm bases")
+    p_ws_prune.add_argument("--root", default=".")
+    p_ws_prune.add_argument("--keep", type=int, default=3)
+    p_ws_prune.set_defaults(func=cmd_workspace_prune)
+
     return parser
 
 

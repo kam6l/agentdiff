@@ -43,6 +43,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "types-psutil>=5.9",
+    "types-PyYAML>=6.0",
 ]
 docs = [
     "mkdocs>=1.6.1",

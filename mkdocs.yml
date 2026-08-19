@@ -47,6 +47,11 @@ nav:
       - Installation: docs/installation.md
   - Core concepts:
       - Trust pipeline: docs/concepts/trust-pipeline.md
+      - Zero-touch automation: docs/concepts/zero-touch.md
+      - Trust compiler (bootstrap): docs/concepts/trust-compiler.md
+      - Impact-aware proof & cache: docs/concepts/impact-proof.md
+      - Automatic repair loop: docs/concepts/repair-loop.md
+      - Warm workspaces: docs/concepts/warm-workspaces.md
       - Runtime model: docs/concepts/runtime.md
       - Docker isolation: docs/concepts/docker-runtime.md
       - Mutation policy: docs/concepts/policy.md
@@ -58,6 +63,7 @@ nav:
       - CLI overview: docs/cli/index.md
       - Run a transaction: docs/cli/run.md
       - Inspect evidence: docs/cli/inspect.md
+      - Zero-touch commands: docs/cli/automation.md
       - Prove & promote: docs/cli/prove-promote.md
       - Recover safely: docs/cli/rollback.md
       - Policy commands: docs/cli/policy.md
