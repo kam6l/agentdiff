@@ -177,7 +177,7 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> None:
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     executable = sys.executable
     module = "agentdiff.sidecar.server"
-    argv = [executable, "-m", module, "--root", str(root), "--daemon"]
+    argv = [executable, "-m", module, "--root", str(root)]
     kwargs: dict[str, Any] = {
         "shell": False,
         "stdout": subprocess.DEVNULL,
