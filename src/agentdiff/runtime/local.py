@@ -413,3 +413,9 @@ class LocalRuntime:
             process.kill()
         with suppress(OSError):
             process.wait(timeout=0.5)
+
+    def close(self) -> None:
+        """Release any resources held by the runtime."""
+        pass
+
+

@@ -151,9 +151,22 @@ There is no hosted dashboard or hosted service: the sidecar is a local daemon, a
 | `agentdiff trust` / `impact` / `proof cache-status` | Trust graph, impact plan, proof cache |
 | `agentdiff workspace status/warm/prune` | Trusted warm workspace snapshots |
 | `agentdiff policy init/validate/explain` | Create and inspect versioned policy |
+| `agentdiff api scan` / `check` | Self-maintaining API usage scanner and breaking change checker |
 | `agentdiff cortex ...` | Open the optional evidence-memory, skill-card, and provider tool namespace |
 
 The earlier `snapshot`, `diff`, and `eval` implementation remains importable for compatibility testing but is no longer exposed as a public CLI path.
+
+### Self-Maintaining APIs
+
+AgentDiff analyzes Python AST to detect third-party API usages (starting with **OpenAI** and **Stripe**), matches usages against known breaking changes, and calculates migration blast radius and test proof requirements without manual intervention:
+
+```bash
+# Scan repository for all external API calls
+agentdiff api scan --root .
+
+# Check for breaking changes, calculate impact, and report remediation
+agentdiff api check --root . --fail-on high
+```
 
 ### Optional Cortex tools
 

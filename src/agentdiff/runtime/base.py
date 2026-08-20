@@ -40,6 +40,62 @@ class RuntimeCapability:
 
 
 @dataclass(frozen=True)
+class RuntimeCapabilities:
+    """Consolidated runtime capabilities profile."""
+
+    backend: str
+    filesystem: RuntimeControlLevel
+    host_repository: RuntimeControlLevel
+    network: RuntimeControlLevel
+    processes: RuntimeControlLevel
+    resources: RuntimeControlLevel
+    privileges: RuntimeControlLevel
+    private_workspace: bool = False
+    supports_live_safety: bool = False
+    supports_source_snapshot: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "backend": self.backend,
+            "filesystem": (
+                self.filesystem.value
+                if hasattr(self.filesystem, "value")
+                else str(self.filesystem)
+            ),
+            "host_repository": (
+                self.host_repository.value
+                if hasattr(self.host_repository, "value")
+                else str(self.host_repository)
+            ),
+            "network": (
+                self.network.value
+                if hasattr(self.network, "value")
+                else str(self.network)
+            ),
+            "processes": (
+                self.processes.value
+                if hasattr(self.processes, "value")
+                else str(self.processes)
+            ),
+            "resources": (
+                self.resources.value
+                if hasattr(self.resources, "value")
+                else str(self.resources)
+            ),
+            "privileges": (
+                self.privileges.value
+                if hasattr(self.privileges, "value")
+                else str(self.privileges)
+            ),
+            "private_workspace": self.private_workspace,
+            "supports_live_safety": self.supports_live_safety,
+            "supports_source_snapshot": self.supports_source_snapshot,
+        }
+
+
+
+
+@dataclass(frozen=True)
 class OwnedProcess:
     """PID identity observed in the launched process tree.
 

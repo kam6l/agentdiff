@@ -64,6 +64,10 @@ class CapsuleReader:
             hasher.update(f"{relpath}:{entry.get('sha256')}:{entry.get('size')}\n".encode("utf-8"))
         return hasher.hexdigest()
 
+    def compute_root_digest(self) -> str:
+        """Compute the deterministic root aggregate digest over the sealed manifest entries."""
+        return self.compute_merkle_root()
+
     def get_artifact_path(self, relative_path: str) -> Path:
         normalized = normalize_relative_path(relative_path)
         target = self.run_dir.joinpath(*normalized.split("/"))

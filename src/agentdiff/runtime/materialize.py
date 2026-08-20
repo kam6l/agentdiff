@@ -18,6 +18,9 @@ class MaterializationStrategy(str, Enum):
     AUTO = "auto"
     REFLINK = "reflink"
     COPY = "copy"
+    FAST_COPY = "fast_copy"
+    STREAM_COPY = "stream_copy"
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,8 +49,11 @@ class WorkspaceMaterializer:
         *,
         filter_fn: Callable[[str], bool] | None = None,
     ) -> MaterializationReport:
+        target_path = Path(target_dir)
+        if target_path.is_symlink():
+            raise ValueError("target directory cannot be a symlink, must be a real directory")
         src = Path(source_dir).resolve(strict=True)
-        dst = Path(target_dir).resolve()
+        dst = target_path.resolve()
         dst.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         started = time.monotonic()
@@ -76,8 +82,17 @@ class WorkspaceMaterializer:
                 total_bytes += size
 
         elapsed = time.monotonic() - started
+        strategy_name = (
+            "stream_copy"
+            if self.strategy == MaterializationStrategy.STREAM_COPY
+            else (
+                "fast_copy"
+                if self.strategy == MaterializationStrategy.FAST_COPY
+                else self.strategy.value
+            )
+        )
         return MaterializationReport(
-            strategy_used=self.strategy.value,
+            strategy_used=strategy_name,
             files_materialized=files_count,
             bytes_materialized=total_bytes,
             duration_seconds=elapsed,
@@ -85,13 +100,18 @@ class WorkspaceMaterializer:
 
     def _copy_file(self, src: Path, dst: Path) -> int:
         info = src.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise RuntimeError(f"symlink rejected in workspace materialization: {src}")
         if not stat.S_ISREG(info.st_mode):
-            return 0
+            raise RuntimeError(f"special file rejected in workspace materialization: {src}")
+        if info.st_nlink > 1:
+            raise RuntimeError(f"hardlink rejected in workspace materialization: {src}")
 
         # Reflink attempt on POSIX if requested/auto
         if self.strategy in {
             MaterializationStrategy.AUTO,
             MaterializationStrategy.REFLINK,
+            MaterializationStrategy.FAST_COPY,
         } and hasattr(os, "copy_file_range"):
             try:
                 src_fd = os.open(src, os.O_RDONLY | getattr(os, "O_BINARY", 0))

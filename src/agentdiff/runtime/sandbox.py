@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any
 
+from .base import RuntimeCapabilities, RuntimeControlLevel
 from .local import LocalRuntime
 
 if TYPE_CHECKING:
@@ -59,6 +60,36 @@ class SandboxRuntime:
             observe_ports=observe_ports,
             poll_interval_seconds=poll_interval_seconds,
         )
+
+    @property
+    def capabilities(self) -> RuntimeCapabilities:
+        """Report only guarantees this adapter actually provides.
+
+        Isolation is delegated to the external Sandbox Runtime; AgentDiff
+        itself observes the host around the wrapper and does not reimplement
+        or silently emulate the external OS controls.
+        """
+        return RuntimeCapabilities(
+            backend="anthropic-sandbox-runtime",
+            filesystem=RuntimeControlLevel.OBSERVED,
+            host_repository=RuntimeControlLevel.OBSERVED,
+            network=RuntimeControlLevel.OBSERVED,
+            processes=RuntimeControlLevel.OBSERVED,
+            resources=RuntimeControlLevel.UNCONTROLLED,
+            privileges=RuntimeControlLevel.UNCONTROLLED,
+            private_workspace=False,
+            supports_live_safety=True,
+            supports_source_snapshot=False,
+        )
+
+    def configure_source(self, source_dir: str | os.PathLike[str]) -> None:
+        """The Sandbox Runtime executes on the host root; no source copy is used."""
+
+    def configure_safety(self, controller: Any) -> None:
+        self._local.configure_safety(controller)
+
+    def close(self) -> None:
+        self._local.close()
 
     def run(
         self,

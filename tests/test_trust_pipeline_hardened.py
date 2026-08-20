@@ -103,6 +103,11 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
     created_file = tmp_path / "created.txt"
     created_file.write_text("partially created", encoding="utf-8")
 
+    import hashlib
+    base_sha256 = hashlib.sha256(b"initial host state").hexdigest()
+
+    created_sha256 = hashlib.sha256(b"partially created").hexdigest()
+
     # Simulate an interrupted journal in APPLYING state
     journal = PromotionJournal(
         root=tmp_path,
@@ -113,7 +118,7 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
             JournalEntry(
                 path="target.txt",
                 change_type="modified",
-                base_sha256="base",
+                base_sha256=base_sha256,
                 result_sha256="target",
                 base_mode=0o644,
                 result_mode=0o644,
@@ -124,7 +129,7 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
                 path="created.txt",
                 change_type="created",
                 base_sha256=None,
-                result_sha256="created",
+                result_sha256=created_sha256,
                 base_mode=None,
                 result_mode=0o644,
                 applied=True,
