@@ -254,6 +254,7 @@ class SidecarServer:
     def _on_stop(self, payload: dict[str, Any]) -> dict[str, Any]:
         del payload
         self._stopping.set()
+        _cleanup_state(self.state_dir)
         return {"ok": True, "stopping": True}
 
     # ---- helpers ------------------------------------------------------------
@@ -279,8 +280,9 @@ class SidecarServer:
 
         from agentdiff.runtime import DockerRuntime
 
-        image = policy.proof.image or "python:3.12-slim"
-        if shutil.which("docker") is not None:
+        backend = getattr(getattr(policy, "runtime", None), "backend", None)
+        if backend == "docker" and shutil.which("docker") is not None:
+            image = policy.proof.image or "python:3.12-slim"
             try:
                 return DockerRuntime(self.root, image=image)
             except (OSError, TypeError, ValueError):
@@ -407,6 +409,14 @@ def _daemonize(sidecar: SidecarServer) -> None:
         "stderr": subprocess.DEVNULL,
         "stdin": subprocess.DEVNULL,
     }
+    env = dict(os.environ)
+    src_dir = str(Path(__file__).resolve().parent.parent.parent)
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
+    else:
+        env["PYTHONPATH"] = src_dir
+    kwargs["env"] = env
+
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
     else:

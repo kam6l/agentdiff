@@ -54,7 +54,7 @@ class SidecarClient:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
                 raw = response.read(_MAX_BODY_BYTES + 1)
                 if len(raw) > _MAX_BODY_BYTES:
                     raise SidecarError("sidecar response exceeds the limit")

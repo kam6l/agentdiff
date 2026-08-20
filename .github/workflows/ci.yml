@@ -18,6 +18,7 @@ env:
   UV_VERSION: "0.5.30"
   UV_LOCKED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
+  COVERAGE_CORE: "sysmon"
 
 jobs:
   tests:
@@ -63,10 +64,10 @@ jobs:
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-python-3.14
+          name: coverage-python-3.12
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
