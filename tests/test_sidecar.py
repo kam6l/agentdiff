@@ -243,7 +243,7 @@ def test_sidecar_daemon_start_and_stop(tmp_path: Path) -> None:
     assert status["ok"] is True
     client.request("POST", "/v1/stop")
     deadline = time.monotonic() + 10.0
-    port_file = tmp_path / ".agentdiff" / "sidecar" / "port"
+    port_file = tmp_path.resolve() / ".agentdiff" / "sidecar" / "port"
     while time.monotonic() < deadline and port_file.exists():
         time.sleep(0.1)
     assert not port_file.exists()

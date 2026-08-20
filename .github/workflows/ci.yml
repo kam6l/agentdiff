@@ -18,6 +18,7 @@ env:
   UV_VERSION: "0.5.30"
   UV_LOCKED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
+  COVERAGE_CORE: "sysmon"
 
 jobs:
   tests:
@@ -56,17 +57,24 @@ jobs:
       - name: Install test dependencies
         run: uv sync --locked --group dev --python ${{ matrix.python-version }}
 
-      - name: Run tests
+      - name: Run tests (with coverage)
+        if: matrix.python-version == '3.12'
         run: >-
           uv run --python ${{ matrix.python-version }} pytest
           -p no:cacheprovider tests/
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
+      - name: Run tests
+        if: matrix.python-version != '3.12'
+        run: >-
+          uv run --python ${{ matrix.python-version }} pytest
+          -p no:cov -p no:cacheprovider -o addopts="-ra --strict-markers --strict-config" tests/
+
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-python-3.14
+          name: coverage-python-3.12
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7

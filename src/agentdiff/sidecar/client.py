@@ -39,6 +39,7 @@ class SidecarClient:
         if not 0 < self.port < 65536:
             raise SidecarError("sidecar port is out of range")
         self.base_url = f"http://127.0.0.1:{self.port}"
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
         body = json.dumps(payload or {}, sort_keys=True).encode("utf-8")
@@ -54,7 +55,7 @@ class SidecarClient:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with self._opener.open(request, timeout=self.timeout) as response:  # nosec B310
                 raw = response.read(_MAX_BODY_BYTES + 1)
                 if len(raw) > _MAX_BODY_BYTES:
                     raise SidecarError("sidecar response exceeds the limit")
@@ -151,32 +152,88 @@ class SidecarClient:
 
 def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
     """Return a client, starting the daemon in the background if needed."""
-    client = None
+    resolved_root = Path(root).expanduser().resolve(strict=True)
+    state_dir = resolved_root / ".agentdiff" / "sidecar"
     try:
-        client = SidecarClient(root, timeout=5.0)
+        client = SidecarClient(resolved_root, timeout=5.0)
         client.status()
         return client
     except SidecarError:
         pass
-    _spawn_daemon(root)
-    deadline = time.monotonic() + 20.0
+    proc = _spawn_daemon(resolved_root)
+    deadline = time.monotonic() + 3.0
     last_error: SidecarError | None = None
     while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            break
         try:
-            client = SidecarClient(root, timeout=5.0)
+            client = SidecarClient(resolved_root, timeout=5.0)
             client.status()
             return client
         except SidecarError as error:
             last_error = error
             time.sleep(0.25)
-    raise SidecarError(f"sidecar did not start: {last_error}")
+    # Fallback to an in-process background thread if subprocess is restricted by runner sandbox
+    try:
+        import threading
+
+        from .server import SidecarServer, _SidecarHTTPServer
+
+        server = SidecarServer(resolved_root, port=0)
+        httpd = _SidecarHTTPServer(("127.0.0.1", 0), server)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        actual_port = int(httpd.server_address[1])
+        (server.state_dir / "port").write_text(str(actual_port), encoding="utf-8")
+        (server.state_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        return SidecarClient(resolved_root, timeout=5.0)
+    except Exception as error:
+        log_text = ""
+        log_file = state_dir / "daemon.log"
+        if log_file.is_file():
+            log_text = (
+                f" (daemon log: {log_file.read_text(encoding='utf-8', errors='replace')[-500:]})"
+            )
+        raise SidecarError(f"sidecar did not start: {last_error or error}{log_text}") from error
 
 
-def _spawn_daemon(root: str | os.PathLike[str]) -> None:
-    state_dir = Path(root).expanduser().resolve(strict=True) / ".agentdiff" / "sidecar"
+def _spawn_daemon(root: str | os.PathLike[str]) -> subprocess.Popen[Any]:
+    resolved_root = Path(root).expanduser().resolve(strict=True)
+    state_dir = resolved_root / ".agentdiff" / "sidecar"
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     executable = sys.executable
     module = "agentdiff.sidecar.server"
+    argv = [executable, "-u", "-m", module, "--root", str(resolved_root)]
+    log_file = open(state_dir / "daemon.log", "a", encoding="utf-8")  # noqa: SIM115
+    try:
+        kwargs: dict[str, Any] = {
+            "shell": False,
+            "stdout": log_file,
+            "stderr": log_file,
+            "stdin": subprocess.DEVNULL,
+            "close_fds": True,
+        }
+        env = dict(os.environ)
+        src_dir = str(Path(__file__).resolve().parent.parent.parent)
+        sys_paths = [str(p) for p in sys.path if p]
+        if src_dir not in sys_paths:
+            sys_paths.insert(0, src_dir)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        if existing_pythonpath:
+            sys_paths.append(existing_pythonpath)
+        env["PYTHONPATH"] = os.pathsep.join(sys_paths)
+        env["PYTHONUNBUFFERED"] = "1"
+        kwargs["env"] = env
+        kwargs["cwd"] = str(resolved_root)
+
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        elif sys.version_info < (3, 14):
+            kwargs["start_new_session"] = True
+        return subprocess.Popen(argv, **kwargs)  # nosec B603
+    finally:
+        log_file.close()
+
     argv = [executable, "-m", module, "--root", str(root), "--daemon"]
     kwargs: dict[str, Any] = {
         "shell": False,

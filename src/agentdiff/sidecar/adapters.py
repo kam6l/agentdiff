@@ -336,7 +336,8 @@ class WrapRunner:
 
     @staticmethod
     def _select_runtime(policy: Policy, workspace: Path) -> Any:
-        if shutil.which("docker") is not None:
+        backend = getattr(getattr(policy, "runtime", None), "backend", None)
+        if backend == "docker" and shutil.which("docker") is not None:
             try:
                 return DockerRuntime(
                     workspace,
