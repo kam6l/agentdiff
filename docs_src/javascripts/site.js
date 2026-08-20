@@ -184,6 +184,27 @@
         button.addEventListener("click", () => renderState(button.dataset.runState));
       });
     }
+
+    // Interactive CLI Tabs Demo
+    const cliDemo = root.querySelector("[data-cli-tabs]");
+    if (cliDemo) {
+      const tabs = selectAll(cliDemo, "[data-cli-tab]");
+      const panes = selectAll(cliDemo, "[data-cli-pane]");
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const targetPaneId = tab.dataset.cliTab;
+          tabs.forEach((t) => {
+            const active = t === tab;
+            t.classList.toggle("is-active", active);
+            t.setAttribute("aria-selected", String(active));
+          });
+          panes.forEach((pane) => {
+            pane.classList.toggle("is-active", pane.dataset.cliPane === targetPaneId);
+          });
+        });
+      });
+    }
   }
 
   function boot() {
