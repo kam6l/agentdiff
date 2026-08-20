@@ -39,6 +39,7 @@ class SidecarClient:
         if not 0 < self.port < 65536:
             raise SidecarError("sidecar port is out of range")
         self.base_url = f"http://127.0.0.1:{self.port}"
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
         body = json.dumps(payload or {}, sort_keys=True).encode("utf-8")
@@ -54,7 +55,7 @@ class SidecarClient:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
+            with self._opener.open(request, timeout=self.timeout) as response:  # nosec B310
                 raw = response.read(_MAX_BODY_BYTES + 1)
                 if len(raw) > _MAX_BODY_BYTES:
                     raise SidecarError("sidecar response exceeds the limit")
