@@ -233,24 +233,3 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> subprocess.Popen[Any]:
         return subprocess.Popen(argv, **kwargs)  # nosec B603
     finally:
         log_file.close()
-
-    argv = [executable, "-m", module, "--root", str(root), "--daemon"]
-    kwargs: dict[str, Any] = {
-        "shell": False,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-        "stdin": subprocess.DEVNULL,
-    }
-    env = dict(os.environ)
-    src_dir = str(Path(__file__).resolve().parent.parent.parent)
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_dir
-    kwargs["env"] = env
-
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-    else:
-        kwargs["start_new_session"] = True
-    subprocess.Popen(argv, **kwargs)  # nosec B603
