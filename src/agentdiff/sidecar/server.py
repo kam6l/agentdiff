@@ -24,7 +24,7 @@ import sys
 import tempfile
 import threading
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -254,7 +254,6 @@ class SidecarServer:
     def _on_stop(self, payload: dict[str, Any]) -> dict[str, Any]:
         del payload
         self._stopping.set()
-        _cleanup_state(self.state_dir)
         return {"ok": True, "stopping": True}
 
     # ---- helpers ------------------------------------------------------------
@@ -371,9 +370,7 @@ class _SidecarHandler(BaseHTTPRequestHandler):
         del format, args
 
 
-class _SidecarHTTPServer(ThreadingHTTPServer):
-    daemon_threads = True
-
+class _SidecarHTTPServer(HTTPServer):
     def __init__(self, address: tuple[str, int], sidecar: SidecarServer) -> None:
         self.sidecar = sidecar
         super().__init__(address, _SidecarHandler)
