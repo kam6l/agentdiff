@@ -10,10 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from agentdiff.api import (
+    APIChangeManifest,
     APIMatcher,
     APIScanner,
     ChangeSeverity,
+    MigrationEngine,
+    MigrationStatus,
     detect_installed_sdk_versions,
+    get_builtin_manifest,
     get_providers_for_selection,
 )
 from agentdiff.cortex import (
@@ -1136,6 +1140,75 @@ def cmd_api_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_api_migrate(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+
+    # Load manifest
+    manifest: APIChangeManifest | None = None
+    if args.manifest:
+        manifest_path = Path(args.manifest)
+        if manifest_path.suffix in {".yaml", ".yml"}:
+            manifest = APIChangeManifest.from_yaml(manifest_path)
+        elif manifest_path.suffix == ".json":
+            manifest = APIChangeManifest.from_json(manifest_path)
+        else:
+            print(
+                f"agentdiff: Unsupported manifest format: {manifest_path.suffix}", file=sys.stderr
+            )
+            return 2
+    else:
+        manifest = get_builtin_manifest(args.provider, args.change)
+
+    if manifest is None:
+        print(f"agentdiff: No built-in manifest for {args.provider}:{args.change}", file=sys.stderr)
+        return 1
+
+    # Validate manifest
+    valid, errors = manifest.validate()
+    if not valid:
+        for e in errors:
+            print(f"agentdiff: Invalid manifest: {e}", file=sys.stderr)
+        return 1
+
+    # Create migration engine
+    engine = MigrationEngine(
+        root=root,
+        policy_path=args.policy,
+        manifest=manifest,
+    )
+
+    # Run migration
+    result = engine.run()
+
+    if args.format == "json":
+        print(_json(result.to_dict()))
+    else:
+        print(f"Migration: {manifest.provider}:{manifest.change_id}")
+        print(f"Title: {manifest.title}")
+        print(f"Status: {result.migration_status.value}")
+        print(f"Verification: {result.verification_level.value}")
+        print(f"Affected files: {len(result.plan.affected_files)}")
+        print(f"Affected usages: {len(result.plan.affected_usages)}")
+
+        if result.plan.steps:
+            print("\nSteps:")
+            for step in result.plan.steps:
+                print(f"  {step.step_id}: {step.description} [{step.status.value}]")
+
+        if result.errors:
+            print("\nErrors:")
+            for err in result.errors:
+                print(f"  - {err}")
+
+        if result.certificate:
+            print(f"\nCertificate: {result.certificate.certificate_id}")
+            print(f"Verified: {result.certificate.verified}")
+
+    return (
+        0 if result.migration_status in {MigrationStatus.COMPLETED, MigrationStatus.PLANNED} else 1
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentdiff",
@@ -1505,6 +1578,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit with non-zero on matching risk/severity",
     )
     p_api_check.set_defaults(func=cmd_api_check)
+
+    p_api_migrate = api_commands.add_parser(
+        "migrate", help="Generate and verify API migration (experimental)"
+    )
+    p_api_migrate.add_argument("--root", default=".", help="Project root to migrate")
+    p_api_migrate.add_argument("--provider", default="openai", help="Provider (openai, stripe)")
+    p_api_migrate.add_argument(
+        "--change", required=True, help="Change ID (e.g., chat_to_responses)"
+    )
+    p_api_migrate.add_argument("--manifest", help="Path to custom manifest YAML/JSON")
+    p_api_migrate.add_argument("--policy", help="Policy file (default: ROOT/agentdiff.yaml)")
+    p_api_migrate.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_api_migrate.set_defaults(func=cmd_api_migrate)
 
     return parser
 

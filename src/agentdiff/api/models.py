@@ -7,6 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from agentdiff.api.manifest import APIChangeManifest
     from agentdiff.impact.impact import ProofImpactPlan
     from agentdiff.scoring.blast_radius import BlastRadiusResult
     from agentdiff.trust.graph import RepoImpactGraph
@@ -364,3 +365,140 @@ def assess_migration_confidence(
         reasons=tuple(reasons),
         risk_factors=tuple(risk_factors),
     )
+
+
+# =============================================================================
+# Migration Planning Models
+# =============================================================================
+
+
+class MigrationStatus(str, Enum):
+    """Status of a migration execution."""
+
+    PLANNED = "planned"
+    IN_PROGRESS = "in_progress"
+    VERIFYING = "verifying"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+
+
+class VerificationLevel(str, Enum):
+    """Verification level achieved."""
+
+    V0 = "v0"  # Patch generated
+    V1 = "v1"  # Syntax/type/build passes
+    V2 = "v2"  # Affected tests pass
+    V3 = "v3"  # Full repo tests pass
+    V4 = "v4"  # API contract/mock tests pass
+    V5 = "v5"  # User-defined integration verification passes
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationStep:
+    """A single step in a migration plan."""
+
+    step_id: str
+    description: str
+    transform_id: str | None = None
+    filepath: str = ""
+    target_symbol: str = ""
+    status: MigrationStatus = MigrationStatus.PLANNED
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "step_id": self.step_id,
+            "description": self.description,
+            "transform_id": self.transform_id,
+            "filepath": self.filepath,
+            "target_symbol": self.target_symbol,
+            "status": self.status.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationPlan:
+    """Complete migration plan for a single API change."""
+
+    provider: str
+    change_id: str
+    manifest: "APIChangeManifest"  # Forward reference
+    affected_usages: tuple[APIUsage, ...]
+    affected_files: tuple[str, ...]
+    assessment: MigrationAssessment
+    steps: tuple[MigrationStep, ...]
+    verification_level: VerificationLevel = VerificationLevel.V0
+    status: MigrationStatus = MigrationStatus.PLANNED
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "change_id": self.change_id,
+            "manifest": self.manifest.to_dict() if self.manifest else None,
+            "affected_usages": [u.to_dict() for u in self.affected_usages],
+            "affected_files": list(self.affected_files),
+            "assessment": self.assessment.to_dict(),
+            "steps": [s.to_dict() for s in self.steps],
+            "verification_level": self.verification_level.value,
+            "status": self.status.value,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationResult:
+    """Result of executing a migration plan."""
+
+    plan: MigrationPlan
+    migration_status: MigrationStatus
+    verification_level: VerificationLevel
+    proof_verdict: str | None = None
+    proof_digest: str | None = None
+    capsule_id: str | None = None
+    certificate: "MigrationCertificate | None" = None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan": self.plan.to_dict(),
+            "migration_status": self.migration_status.value,
+            "verification_level": self.verification_level.value,
+            "proof_verdict": self.proof_verdict,
+            "proof_digest": self.proof_digest,
+            "capsule_id": self.capsule_id,
+            "certificate": self.certificate.to_dict() if self.certificate else None,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationCertificate:
+    """Verifiable migration certificate."""
+
+    certificate_id: str
+    provider: str
+    change_id: str
+    verification_level: VerificationLevel
+    affected_files: tuple[str, ...]
+    blast_radius_score: int
+    proof_digest: str
+    capsule_id: str
+    migration_digest: str
+    created_at: str
+    verified: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "certificate_id": self.certificate_id,
+            "provider": self.provider,
+            "change_id": self.change_id,
+            "verification_level": self.verification_level.value,
+            "affected_files": list(self.affected_files),
+            "blast_radius_score": self.blast_radius_score,
+            "proof_digest": self.proof_digest,
+            "capsule_id": self.capsule_id,
+            "migration_digest": self.migration_digest,
+            "created_at": self.created_at,
+            "verified": self.verified,
+        }
