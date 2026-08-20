@@ -224,7 +224,7 @@ class LocalRuntime:
                 ),
             )
             for child in root_process.children(recursive=True):
-                with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+                with suppress(psutil.Error, OSError, ValueError, TypeError):
                     child_pid = child.pid
                     child_created = child.create_time()
                     parent = child.parent()
@@ -238,7 +238,7 @@ class LocalRuntime:
                             relation="descendant",
                         ),
                     )
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.Error, OSError, ValueError, TypeError):
             pass
 
     def _observe_execution_domain(

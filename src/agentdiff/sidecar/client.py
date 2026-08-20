@@ -201,15 +201,14 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> None:
             env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
         else:
             env["PYTHONPATH"] = src_dir
+        env["PYTHONUNBUFFERED"] = "1"
         kwargs["env"] = env
+        kwargs["cwd"] = str(resolved_root)
 
         if os.name == "nt":
             kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
         else:
-            import signal
-
             kwargs["start_new_session"] = True
-            kwargs["preexec_fn"] = lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN)
         subprocess.Popen(argv, **kwargs)  # nosec B603
     finally:
         log_file.close()
