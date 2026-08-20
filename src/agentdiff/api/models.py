@@ -93,12 +93,17 @@ class APIChange:
     severity: ChangeSeverity
     target_symbol: str
     description: str
+    target_symbols: tuple[str, ...] = ()
     target_parameter: str | None = None
     target_model: str | None = None
     breaking_version: str = ""
     migration_guide_url: str = ""
     replacement_symbol: str = ""
     replacement_code: str = ""
+
+    @property
+    def applicable_symbols(self) -> tuple[str, ...]:
+        return self.target_symbols if self.target_symbols else (self.target_symbol,)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -108,6 +113,7 @@ class APIChange:
             "change_type": self.change_type.value,
             "severity": self.severity.value,
             "target_symbol": self.target_symbol,
+            "target_symbols": list(self.target_symbols),
             "target_parameter": self.target_parameter,
             "target_model": self.target_model,
             "breaking_version": self.breaking_version,
@@ -119,6 +125,8 @@ class APIChange:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> APIChange:
+        target_symbols_raw = data.get("target_symbols")
+        target_symbols = tuple(str(s) for s in target_symbols_raw) if target_symbols_raw else ()
         return cls(
             change_id=str(data["change_id"]),
             provider=str(data["provider"]),
@@ -127,6 +135,7 @@ class APIChange:
             severity=ChangeSeverity(data["severity"]),
             target_symbol=str(data["target_symbol"]),
             description=str(data.get("description", "")),
+            target_symbols=target_symbols,
             target_parameter=data.get("target_parameter"),
             target_model=data.get("target_model"),
             breaking_version=str(data.get("breaking_version", "")),
@@ -166,6 +175,9 @@ class MigrationImpact:
     impact_plan: ProofImpactPlan | None = None
     risk_level: RiskLevel = RiskLevel.LOW
     remediations: tuple[str, ...] = ()
+    detected_sdk_versions: dict[str, Any] = field(default_factory=dict)
+    impact_status: str = "ok"  # "ok", "unknown", "error", "skipped"
+    impact_error: str | None = None
 
     @property
     def has_breaking_changes(self) -> bool:
@@ -182,4 +194,7 @@ class MigrationImpact:
             "impact_plan": self.impact_plan.to_dict() if self.impact_plan is not None else None,
             "risk_level": self.risk_level.value,
             "remediations": list(self.remediations),
+            "detected_sdk_versions": dict(self.detected_sdk_versions),
+            "impact_status": self.impact_status,
+            "impact_error": self.impact_error,
         }

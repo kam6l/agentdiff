@@ -29,4 +29,3 @@ __all__ = [
     "compute_proof_strength",
     "is_verifier_related",
 ]
-

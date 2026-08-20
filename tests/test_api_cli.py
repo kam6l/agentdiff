@@ -81,9 +81,7 @@ def test_cli_api_check_detects_breaking_changes(tmp_path: Path) -> None:
     assert "openai.ChatCompletion.create" in result.stdout
     assert "stripe.Charge.create" in result.stdout
 
-    result_json = run_cli(
-        "api", "check", "--root", str(tmp_path), "--format", "json", cwd=tmp_path
-    )
+    result_json = run_cli("api", "check", "--root", str(tmp_path), "--format", "json", cwd=tmp_path)
     assert result_json.returncode == 1
     payload = json.loads(result_json.stdout)
     assert payload["affected_usages"] >= 2

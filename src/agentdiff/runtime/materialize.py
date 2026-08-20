@@ -22,7 +22,6 @@ class MaterializationStrategy(str, Enum):
     STREAM_COPY = "stream_copy"
 
 
-
 @dataclass(frozen=True, slots=True)
 class MaterializationReport:
     strategy_used: str
@@ -107,18 +106,20 @@ class WorkspaceMaterializer:
         if info.st_nlink > 1:
             raise RuntimeError(f"hardlink rejected in workspace materialization: {src}")
 
-        # Reflink attempt on POSIX if requested/auto
+        copied_via_range = False
+        # Reflink / copy_file_range attempt on POSIX if requested/auto
         if self.strategy in {
             MaterializationStrategy.AUTO,
             MaterializationStrategy.REFLINK,
             MaterializationStrategy.FAST_COPY,
         } and hasattr(os, "copy_file_range"):
             try:
+                mode_init = stat.S_IMODE(info.st_mode)
                 src_fd = os.open(src, os.O_RDONLY | getattr(os, "O_BINARY", 0))
                 dst_fd = os.open(
                     dst,
                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0),
-                    0o644,
+                    mode_init,
                 )
                 try:
                     total = 0
@@ -127,16 +128,17 @@ class WorkspaceMaterializer:
                         if copied == 0:
                             break
                         total += copied
-                    return total
+                    copied_via_range = True
                 finally:
                     os.close(src_fd)
                     os.close(dst_fd)
             except OSError:
-                pass
+                copied_via_range = False
 
-        # Robust streaming fallback
-        with open(src, "rb") as input_f, open(dst, "wb") as output_f:
-            shutil.copyfileobj(input_f, output_f, length=_CHUNK_SIZE)
+        if not copied_via_range:
+            # Robust streaming fallback
+            with open(src, "rb") as input_f, open(dst, "wb") as output_f:
+                shutil.copyfileobj(input_f, output_f, length=_CHUNK_SIZE)
 
         mode = stat.S_IMODE(info.st_mode)
         if os.name != "nt":

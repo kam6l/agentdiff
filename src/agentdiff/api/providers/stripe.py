@@ -30,6 +30,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="stripe.Charge.create",
+                target_symbols=("stripe.Charge.create", "client.charges.create"),
                 description=(
                     "Direct `stripe.Charge.create()` calls do not support Strong Customer"
                     " Authentication (SCA) or 3D Secure 2."
@@ -52,6 +53,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="stripe.Source.create",
+                target_symbols=("stripe.Source.create", "client.sources.create"),
                 description=(
                     "`stripe.Source.create()` is legacy. Migrate to `stripe.PaymentMethod.create()`"
                     " and `stripe.SetupIntent.create()`."
@@ -69,6 +71,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.MODERATE,
                 target_symbol="stripe.Token.create",
+                target_symbols=("stripe.Token.create", "client.tokens.create"),
                 description=(
                     "Creating raw card tokens with `stripe.Token.create()` is legacy and incurs"
                     " higher PCI compliance burden. Migrate to Stripe Elements and PaymentMethods."
@@ -86,6 +89,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.MODERATE,
                 target_symbol="stripe.Plan.create",
+                target_symbols=("stripe.Plan.create", "client.plans.create"),
                 description=(
                     "`stripe.Plan.create()` has been unified under the Prices API."
                     " Use `stripe.Price.create()`."
@@ -108,6 +112,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.CRITICAL,
                 target_symbol="stripe.Order.create",
+                target_symbols=("stripe.Order.create", "client.orders.create"),
                 description=(
                     "The legacy `stripe.Order` API was deprecated and removed."
                     " Use Stripe Checkout Sessions or PaymentIntents."
@@ -130,6 +135,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.MODERATE,
                 target_symbol="stripe.SKU.create",
+                target_symbols=("stripe.SKU.create", "client.skus.create"),
                 description=(
                     "`stripe.SKU.create()` is deprecated. Model items using"
                     " `stripe.Product.create()` and `stripe.Price.create()`."
@@ -149,6 +155,7 @@ class StripeProvider(APIProvider):
                 change_type=ChangeType.PARAMETER_REMOVAL,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="stripe.Charge.create",
+                target_symbols=("stripe.Charge.create", "client.charges.create"),
                 target_parameter="card",
                 description=(
                     "Passing raw `card` dictionary or token into `stripe.Charge.create()` is"

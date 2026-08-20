@@ -13,6 +13,7 @@ from agentdiff.api import (
     APIMatcher,
     APIScanner,
     ChangeSeverity,
+    detect_installed_sdk_versions,
     get_providers_for_selection,
 )
 from agentdiff.cortex import (
@@ -1027,6 +1028,7 @@ def cmd_api_scan(args: argparse.Namespace) -> int:
     providers = get_providers_for_selection(args.provider)
     scanner = APIScanner(providers=providers)
     usages = scanner.scan(root)
+    sdk_versions = detect_installed_sdk_versions(root)
 
     if args.format == "json":
         print(
@@ -1035,6 +1037,7 @@ def cmd_api_scan(args: argparse.Namespace) -> int:
                     "root": str(root),
                     "provider": args.provider,
                     "count": len(usages),
+                    "detected_sdk_versions": {k: v.to_dict() for k, v in sdk_versions.items()},
                     "usages": [u.to_dict() for u in usages],
                 }
             )
@@ -1042,6 +1045,12 @@ def cmd_api_scan(args: argparse.Namespace) -> int:
     else:
         print(f"External API Scan: {safe_display(root)}")
         print(f"Provider filter:   {args.provider}")
+        if sdk_versions:
+            sdk_summary = ", ".join(
+                f"{k} ({v.version_specifier or v.exact_version or 'detected'} from {v.source_file})"
+                for k, v in sorted(sdk_versions.items())
+            )
+            print(f"Detected SDKs:     {sdk_summary}")
         print(f"Total API usages:  {len(usages)}")
         if usages:
             print("")
@@ -1068,6 +1077,13 @@ def cmd_api_check(args: argparse.Namespace) -> int:
     else:
         print(f"External API Breaking Change Check: {safe_display(root)}")
         print(f"Provider filter:   {args.provider}")
+        if impact.detected_sdk_versions:
+            items = []
+            for k, v in sorted(impact.detected_sdk_versions.items()):
+                spec = v.get("version_specifier") or v.get("exact_version") or "detected"
+                src = v.get("source_file", "manifest")
+                items.append(f"{k} ({spec} from {src})")
+            print(f"Detected SDKs:     {', '.join(items)}")
         print(f"Total usages:      {impact.total_usages}")
         print(f"Affected usages:   {impact.affected_usages}")
         print(f"Affected files:    {len(impact.affected_files)}")
@@ -1076,7 +1092,9 @@ def cmd_api_check(args: argparse.Namespace) -> int:
             f"(Blast Radius Score: {impact.blast_radius.score}/100)"
         )
 
-        if impact.impact_plan is not None:
+        if impact.impact_error:
+            print(f"Warning:           {impact.impact_error}")
+        elif impact.impact_plan is not None:
             print(f"Proof Level:       {impact.impact_plan.level.upper()}")
             if impact.impact_plan.tests:
                 print(f"Impacted tests:    {len(impact.impact_plan.tests)}")
@@ -1464,9 +1482,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     api_commands = p_api.add_subparsers(dest="api_command", required=True)
 
-    p_api_scan = api_commands.add_parser(
-        "scan", help="Scan repository AST for external API usages"
-    )
+    p_api_scan = api_commands.add_parser("scan", help="Scan repository AST for external API usages")
     p_api_scan.add_argument("--root", default=".", help="Project root to scan")
     p_api_scan.add_argument(
         "--provider", default="all", help="Provider filter (openai, stripe, all)"

@@ -155,4 +155,3 @@ class ProofResult:
             "proof_strength_label": self.proof_strength_label,
             "verifier_independence": self.verifier_independence,
         }
-

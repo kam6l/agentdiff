@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+    "packaging>=23.0",
     "psutil>=5.9",
     "pyyaml>=6.0",
     "rich>=13.0",
