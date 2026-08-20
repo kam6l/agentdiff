@@ -120,6 +120,21 @@ search:
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
+         ECOSYSTEMS & INTEGRATIONS
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="ad-ecosystem-bar" aria-label="Supported ecosystems and integrations">
+      <span class="ad-ecosystem-label">WORKS ACROSS YOUR STACK</span>
+      <div class="ad-ecosystem-tags">
+        <span class="ad-eco-tag"><b>Python</b> <code>3.12 · 3.13 · 3.14</code></span>
+        <span class="ad-eco-tag"><b>TypeScript / Node</b> <code>ESLint AST</code></span>
+        <span class="ad-eco-tag"><b>Rust</b> <code>Beta</code></span>
+        <span class="ad-eco-tag"><b>GitHub Actions</b> <code>CI/CD</code></span>
+        <span class="ad-eco-tag"><b>GitLab CI</b> <code>Worktree runner</code></span>
+        <span class="ad-eco-tag"><b>Pre-commit</b> <code>Local hooks</code></span>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
          PRODUCT DEMO — Connected Pipeline Flow
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-pipeline-section ad-section" id="demo" aria-labelledby="ad-demo-title">
@@ -221,6 +236,55 @@ search:
           </article>
         </div>
       </div>
+
+      <!-- Interactive CLI Playground -->
+      <div class="ad-cli-demo" data-cli-tabs>
+        <div class="ad-cli-demo__bar">
+          <div class="ad-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="ad-cli-demo__tabs" role="tablist" aria-label="CLI commands">
+            <button type="button" class="is-active" role="tab" aria-selected="true" data-cli-tab="scan">1. Scan AST</button>
+            <button type="button" role="tab" aria-selected="false" data-cli-tab="verify">2. Clean-Room Verify</button>
+            <button type="button" role="tab" aria-selected="false" data-cli-tab="cert">3. Migration Certificate</button>
+          </div>
+          <span class="ad-cli-demo__version">CLI v0.4.0</span>
+        </div>
+        <div class="ad-cli-demo__window">
+          <!-- Pane 1: Scan -->
+          <div class="ad-cli-pane is-active" data-cli-pane="scan">
+            <div class="ad-cli-line"><span class="ad-cli-prompt">$</span> <code>agentdiff scan --provider openai</code></div>
+            <div class="ad-cli-out is-dim">Scanning repository AST for upstream provider deprecations...</div>
+            <div class="ad-cli-out"><span class="ad-cli-pill is-warn">MATCH</span> <b>openai 0.28 → 1.0</b> (ChatCompletion removal)</div>
+            <div class="ad-cli-out is-indent"><span class="is-file">src/llm/client.py:42</span> → <code>openai.ChatCompletion.create()</code></div>
+            <div class="ad-cli-out is-indent"><span class="is-file">src/agents/planner.py:118</span> → <code>openai.ChatCompletion.create()</code></div>
+            <div class="ad-cli-out is-indent"><span class="is-file">src/agents/eval.py:87</span> → <code>openai.Embedding.create()</code></div>
+            <div class="ad-cli-out is-highlight">Found 3 affected files · 7 call sites · Blast radius: 72/100 (HIGH)</div>
+          </div>
+          <!-- Pane 2: Verify -->
+          <div class="ad-cli-pane" data-cli-pane="verify">
+            <div class="ad-cli-line"><span class="ad-cli-prompt">$</span> <code>agentdiff verify --clean-room --isolated</code></div>
+            <div class="ad-cli-out is-dim">Replaying AST patch in isolated worktree [/tmp/agentdiff-wt-7f8a]...</div>
+            <div class="ad-cli-out"><span class="ad-cli-pill is-ok">V0 SYNTAX</span> Passed (3/3 files parse cleanly)</div>
+            <div class="ad-cli-out"><span class="ad-cli-pill is-ok">V1 TYPES</span> Passed (mypy + pyright: 0 type errors)</div>
+            <div class="ad-cli-out"><span class="ad-cli-pill is-ok">V2 TARGETED</span> Passed (18/18 affected tests green)</div>
+            <div class="ad-cli-out"><span class="ad-cli-pill is-ok">V3 REPO SUITE</span> Passed (316/316 unit + integration tests green)</div>
+            <div class="ad-cli-out is-highlight is-green">Verification SUCCESS: Clean-room proof verified · 0 regressions</div>
+          </div>
+          <!-- Pane 3: Cert -->
+          <div class="ad-cli-pane" data-cli-pane="cert">
+            <div class="ad-cli-line"><span class="ad-cli-prompt">$</span> <code>agentdiff cert inspect run_e45c0d69</code></div>
+            <div class="ad-cli-out is-dim">Cryptographic Migration Certificate:</div>
+            <pre class="ad-cli-json"><code>{
+  "certificate_id": "cert_9f4a12b8",
+  "provider": "openai",
+  "change": "0.28 → 1.0",
+  "verification_level": "V3",
+  "proof_digest": "sha256:e45c0d69a41e9b28b7e21a4f5c9d8e7a",
+  "rollback_cmd": "agentdiff rollback run_e45c0d69 --safe-only",
+  "signature_verified": true
+}</code></pre>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
@@ -307,6 +371,32 @@ search:
           <strong>Untrusted by Default</strong>
           <p>Regardless of source, no code reaches your repository without passing the deterministic verification engine.</p>
         </article>
+      </div>
+
+      <!-- Visual Before / After Code Diff -->
+      <div class="ad-diff-card" aria-label="AST code migration diff preview">
+        <div class="ad-diff-card__header">
+          <div class="ad-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <code>src/llm/client.py · AST Migration Diff</code>
+          <span class="ad-diff-badge">AST Transform · 0 Hallucinations</span>
+        </div>
+        <div class="ad-diff-card__body">
+          <pre class="ad-diff-code"><code><span class="ad-diff-del">- # Legacy OpenAI 0.28 call site</span>
+<span class="ad-diff-del">- response = openai.ChatCompletion.create(</span>
+<span class="ad-diff-del">-     model="gpt-4",</span>
+<span class="ad-diff-del">-     messages=[{"role": "user", "content": prompt}],</span>
+<span class="ad-diff-del">-     temperature=0.7,</span>
+<span class="ad-diff-del">- )</span>
+<span class="ad-diff-del">- text = response["choices"][0]["message"]["content"]</span>
+<span class="ad-diff-add">+ # Migrated OpenAI 1.0 (Deterministic AST transform)</span>
+<span class="ad-diff-add">+ client = OpenAI()</span>
+<span class="ad-diff-add">+ response = client.chat.completions.create(</span>
+<span class="ad-diff-add">+     model="gpt-4",</span>
+<span class="ad-diff-add">+     messages=[{"role": "user", "content": prompt}],</span>
+<span class="ad-diff-add">+     temperature=0.7,</span>
+<span class="ad-diff-add">+ )</span>
+<span class="ad-diff-add">+ text = response.choices[0].message.content</span></code></pre>
+        </div>
       </div>
     </section>
 
