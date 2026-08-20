@@ -27,6 +27,7 @@ search:
       <div class="ad-site-nav__links" id="ad-nav-links" data-menu>
         <a href="#how-it-works">How it works</a>
         <a href="#compare">Compare</a>
+        <a href="#engine">Under the hood</a>
         <a href="#roadmap">Roadmap</a>
         <a href="docs/">Docs</a>
         <a class="ad-nav-cta" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
@@ -37,14 +38,14 @@ search:
   <main id="main-content">
 
     <!-- ═══════════════════════════════════════════════════════════════
-         HERO
+         HERO SECTION
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-hero" aria-labelledby="ad-hero-title">
       <div class="ad-hero__texture" aria-hidden="true"></div>
       <div class="ad-hero__copy">
         <p class="ad-pill"><span></span> Open source · beta · local-first</p>
         <h1 id="ad-hero-title">AI writes the code.<br><em>AgentDiff decides if it ships.</em></h1>
-        <p class="ad-hero__lede">When APIs break, dependencies change, or agents rewrite your code — AgentDiff detects what's affected, verifies the fix is safe, and delivers a trusted PR with proof. The deterministic trust layer for autonomous software changes.</p>
+        <p class="ad-hero__lede">When APIs break, dependencies change, or agents generate code — AgentDiff detects affected call sites, proves the patch in an isolated clean room, and delivers a verified PR with cryptographic evidence.</p>
         <div class="ad-hero__actions">
           <a class="ad-button ad-button--light" href="#demo">See how it works <span aria-hidden="true">↓</span></a>
           <a class="ad-button ad-button--ghost" href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
@@ -54,289 +55,333 @@ search:
           <code id="ad-install-command">git clone https://github.com/kam6l/agentdiff.git &amp;&amp; cd agentdiff &amp;&amp; uv tool install .</code>
           <button type="button" data-copy-target="ad-install-command"><span data-copy-label>Copy</span></button>
         </div>
-        <p class="ad-hero__note">Observation by default. External enforcement only through a separately configured runtime.</p>
+        <p class="ad-hero__note">Deterministic verification · Real-state observation · Zero false claims</p>
       </div>
 
-      <div class="ad-hero__pitch" aria-label="How AgentDiff works">
-        <div class="ad-hero__pitch-card">
-          <div class="ad-hero__pitch-header">
-            <span>THE PROBLEM</span>
-          </div>
-          <div class="ad-hero__pitch-body">
-            <p class="ad-hero__pitch-big">AI agents can generate code.</p>
-            <p class="ad-hero__pitch-sub">But who verifies the changes are safe?<br>Who checks what else was affected?<br>Who proves the fix actually works?</p>
-          </div>
-          <div class="ad-hero__pitch-header">
-            <span>AGENTDIFF</span>
-          </div>
-          <div class="ad-hero__pitch-body ad-hero__pitch-body--answer">
-            <p class="ad-hero__pitch-answer">Detects affected code. Scores blast radius. Verifies in a clean room. Delivers a PR with proof.</p>
-          </div>
+      <!-- Real Interactive Verification Card -->
+      <div class="ad-proof-stage" aria-label="Real AgentDiff transaction example">
+        <div class="ad-proof-stage__topline">
+          <span>REAL-TIME VERIFICATION</span>
+          <span>RUN · E45C0D69</span>
         </div>
+        <article class="ad-run-card" data-run-card>
+          <header class="ad-run-card__header">
+            <div class="ad-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+            <code>agentdiff / verification capsule</code>
+            <span class="ad-runtime-status" data-run-status><i></i> recorded</span>
+          </header>
+
+          <div class="ad-run-card__task">
+            <div>
+              <span class="ad-ui-label">TRIGGER</span>
+              <strong>openai 0.28 → 1.0 migration</strong>
+            </div>
+            <div class="ad-state-switch" role="group" aria-label="Transaction state">
+              <button type="button" class="is-active" aria-pressed="true" data-run-state="detected">Detected</button>
+              <button type="button" aria-pressed="false" data-run-state="verified">Verified</button>
+            </div>
+          </div>
+
+          <div class="ad-run-card__body">
+            <div class="ad-mutation-table">
+              <div class="ad-table-head"><span>CHANGE</span><span>RESOURCE</span><span>POLICY</span></div>
+              <div data-run-mutations>
+                <div class="ad-mutation-row is-deny"><b>!</b><code>.env</code><span>deny</span></div>
+                <div class="ad-mutation-row is-review"><b>!</b><code>pyproject.toml</code><span>review</span></div>
+                <div class="ad-mutation-row is-allow"><b>✓</b><code>src/llm.py</code><span>allow</span></div>
+              </div>
+            </div>
+            <div class="ad-score-block">
+              <span class="ad-ui-label" data-score-label>BLAST RADIUS</span>
+              <div class="ad-score-line"><strong data-run-score>72</strong><span data-score-unit>/100</span></div>
+              <div class="ad-score-track"><i data-run-meter style="width:72%; background: var(--ad-orange);"></i></div>
+              <b class="ad-verdict" data-run-verdict>HIGH · PR BLOCKED</b>
+            </div>
+          </div>
+          <footer class="ad-run-card__footer">
+            <code data-run-summary>3 call sites · 1 unexpected mutation · 1 protected</code>
+            <span data-run-action>inspect proof capsule →</span>
+          </footer>
+        </article>
+        <p class="ad-proof-stage__caption">Click "Detected" and "Verified" to switch between initial risk evaluation and clean-room proof.</p>
       </div>
     </section>
 
-    <section class="ad-proof-strip" aria-label="Core capabilities" tabindex="0">
+    <!-- ═══════════════════════════════════════════════════════════════
+         TICKER STRIP
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="ad-proof-strip" aria-label="Verified capabilities" tabindex="0">
       <span>AST-based API scanning</span>
       <span>Deterministic policy</span>
       <span>0–100 blast radius</span>
       <span>Clean-room proof</span>
-      <span>Verified PRs</span>
+      <span>Conflict-safe recovery</span>
+      <span>Migration certificates</span>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         DEMO — 30-second product pipeline
+         PRODUCT DEMO — Visual Pipeline
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-pipeline-section ad-section" id="demo" aria-labelledby="ad-demo-title">
-      <div class="ad-section-label"><span>◆</span> Product demo</div>
-      <h2 id="ad-demo-title">From API change<br><em>to trusted PR.</em></h2>
-      <p class="ad-pipeline-lede">A 30-second walkthrough of what AgentDiff does when an upstream API ships a breaking change.</p>
+      <div class="ad-section-label"><span>01</span> 30-Second Product Tour</div>
+      <div class="ad-problem__heading">
+        <h2 id="ad-demo-title">From API change<br><em>to trusted PR.</em></h2>
+        <p>What happens when an upstream dependency introduces a breaking change? AgentDiff automates the entire trust pipeline without human guesswork.</p>
+      </div>
 
-      <div class="ad-pipeline" aria-label="AgentDiff pipeline steps">
+      <div class="ad-pipeline" aria-label="AgentDiff pipeline stages">
         <article class="ad-pipeline__step">
-          <span>01</span>
+          <div class="ad-pipeline__badge">STEP 01</div>
           <strong>API change detected</strong>
-          <div class="ad-pipeline__code"><code>openai>=1.0: ChatCompletion → client.chat.completions</code></div>
-          <p>Provider ships a breaking SDK change. AgentDiff matches it against known catalogs.</p>
+          <p>Provider deprecation matched against structured change catalogs with SDK version awareness.</p>
+          <div class="ad-pipeline__code"><code>openai 0.28 → 1.0 (ChatCompletion removal)</code></div>
         </article>
-        <i aria-hidden="true">→</i>
+
         <article class="ad-pipeline__step">
-          <span>02</span>
+          <div class="ad-pipeline__badge">STEP 02</div>
           <strong>Affected code found</strong>
-          <div class="ad-pipeline__code"><code>src/llm.py:42 src/agent.py:118 tests/test_llm.py:7</code></div>
-          <p>AST scanner finds every usage. Provenance-tracked, no false positives.</p>
+          <p>AST analysis locates every call site in your repository. Provenance-tracked, zero false positives.</p>
+          <div class="ad-pipeline__code"><code>src/llm.py:42 · src/agent.py:118 · 3 call sites</code></div>
         </article>
-        <i aria-hidden="true">→</i>
+
         <article class="ad-pipeline__step">
-          <span>03</span>
+          <div class="ad-pipeline__badge">STEP 03</div>
           <strong>Blast radius scored</strong>
-          <div class="ad-pipeline__score"><strong>72</strong><small>/100 · HIGH</small></div>
-          <p>Deterministic 0–100 score. Every point accounted for. Policy decides: allow, review, or deny.</p>
+          <p>Deterministic 0–100 score accounting for affected files, dependency risk, and policy rules.</p>
+          <div class="ad-pipeline__score"><strong>72</strong><small>/100 · HIGH IMPACT</small></div>
         </article>
-        <i aria-hidden="true">→</i>
+
         <article class="ad-pipeline__step">
-          <span>04</span>
+          <div class="ad-pipeline__badge">STEP 04</div>
           <strong>Migration generated</strong>
-          <div class="ad-pipeline__code"><code>AST transform: 3 files · agent fallback: 0</code></div>
-          <p>Known migrations use deterministic AST transforms. Complex ones use an agent — untrusted until proven.</p>
+          <p>Deterministic AST transforms for known patterns; supervised agent fallback for complex logic.</p>
+          <div class="ad-pipeline__code"><code>AST transform: 3 files modified · 0 hallucinated</code></div>
         </article>
-        <i aria-hidden="true">→</i>
+
         <article class="ad-pipeline__step">
-          <span>05</span>
-          <strong>Verified in clean room</strong>
-          <div class="ad-pipeline__code"><code>syntax ✓ types ✓ targeted ✓ full ✓</code></div>
-          <p>Patch replayed in isolated worktree. Syntax, types, targeted tests, full repo tests. All evidence recorded.</p>
+          <div class="ad-pipeline__badge">STEP 05</div>
+          <strong>Clean-room verification</strong>
+          <p>Patch replayed in an isolated worktree. Syntax, types, targeted tests, and full suite executed.</p>
+          <div class="ad-pipeline__code"><code>V0 syntax ✓  V1 types ✓  V2 targeted ✓  V3 full ✓</code></div>
         </article>
-        <i aria-hidden="true">→</i>
+
         <article class="ad-pipeline__step ad-pipeline__step--final">
-          <span>06</span>
+          <div class="ad-pipeline__badge ad-pipeline__badge--lime">STEP 06</div>
           <strong>Trusted PR delivered</strong>
-          <div class="ad-pipeline__verdict"><b>VERIFIED</b></div>
-          <p>Migration Certificate with blast radius, test results, proof digest, and rollback info. Conflict-safe promotion.</p>
+          <p>PR opened with machine-readable Migration Certificate, test results, digest, and rollback instructions.</p>
+          <div class="ad-pipeline__verdict"><b>VERIFIED BY AGENTDIFF</b></div>
         </article>
       </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         HOW IT WORKS — 5 sections
+         PRODUCT STORY — 5 Core Pillars
          ═══════════════════════════════════════════════════════════════ -->
 
+    <!-- 01 DETECT -->
     <section class="ad-section ad-detect" id="how-it-works" aria-labelledby="ad-detect-title">
-      <div class="ad-section-label"><span>01</span> Detect</div>
+      <div class="ad-section-label"><span>02</span> Detect</div>
       <div class="ad-problem__heading">
         <h2 id="ad-detect-title">An API changed.<br><em>Who's affected?</em></h2>
-        <p>AgentDiff scans your Python AST to find every third-party API usage — OpenAI, Stripe, and more. Not grep. Provenance-tracked, SDK-version-aware, zero false positives.</p>
+        <p>AgentDiff scans Python AST to pinpoint every third-party API call across your codebase. Not regex or grep. Provenance-tracked, SDK-version aware, zero false positives.</p>
       </div>
       <div class="ad-detect__demo">
         <div class="ad-story-card ad-story-card--dark">
-          <div class="ad-story-card__meta"><span>BEFORE</span><span>openai 0.28</span></div>
+          <div class="ad-story-card__meta"><span>LEGACY CALL SITE</span><span>OPENAI 0.28</span></div>
           <div class="ad-terminal-fragment ad-terminal-fragment--dark">
+            <code><span class="is-red"># Deprecated pattern in src/llm.py</span></code><br>
             <code>response = openai.ChatCompletion.create(</code><br>
             <code>    model="gpt-4",</code><br>
             <code>    messages=[{"role": "user", "content": prompt}]</code><br>
             <code>)</code>
           </div>
-          <footer>Old SDK pattern — found across 3 files, 7 call sites.</footer>
+          <footer>Detected: 3 files · 7 call sites · SDK version &lt; 1.0.0</footer>
         </div>
         <div class="ad-story-card ad-story-card--dark">
-          <div class="ad-story-card__meta"><span>DETECTED CHANGE</span><span>openai 1.0+</span></div>
+          <div class="ad-story-card__meta"><span>AST-TRANSFORMED FIX</span><span>OPENAI 1.0+</span></div>
           <div class="ad-terminal-fragment ad-terminal-fragment--dark">
-            <code><span class="is-red">- openai.ChatCompletion.create(</span></code><br>
-            <code><span class="is-green">+ client.chat.completions.create(</span></code><br>
-            <code>      model="gpt-4",</code><br>
-            <code>      messages=[...]</code><br>
-            <code>  )</code>
+            <code><span class="is-green"># Verified AST migration</span></code><br>
+            <code>client = openai.OpenAI()</code><br>
+            <code>response = client.chat.completions.create(</code><br>
+            <code>    model="gpt-4",</code><br>
+            <code>    messages=[{"role": "user", "content": prompt}]</code><br>
+            <code>)</code>
           </div>
-          <footer>Matched against known breaking-change catalog.</footer>
+          <footer>Deterministic transform matched to breaking catalog</footer>
         </div>
       </div>
       <div class="ad-detect__command">
-        <code>$ agentdiff api scan --root . && agentdiff api check --root . --fail-on high</code>
+        <code>$ agentdiff api scan --root . &amp;&amp; agentdiff api check --root . --fail-on high</code>
       </div>
     </section>
 
+    <!-- 02 UNDERSTAND IMPACT -->
     <section class="ad-score-story ad-section" id="understand" aria-labelledby="ad-score-title">
-      <div class="ad-section-label ad-section-label--light"><span>02</span> Understand impact</div>
+      <div class="ad-section-label ad-section-label--light"><span>03</span> Understand Impact</div>
       <div class="ad-score-story__layout">
         <div>
           <h2 id="ad-score-title">Blast radius,<br><em>not guesswork.</em></h2>
-          <p>AgentDiff adds deterministic weights for every observed mutation. The total is capped at 100, but the raw components remain visible — so a number never replaces the evidence. Every change gets an allow, review, or deny decision with the matching rule.</p>
-          <a href="docs/concepts/blast-radius/">Read the scoring model <span aria-hidden="true">→</span></a>
+          <p>AgentDiff computes an explainable 0–100 score from real filesystem observations, dependency changes, and policy outcomes. Every point is accounted for—no opaque model confidence scores.</p>
+          <a href="docs/concepts/blast-radius/">Explore the blast-radius scoring model <span aria-hidden="true">→</span></a>
         </div>
         <div class="ad-equation" aria-label="Example blast-radius calculation">
-          <span>denied mutation</span><strong>45</strong>
-          <span>dependency file</span><strong>35</strong>
+          <span>denied mutation (.env)</span><strong>45</strong>
+          <span>dependency file (pyproject.toml)</span><strong>35</strong>
           <span>created resources</span><strong>01</strong>
           <hr>
           <span>blast radius</span><strong class="is-total">81</strong>
-          <small>CRITICAL · EVERY POINT ACCOUNTED FOR</small>
+          <small>CRITICAL · PR PROMOTION BLOCKED UNTIL RESOLVED</small>
         </div>
       </div>
     </section>
 
+    <!-- 03 GENERATE CHANGES -->
     <section class="ad-section ad-generate" aria-labelledby="ad-generate-title">
-      <div class="ad-section-label"><span>03</span> Generate changes</div>
+      <div class="ad-section-label"><span>04</span> Generate Changes</div>
       <div class="ad-problem__heading">
         <h2 id="ad-generate-title">Deterministic transforms.<br><em>Agent fallback.</em></h2>
-        <p>Known migrations — like OpenAI's Responses API or Stripe's PaymentIntents — use deterministic AST transforms. No model involved, no hallucination possible. Complex migrations fall back to a coding agent. Either way: <strong>the patch is untrusted until AgentDiff proves it.</strong></p>
+        <p>Known migrations use deterministic AST transforms with 100% precision. Complex migrations fall back to a supervised coding agent. Either way: <strong>the patch is untrusted until AgentDiff proves it.</strong></p>
       </div>
       <div class="ad-generate__grid">
         <article>
           <span>DETERMINISTIC</span>
-          <strong>AST transforms</strong>
-          <p>Registry-extensible by providers. Known input → known output. Provenance-tracked.</p>
+          <strong>AST Transforms</strong>
+          <p>Provider-extensible transforms for known breaking changes. Zero hallucination risk, exact AST syntax trees.</p>
         </article>
         <article>
-          <span>PROBABILISTIC</span>
-          <strong>Coding agent</strong>
-          <p>For complex migrations. Output is captured but <em>never trusted</em> until clean-room verification passes.</p>
+          <span>SUPERVISED</span>
+          <strong>Agent Fallback</strong>
+          <p>Coding agents handle arbitrary multi-file refactoring, but output is sandboxed and treated as unproven input.</p>
         </article>
         <article>
-          <span>ALWAYS</span>
-          <strong>Untrusted until proven</strong>
-          <p>Both paths produce patches. AgentDiff's verification engine decides if the result is safe to ship.</p>
+          <span>POLICY CORE</span>
+          <strong>Untrusted by Default</strong>
+          <p>Regardless of source, no code reaches your repository without passing the deterministic verification engine.</p>
         </article>
       </div>
     </section>
 
+    <!-- 04 VERIFY SAFELY -->
     <section class="ad-section ad-verify" aria-labelledby="ad-verify-title">
-      <div class="ad-section-label"><span>04</span> Verify safely</div>
+      <div class="ad-section-label"><span>05</span> Verify Safely</div>
       <div class="ad-problem__heading">
         <h2 id="ad-verify-title">Clean-room proof.<br><em>No shortcuts.</em></h2>
-        <p>Every patch is replayed in an isolated worktree — completely independent of the agent that generated it. Syntax checks, type checks, targeted tests, full repo tests. If it fails, the automatic repair loop retries within scope. All evidence is recorded in a durable capsule.</p>
+        <p>Every generated patch is replayed in an isolated worktree. Tests, types, and linters run in a clean environment, completely detached from the generation process. If tests fail, the bounded repair loop steps in.</p>
       </div>
-      <div class="ad-verify__flow" aria-label="Verification flow">
+      <div class="ad-verify__flow" aria-label="Verification ladder">
         <article>
           <span>V0 · SYNTAX</span>
-          <strong>Parses correctly</strong>
-          <p>Basic AST validity check.</p>
+          <strong>AST Validity</strong>
+          <p>Parses without errors across all modified files.</p>
         </article>
         <i aria-hidden="true">→</i>
         <article>
           <span>V1 · TYPES</span>
-          <strong>Type checks pass</strong>
-          <p>Static analysis in the clean workspace.</p>
+          <strong>Static Analysis</strong>
+          <p>Type checks and imports verified in clean room.</p>
         </article>
         <i aria-hidden="true">→</i>
         <article>
           <span>V2 · TARGETED</span>
-          <strong>Affected tests pass</strong>
-          <p>Only tests touched by the change.</p>
+          <strong>Impact Tests</strong>
+          <p>Targeted test suite for affected call sites passes.</p>
         </article>
         <i aria-hidden="true">→</i>
         <article>
           <span>V3 · FULL</span>
-          <strong>All tests pass</strong>
-          <p>Complete test suite in clean room.</p>
+          <strong>Repo Suite</strong>
+          <p>Entire repository test suite passes cleanly.</p>
         </article>
       </div>
-      <div class="ad-recovery__command"><code>$ agentdiff prove &lt;run-id&gt; && agentdiff promote &lt;run-id&gt;</code><span>Clean-room proof → conflict-safe promotion</span></div>
+      <div class="ad-recovery__command"><code>$ agentdiff prove &lt;run-id&gt; &amp;&amp; agentdiff promote &lt;run-id&gt;</code><span>Clean-room proof → conflict-safe promotion</span></div>
     </section>
 
+    <!-- 05 DELIVER PR -->
     <section class="ad-section ad-deliver" aria-labelledby="ad-deliver-title">
-      <div class="ad-section-label"><span>05</span> Deliver PR</div>
+      <div class="ad-section-label"><span>06</span> Deliver PR</div>
       <div class="ad-problem__heading">
         <h2 id="ad-deliver-title">One PR.<br><em>Full evidence.</em></h2>
-        <p>The verified patch is promoted to a pull request with a machine-readable Migration Certificate: which provider change triggered it, which files were affected, the blast radius score, every test that was executed, the proof digest, and rollback instructions. Conflict-safe — later human edits are preserved.</p>
+        <p>The verified patch is promoted to a pull request with an attached Migration Certificate detailing the upstream change, affected files, test results, proof digest, and rollback command.</p>
       </div>
       <div class="ad-deliver__cert">
         <div class="ad-deliver__cert-header">
           <div class="ad-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
           <code>Migration Certificate · openai 0.28 → 1.0</code>
+          <span class="ad-runtime-status"><i></i> verified</span>
         </div>
         <div class="ad-deliver__cert-body">
-          <div><span>Provider change</span><strong>openai SDK 0.28 → 1.0 (ChatCompletion removal)</strong></div>
-          <div><span>Affected files</span><strong>3 files · 7 call sites</strong></div>
-          <div><span>Migration method</span><strong>AST transform (deterministic)</strong></div>
-          <div><span>Blast radius</span><strong>72/100 · HIGH</strong></div>
-          <div><span>Verification</span><strong>V3 — full test suite passed</strong></div>
-          <div><span>Proof digest</span><strong><code>sha256:e45c0d69...</code></strong></div>
-          <div><span>Rollback</span><strong>agentdiff rollback &lt;id&gt; --safe-only</strong></div>
+          <div><span>Trigger</span><strong>openai SDK 0.28 → 1.0 (ChatCompletion removal)</strong></div>
+          <div><span>Affected files</span><strong>3 files · 7 call sites detected via AST</strong></div>
+          <div><span>Migration method</span><strong>Deterministic AST transform (zero hallucinations)</strong></div>
+          <div><span>Blast radius</span><strong>12/100 · LOW (safe for automated promotion)</strong></div>
+          <div><span>Verification</span><strong>V3 Passed (42/42 targeted + full suite green)</strong></div>
+          <div><span>Proof digest</span><strong><code>sha256:e45c0d69a41e9b28...</code></strong></div>
+          <div><span>Rollback</span><strong><code>agentdiff rollback &lt;id&gt; --safe-only</code></strong></div>
         </div>
       </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         DIFFERENTIATION
+         DIFFERENTIATION MATRIX
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-compare ad-section" id="compare" aria-labelledby="ad-compare-title">
-      <div class="ad-section-label"><span>◆</span> Not another coding agent</div>
+      <div class="ad-section-label"><span>07</span> Differentiation</div>
       <div class="ad-fit__heading">
-        <h2 id="ad-compare-title">AgentDiff is<br><em>the missing layer.</em></h2>
-        <p>Coding agents generate. Dependabot bumps versions. Neither verifies that the change is safe, scores its blast radius, or delivers proof. AgentDiff is the trust layer that sits between generation and delivery.</p>
+        <h2 id="ad-compare-title">Not another coding agent.<br><em>The trust layer.</em></h2>
+        <p>Coding agents generate code. Dependabot bumps versions. Neither scores blast radius, verifies changes in clean rooms, or attaches cryptographic proof. AgentDiff is the verifier between generation and deployment.</p>
       </div>
       <div class="ad-fit__table ad-compare__table">
         <div class="ad-fit__head"><span>Capability</span><span>Copilot / Cursor</span><span>Dependabot</span><span>AgentDiff</span></div>
-        <div><b>Blast radius analysis</b><span>—</span><span>—</span><em>0–100 deterministic score</em></div>
-        <div><b>Policy enforcement</b><span>—</span><span>Auto-merge rules</span><em>allow / review / deny per path</em></div>
-        <div><b>Proof & evidence</b><span>—</span><span>CI pass/fail</span><em>Clean-room replay + capsule</em></div>
-        <div><b>Selective rollback</b><span>Undo all</span><span>Revert PR</span><em>Conflict-safe per-file recovery</em></div>
-        <div><b>Independent verification</b><span>—</span><span>—</span><em>Isolated worktree, not agent self-report</em></div>
-        <div><b>Migration certificates</b><span>—</span><span>—</span><em>Machine-readable audit trail</em></div>
+        <div><b>Blast radius scoring</b><span>—</span><span>—</span><em>0–100 deterministic score</em></div>
+        <div><b>Policy enforcement</b><span>—</span><span>Basic branch rules</span><em>allow / review / deny per path</em></div>
+        <div><b>Clean-room proof</b><span>—</span><span>CI pass/fail only</span><em>Replay in isolated worktree</em></div>
+        <div><b>Selective rollback</b><span>Undo all changes</span><span>Revert whole PR</span><em>Conflict-safe per-file recovery</em></div>
+        <div><b>Independent verification</b><span>Self-reporting model</span><span>—</span><em>External verification engine</em></div>
+        <div><b>Migration certificates</b><span>—</span><span>—</span><em>Machine-readable audit capsules</em></div>
       </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         UNDER THE HOOD — deep technical details
+         UNDER THE HOOD — Deep Technical Details
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-cortex ad-section" id="engine" aria-labelledby="ad-engine-title">
-      <div class="ad-section-label"><span>◆</span> Under the hood</div>
+      <div class="ad-section-label"><span>08</span> Under The Hood</div>
       <div class="ad-cortex__heading">
-        <h2 id="ad-engine-title">Trust engine<br><em>internals.</em></h2>
-        <p>The infrastructure that makes verified autonomous changes possible. Independent real-state observation, deterministic policy, conflict-safe promotion, and bounded repair — all working together.</p>
+        <h2 id="ad-engine-title">Trust engine<br><em>architecture.</em></h2>
+        <p>Built on deterministic foundations: no-follow filesystem scanning, tamper-evident SHA-256 digests, warm isolated workspaces, and safe promotion.</p>
       </div>
       <div class="ad-cortex__providers">
         <article>
-          <span>PROOF</span>
-          <strong>Clean-room replay</strong>
-          <p>Every patch is replayed in a fresh worktree, completely independent of the agent. Syntax, types, and tests are verified from scratch.</p>
+          <span>PROOF ENGINE</span>
+          <strong>Clean-Room Replay</strong>
+          <p>Every patch is replayed in a fresh, isolated worktree. Syntax, types, and test suites run from scratch with zero leakage from the agent environment.</p>
         </article>
         <article>
           <span>EVIDENCE</span>
-          <strong>Durable capsules</strong>
-          <p>Before/after filesystem manifests, SHA-256 checksums, policy provenance, score components, and process identity — all in a versioned local capsule.</p>
+          <strong>Durable Capsules</strong>
+          <p>Captures before/after manifests, SHA-256 checksums, policy provenance, blast-radius components, and process identifiers in a versioned local capsule.</p>
         </article>
         <article>
           <span>RECOVERY</span>
-          <strong>Selective rollback</strong>
-          <p>Undo only review and deny mutations. Only when current state matches exact post-run state. Human edits become conflicts and are preserved.</p>
+          <strong>Selective Rollback</strong>
+          <p>Targeted undo for review and deny mutations without blowing away allowed work. Human edits become conflicts and are safely preserved.</p>
         </article>
       </div>
       <div class="ad-underhood__row">
         <article>
           <span>REPAIR LOOP</span>
-          <strong>Bounded retry</strong>
-          <p>When proof fails, the automatic repair loop retries — but only while the repair stays within the original scope. No unbounded agent loops.</p>
+          <strong>Bounded Retries</strong>
+          <p>When proof fails, the automatic repair loop retries the patch—strictly bounded to the initial task scope. No infinite agent loops.</p>
         </article>
         <article>
           <span>POLICY ENGINE</span>
-          <strong>Deterministic rules</strong>
-          <p>Versioned allow/review/deny rules with provenance. Every decision includes the matching rule and is auditable. No probabilistic access control.</p>
+          <strong>Deterministic Rules</strong>
+          <p>Fine-grained path rules with explicit provenance. Every mutation is categorized with allow, review, or deny and audit trail.</p>
         </article>
         <article>
           <span>WARM WORKSPACES</span>
-          <strong>Fast isolation</strong>
-          <p>Pre-built workspace snapshots for rapid clean-room verification. No cold-start penalty for proof runs.</p>
+          <strong>Zero Cold Starts</strong>
+          <p>Pre-warmed workspace snapshots enable sub-second clean-room verification runs without costly dependency reinstallations.</p>
         </article>
       </div>
     </section>
@@ -347,18 +392,18 @@ search:
     <section class="ad-trust ad-section" id="trust" aria-labelledby="ad-trust-title">
       <div class="ad-trust__mark" aria-hidden="true">[ ! ]</div>
       <div>
-        <div class="ad-section-label ad-section-label--light"><span>◆</span> Honest capability boundaries</div>
+        <div class="ad-section-label ad-section-label--light"><span>09</span> Honest Boundaries</div>
         <h2 id="ad-trust-title">Evidence, not<br>security theater.</h2>
       </div>
       <div class="ad-trust__content">
-        <p>The local runtime observes a subprocess. It does not become a kernel isolation boundary just because an AI agent launched it.</p>
+        <p>The local runtime observes a subprocess. It does not pretend to be a kernel sandbox just because an AI agent executed the command.</p>
         <ul>
           <li><span>Does</span> capture no-follow filesystem state and versioned evidence</li>
-          <li><span>Does</span> enforce command policy before local process launch</li>
+          <li><span>Does</span> enforce command mutation policy before local process launch</li>
           <li><span>Does not</span> block network access in local observation mode</li>
           <li><span>Does not</span> claim causal ownership of machine-wide port changes</li>
         </ul>
-        <a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Read the full trust model <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Read the full security trust model <span aria-hidden="true">↗</span></a>
       </div>
     </section>
 
@@ -366,42 +411,42 @@ search:
          CURRENT CAPABILITIES & ROADMAP
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-status ad-section" id="roadmap" aria-labelledby="ad-status-title">
-      <div class="ad-section-label"><span>◆</span> Honest status</div>
+      <div class="ad-section-label"><span>10</span> Transparency</div>
       <div class="ad-fit__heading">
-        <h2 id="ad-status-title">What works today.<br><em>What's next.</em></h2>
-        <p>AgentDiff is beta software. Here's an honest look at current capabilities and the focused roadmap.</p>
+        <h2 id="ad-status-title">What works today.<br><em>What's coming next.</em></h2>
+        <p>AgentDiff is in public beta. Here is an honest accounting of current production capabilities and our near-term roadmap.</p>
       </div>
       <div class="ad-status__grid">
         <div class="ad-status__column">
-          <div class="ad-status__header"><span></span> Current capabilities</div>
+          <div class="ad-status__header"><span></span> Current Capabilities (Beta)</div>
           <ul class="ad-status__list">
-            <li><strong>API scanning</strong> AST-based detection for OpenAI and Stripe</li>
-            <li><strong>Dependency analysis</strong> SDK version detection and breaking-change matching</li>
-            <li><strong>Impact analysis</strong> Deterministic blast radius scoring (0–100)</li>
-            <li><strong>Policy engine</strong> Versioned allow / review / deny rules</li>
-            <li><strong>Verification engine</strong> Clean-room proof and replay</li>
-            <li><strong>Evidence capsules</strong> Durable manifests with SHA-256 checksums</li>
-            <li><strong>Selective recovery</strong> Conflict-safe per-file rollback</li>
-            <li><strong>Zero-touch automation</strong> <code>agentdiff wrap -- &lt;agent&gt;</code></li>
+            <li><strong>AST-based API scanning</strong> Zero-false-positive call site detection (OpenAI &amp; Stripe)</li>
+            <li><strong>Dependency &amp; SDK matching</strong> Catalog matching with version awareness</li>
+            <li><strong>Blast radius scoring</strong> Deterministic 0–100 impact scoring</li>
+            <li><strong>Clean-room verification</strong> Isolated worktree proof engine</li>
+            <li><strong>Policy engine</strong> Allow / review / deny rules with provenance</li>
+            <li><strong>Evidence capsules</strong> Tamper-evident manifests with SHA-256 hashes</li>
+            <li><strong>Selective recovery</strong> Conflict-safe per-file rollback (<code>--safe-only</code>)</li>
+            <li><strong>Zero-touch wrapper</strong> Automated agent execution via <code>agentdiff wrap</code></li>
           </ul>
         </div>
         <div class="ad-status__column ad-status__column--future">
-          <div class="ad-status__header ad-status__header--future"><span></span> Roadmap</div>
+          <div class="ad-status__header ad-status__header--future"><span></span> Roadmap (In Progress)</div>
           <ul class="ad-status__list">
-            <li><strong>Automatic AST migrations</strong> Deterministic transforms for known provider changes</li>
-            <li><strong>Verified PRs</strong> GitHub PR delivery with Migration Certificates</li>
-            <li><strong>API Change Manifests</strong> Machine-readable upstream change format</li>
-            <li><strong>Verification levels V0–V5</strong> Graduated proof from syntax to integration</li>
-            <li><strong>More providers</strong> Beyond OpenAI and Stripe</li>
-            <li><strong>PyPI & signed releases</strong> Published packages with provenance</li>
-            <li><strong>Signed evidence export</strong> Shareable authenticated capsules</li>
+            <li><strong>Automated AST migrations</strong> Built-in transforms for major SDK transitions</li>
+            <li><strong>Verified GitHub PRs</strong> Direct PR delivery with Migration Certificates</li>
+            <li><strong>API Change Manifests</strong> Standardized machine-readable change format</li>
+            <li><strong>Graduated proof ladder</strong> Verification levels V0 through V5</li>
+            <li><strong>Expanded provider catalogs</strong> AWS SDK, Anthropic, LangChain, Twilio</li>
+            <li><strong>Signed release artifacts</strong> PyPI Trusted Publishing with provenance</li>
+            <li><strong>OpenTelemetry export</strong> Standardized evidence export to telemetry collectors</li>
           </ul>
         </div>
       </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         FINAL CTA
+         FINAL CALL TO ACTION
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-final-cta">
       <div class="ad-final-cta__noise" aria-hidden="true"></div>
@@ -422,9 +467,9 @@ search:
       </a>
       <p>The trust layer for autonomous software changes.</p>
     </div>
-    <div><b>Learn</b><a href="docs/">Documentation</a><a href="docs/quickstart/">Quickstart</a><a href="docs/cli/">CLI</a></div>
+    <div><b>Learn</b><a href="docs/">Documentation</a><a href="docs/quickstart/">Quickstart</a><a href="docs/cli/">CLI Reference</a></div>
     <div><b>Project</b><a href="https://github.com/kam6l/agentdiff" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/kam6l/agentdiff/issues" target="_blank" rel="noopener noreferrer">Issues</a><a href="https://github.com/kam6l/agentdiff/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></div>
-    <div><b>Trust</b><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Security</a><a href="docs/concepts/runtime/">Runtime model</a><a href="docs/concepts/recovery/">Recovery</a></div>
+    <div><b>Trust</b><a href="https://github.com/kam6l/agentdiff/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Security Policy</a><a href="docs/concepts/runtime/">Runtime Model</a><a href="docs/concepts/recovery/">Recovery</a></div>
     <small>MIT licensed · AgentDiff contributors · 2026</small>
   </footer>
 </div>

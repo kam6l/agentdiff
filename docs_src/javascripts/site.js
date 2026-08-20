@@ -14,6 +14,7 @@
     root.dataset.enhanced = "true";
     document.body.classList.add("ad-home-page");
 
+    // Mobile navigation toggle
     const menuButton = root.querySelector("[data-menu-toggle]");
     const menu = root.querySelector("[data-menu]");
     const closeMenu = () => {
@@ -37,6 +38,7 @@
       });
     }
 
+    // Copy to clipboard
     selectAll(root, "[data-copy-target]").forEach((button) => {
       button.addEventListener("click", async () => {
         const target = document.getElementById(button.dataset.copyTarget);
@@ -68,7 +70,7 @@
       });
     });
 
-    /* Smooth scroll for anchor links */
+    // Smooth scroll for anchor links
     selectAll(root, 'a[href^="#"]').forEach((link) => {
       link.addEventListener("click", (event) => {
         const targetId = link.getAttribute("href")?.slice(1);
@@ -81,35 +83,89 @@
       });
     });
 
-    /* Evidence inspector tabs (if present on page) */
-    const tabs = selectAll(root, "[data-evidence-tab]");
-    const panels = selectAll(root, "[data-evidence-panel]");
-    if (tabs.length && panels.length) {
-      const selectTab = (tab, focus = false) => {
-        const name = tab.dataset.evidenceTab;
-        tabs.forEach((candidate) => {
-          const selected = candidate === tab;
-          candidate.setAttribute("aria-selected", String(selected));
-          candidate.tabIndex = selected ? 0 : -1;
-        });
-        panels.forEach((panel) => {
-          panel.hidden = panel.dataset.evidencePanel !== name;
-        });
-        if (focus) tab.focus();
+    // Interactive Hero Run Card State
+    const runCard = root.querySelector("[data-run-card]");
+    if (runCard) {
+      const stateButtons = selectAll(runCard, "[data-run-state]");
+      const mutationContainer = runCard.querySelector("[data-run-mutations]");
+      const score = runCard.querySelector("[data-run-score]");
+      const scoreLabel = runCard.querySelector("[data-score-label]");
+      const scoreUnit = runCard.querySelector("[data-score-unit]");
+      const meter = runCard.querySelector("[data-run-meter]");
+      const verdict = runCard.querySelector("[data-run-verdict]");
+      const summary = runCard.querySelector("[data-run-summary]");
+      const action = runCard.querySelector("[data-run-action]");
+      const runtimeStatus = runCard.querySelector("[data-run-status]");
+
+      const states = {
+        detected: {
+          rows: [
+            ["is-deny", "!", ".env", "deny"],
+            ["is-review", "!", "pyproject.toml", "review"],
+            ["is-allow", "✓", "src/llm.py", "allow"],
+          ],
+          label: "BLAST RADIUS",
+          score: "72",
+          unit: "/100",
+          width: "72%",
+          color: "var(--ad-orange)",
+          verdict: "HIGH · PR BLOCKED",
+          status: "<i></i> recorded",
+          summary: "3 call sites · 1 unexpected mutation · 1 protected",
+          action: "inspect proof capsule →",
+        },
+        verified: {
+          rows: [
+            ["is-allow", "✓", "src/llm.py", "ast-migrated"],
+            ["is-allow", "✓", "tests/test_llm.py", "42 passed"],
+            ["is-allow", "✓", "pyproject.toml", "bumped 1.0+"],
+          ],
+          label: "CLEAN-ROOM PROOF",
+          score: "12",
+          unit: "/100",
+          width: "12%",
+          color: "var(--ad-lime)",
+          verdict: "LOW · PR READY",
+          status: "<i style='background: var(--ad-lime);'></i> verified",
+          summary: "3 AST transforms · 42 tests passed · 0 conflicts",
+          action: "PR ready for merge ✓",
+        },
       };
 
-      tabs.forEach((tab, index) => {
-        tab.addEventListener("click", () => selectTab(tab));
-        tab.addEventListener("keydown", (event) => {
-          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-          event.preventDefault();
-          let nextIndex = index;
-          if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
-          if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-          if (event.key === "Home") nextIndex = 0;
-          if (event.key === "End") nextIndex = tabs.length - 1;
-          selectTab(tabs[nextIndex], true);
+      const renderState = (name) => {
+        const state = states[name];
+        if (!state) return;
+        stateButtons.forEach((button) => {
+          const selected = button.dataset.runState === name;
+          button.classList.toggle("is-active", selected);
+          button.setAttribute("aria-pressed", String(selected));
         });
+        if (mutationContainer) {
+          mutationContainer.innerHTML = state.rows.map(([klass, symbol, path, result]) => (
+            `<div class="ad-mutation-row ${klass}"><b>${symbol}</b><code>${path}</code><span>${result}</span></div>`
+          )).join("");
+        }
+        if (scoreLabel) scoreLabel.textContent = state.label;
+        if (score) score.textContent = state.score;
+        if (scoreUnit) scoreUnit.textContent = state.unit;
+        if (meter) {
+          meter.style.width = state.width;
+          meter.style.background = state.color;
+        }
+        if (verdict) {
+          verdict.textContent = state.verdict;
+          verdict.style.color = name === "verified" ? "var(--ad-lime)" : "var(--ad-orange-dark)";
+        }
+        if (summary) summary.textContent = state.summary;
+        if (action) {
+          action.textContent = state.action;
+          action.style.color = name === "verified" ? "var(--ad-lime)" : "var(--ad-orange-dark)";
+        }
+        if (runtimeStatus) runtimeStatus.innerHTML = state.status;
+      };
+
+      stateButtons.forEach((button) => {
+        button.addEventListener("click", () => renderState(button.dataset.runState));
       });
     }
   }
