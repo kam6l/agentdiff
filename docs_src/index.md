@@ -120,7 +120,7 @@ search:
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         PRODUCT DEMO — Visual Pipeline
+         PRODUCT DEMO — Connected Pipeline Flow
          ═══════════════════════════════════════════════════════════════ -->
     <section class="ad-pipeline-section ad-section" id="demo" aria-labelledby="ad-demo-title">
       <div class="ad-section-label"><span>01</span> 30-Second Product Tour</div>
@@ -129,53 +129,97 @@ search:
         <p>What happens when an upstream dependency introduces a breaking change? AgentDiff automates the entire trust pipeline without human guesswork.</p>
       </div>
 
-      <div class="ad-pipeline" aria-label="AgentDiff pipeline stages">
-        <article class="ad-pipeline__step">
-          <div class="ad-pipeline__badge">STEP 01</div>
-          <h3>API change detected</h3>
-          <p>Provider deprecation matched against structured change catalogs with SDK version awareness.</p>
-          <div class="ad-pipeline__code"><code>openai 0.28 → 1.0 (ChatCompletion)</code></div>
-        </article>
+      <div class="ad-pipeline-flow" aria-label="AgentDiff 6-step automated pipeline">
+        <!-- ROW 1: Detection & Impact -->
+        <div class="ad-pipeline-flow__row">
+          <article class="ad-pipeline-card">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num">01 · DETECT</span>
+              <h3>API change detected</h3>
+              <p>Provider deprecation matched against structured change catalogs with SDK version awareness.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal">
+              <span class="ad-pipeline-card__dot is-warn"></span>
+              <code>openai 0.28 → 1.0 (ChatCompletion)</code>
+            </div>
+          </article>
 
-        <article class="ad-pipeline__step">
-          <div class="ad-pipeline__badge">STEP 02</div>
-          <h3>Affected code found</h3>
-          <p>AST analysis locates every call site in your repository. Provenance-tracked, zero false positives.</p>
-          <div class="ad-pipeline__code"><code>src/llm.py:42 · 3 call sites</code></div>
-        </article>
+          <i class="ad-pipeline-flow__arrow" aria-hidden="true">→</i>
 
-        <article class="ad-pipeline__step">
-          <div class="ad-pipeline__badge">STEP 03</div>
-          <h3>Blast radius scored</h3>
-          <p>Deterministic 0–100 score accounting for affected files, dependency risk, and policy rules.</p>
-          <div class="ad-pipeline__score">
-            <div class="ad-pipeline__score-num"><strong>72</strong><small>/100</small></div>
-            <span class="ad-pipeline__score-tag">HIGH IMPACT</span>
-          </div>
-        </article>
+          <article class="ad-pipeline-card">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num">02 · SCAN</span>
+              <h3>Affected code found</h3>
+              <p>AST analysis locates every call site in your repository. Provenance-tracked, zero false positives.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal">
+              <span class="ad-pipeline-card__dot"></span>
+              <code>src/llm.py:42 · 3 call sites</code>
+            </div>
+          </article>
 
-        <article class="ad-pipeline__step">
-          <div class="ad-pipeline__badge">STEP 04</div>
-          <h3>Migration generated</h3>
-          <p>Deterministic AST transforms for known patterns; supervised agent fallback for complex logic.</p>
-          <div class="ad-pipeline__code"><code>AST transform: 3 files · 0 hallucinated</code></div>
-        </article>
+          <i class="ad-pipeline-flow__arrow" aria-hidden="true">→</i>
 
-        <article class="ad-pipeline__step">
-          <div class="ad-pipeline__badge">STEP 05</div>
-          <h3>Clean-room verification</h3>
-          <p>Patch replayed in an isolated worktree. Syntax, types, targeted tests, and full suite executed.</p>
-          <div class="ad-pipeline__code"><code>V0 syntax ✓  V1 types ✓  V2 tests ✓</code></div>
-        </article>
+          <article class="ad-pipeline-card">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num">03 · SCORE</span>
+              <h3>Blast radius computed</h3>
+              <p>Deterministic 0–100 score accounting for affected files, dependency risk, and policy rules.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal ad-pipeline-card__terminal--score">
+              <div class="ad-pipeline-card__score-num"><strong>72</strong><small>/100</small></div>
+              <span class="ad-pipeline-card__score-badge">HIGH IMPACT</span>
+            </div>
+          </article>
+        </div>
 
-        <article class="ad-pipeline__step ad-pipeline__step--final">
-          <div class="ad-pipeline__badge ad-pipeline__badge--lime">STEP 06</div>
-          <h3>Trusted PR delivered</h3>
-          <p>PR opened with machine-readable Migration Certificate, test results, digest, and rollback instructions.</p>
-          <div class="ad-pipeline__verdict">
-            <b>VERIFIED BY AGENTDIFF</b>
-          </div>
-        </article>
+        <!-- CONNECTOR BETWEEN ROWS -->
+        <div class="ad-pipeline-flow__bridge" aria-hidden="true">
+          <span>↓</span>
+        </div>
+
+        <!-- ROW 2: Generation, Verification & Delivery -->
+        <div class="ad-pipeline-flow__row">
+          <article class="ad-pipeline-card">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num">04 · GENERATE</span>
+              <h3>Migration generated</h3>
+              <p>Deterministic AST transforms for known patterns; supervised agent fallback for complex logic.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal">
+              <span class="ad-pipeline-card__dot is-info"></span>
+              <code>AST transform: 3 files · 0 hallucinated</code>
+            </div>
+          </article>
+
+          <i class="ad-pipeline-flow__arrow" aria-hidden="true">→</i>
+
+          <article class="ad-pipeline-card">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num">05 · VERIFY</span>
+              <h3>Clean-room proof</h3>
+              <p>Patch replayed in an isolated worktree. Syntax, types, targeted tests, and full suite executed.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal ad-pipeline-card__terminal--success">
+              <span class="ad-pipeline-card__dot is-success"></span>
+              <code>V0 syntax ✓ · V1 types ✓ · V2 tests ✓</code>
+            </div>
+          </article>
+
+          <i class="ad-pipeline-flow__arrow" aria-hidden="true">→</i>
+
+          <article class="ad-pipeline-card ad-pipeline-card--final">
+            <div class="ad-pipeline-card__header">
+              <span class="ad-pipeline-card__num is-verified">06 · DELIVER</span>
+              <h3>Trusted PR delivered</h3>
+              <p>PR opened with machine-readable Migration Certificate, test results, digest, and rollback instructions.</p>
+            </div>
+            <div class="ad-pipeline-card__terminal ad-pipeline-card__terminal--verified">
+              <b>VERIFIED BY AGENTDIFF</b>
+              <code>sha256:e45c0d69...</code>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
