@@ -254,6 +254,7 @@ class SidecarServer:
     def _on_stop(self, payload: dict[str, Any]) -> dict[str, Any]:
         del payload
         self._stopping.set()
+        _cleanup_state(self.state_dir)
         return {"ok": True, "stopping": True}
 
     # ---- helpers ------------------------------------------------------------

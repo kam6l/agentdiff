@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess  # nosec B404
-import sys
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -73,7 +72,6 @@ class LocalRuntime:
         before_ports, before_port_error = self._snapshot_ports()
         started = time.monotonic()
         # The argv sequence is passed without shell interpretation.
-        use_new_session = os.name == "posix" and sys.version_info < (3, 14)
         process = subprocess.Popen(  # nosec B603
             command,
             cwd=self.root,
@@ -81,7 +79,7 @@ class LocalRuntime:
             stdin=stdin,
             stdout=stdout,
             stderr=stderr,
-            start_new_session=use_new_session,
+            start_new_session=os.name == "posix",
         )
         owned: dict[tuple[int, float], OwnedProcess] = {}
         deadline = started + timeout_seconds if timeout_seconds is not None else None

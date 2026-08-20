@@ -386,9 +386,6 @@ def _yaml_dump(policy_dict: dict[str, Any]) -> str:
     """Serialize policy to YAML with stable ordering (yaml is a runtime dep)."""
     import yaml
 
-    dumper = getattr(yaml, "SafeDumper", None)
-    if dumper is not None:
-        return yaml.dump(policy_dict, Dumper=dumper, sort_keys=False, default_flow_style=False)
     return yaml.safe_dump(policy_dict, sort_keys=False, default_flow_style=False)
 
 
