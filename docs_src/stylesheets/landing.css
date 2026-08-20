@@ -21,6 +21,12 @@
   --ad-display: clamp(3.35rem, 7.4vw, 8.6rem);
 }
 
+html:has(.ad-home),
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 32px;
+}
+
 body:has(.ad-home) {
   background: var(--ad-paper);
   color: var(--ad-ink);
@@ -58,7 +64,7 @@ body:has(.ad-home) .md-content__inner::after {
 
 .ad-home {
   min-width: 0;
-  overflow: clip;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 18% 4%, rgba(240, 106, 60, 0.08), transparent 23rem),
     var(--ad-paper);

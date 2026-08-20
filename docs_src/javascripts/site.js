@@ -70,16 +70,32 @@
       });
     });
 
-    // Smooth scroll for anchor links
+    // Smooth scroll for anchor links with offset
     selectAll(root, 'a[href^="#"]').forEach((link) => {
       link.addEventListener("click", (event) => {
-        const targetId = link.getAttribute("href")?.slice(1);
-        if (!targetId) return;
+        const href = link.getAttribute("href");
+        if (!href || href === "#") return;
+        const targetId = href.slice(1);
         const target = document.getElementById(targetId);
         if (!target) return;
+
         event.preventDefault();
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-        history.replaceState(null, "", `#${targetId}`);
+        closeMenu();
+
+        const headerOffset = 30;
+        const elementPosition = target.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth",
+        });
+
+        if (window.history && window.history.pushState) {
+          window.history.pushState(null, "", `#${targetId}`);
+        } else {
+          location.hash = `#${targetId}`;
+        }
       });
     });
 
