@@ -1,5 +1,5 @@
 site_name: AgentDiff
-site_description: Run AI agents in isolation, prove their patches, and promote only trusted changes.
+site_description: AI writes code. AgentDiff decides if autonomous changes are safe to ship — with blast radius analysis, clean-room proof, and verified PRs.
 site_author: kam6l
 site_url: https://kam6l.github.io/agentdiff/
 repo_url: https://github.com/kam6l/agentdiff

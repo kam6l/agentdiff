@@ -68,81 +68,20 @@
       });
     });
 
-    const runCard = root.querySelector("[data-run-card]");
-    if (runCard) {
-      const stateButtons = selectAll(runCard, "[data-run-state]");
-      const mutationContainer = runCard.querySelector("[data-run-mutations]");
-      const score = runCard.querySelector("[data-run-score]");
-      const scoreLabel = runCard.querySelector("[data-score-label]");
-      const scoreUnit = score?.parentElement?.querySelector("span");
-      const meter = runCard.querySelector("[data-run-meter]");
-      const verdict = runCard.querySelector("[data-run-verdict]");
-      const summary = runCard.querySelector("[data-run-summary]");
-      const action = runCard.querySelector("[data-run-action]");
-
-      const states = {
-        observed: {
-          rows: [
-            ["is-deny", "+", ".env", "deny"],
-            ["is-review", "+", "pyproject.toml", "review"],
-            ["is-allow", "+", "src/parser.py", "allow"],
-          ],
-          label: "BLAST RADIUS",
-          score: "81",
-          unit: "/100",
-          width: "81%",
-          color: "var(--ad-orange)",
-          verdict: "DENY · CRITICAL",
-          summary: "1 expected · 1 unexpected · 1 protected",
-          action: "inspect evidence →",
-        },
-        recovered: {
-          rows: [
-            ["is-deny", "−", ".env", "removed"],
-            ["is-review", "−", "pyproject.toml", "removed"],
-            ["is-allow", "✓", "src/parser.py", "kept"],
-          ],
-          label: "RECOVERY",
-          score: "2",
-          unit: "/3",
-          width: "66.67%",
-          color: "var(--ad-lime)",
-          verdict: "SAFE · NO CONFLICTS",
-          summary: "2 recovered · 1 expected kept",
-          action: "recovery recorded ✓",
-        },
-      };
-
-      const renderState = (name) => {
-        const state = states[name];
-        if (!state) return;
-        stateButtons.forEach((button) => {
-          const selected = button.dataset.runState === name;
-          button.classList.toggle("is-active", selected);
-          button.setAttribute("aria-pressed", String(selected));
-        });
-        if (mutationContainer) {
-          mutationContainer.innerHTML = state.rows.map(([klass, symbol, path, result]) => (
-            `<div class="ad-mutation-row ${klass}"><b>${symbol}</b><code>${path}</code><span>${result}</span></div>`
-          )).join("");
-        }
-        if (scoreLabel) scoreLabel.textContent = state.label;
-        if (score) score.textContent = state.score;
-        if (scoreUnit) scoreUnit.textContent = state.unit;
-        if (meter) {
-          meter.style.width = state.width;
-          meter.style.background = state.color;
-        }
-        if (verdict) verdict.textContent = state.verdict;
-        if (summary) summary.textContent = state.summary;
-        if (action) action.textContent = state.action;
-      };
-
-      stateButtons.forEach((button) => {
-        button.addEventListener("click", () => renderState(button.dataset.runState));
+    /* Smooth scroll for anchor links */
+    selectAll(root, 'a[href^="#"]').forEach((link) => {
+      link.addEventListener("click", (event) => {
+        const targetId = link.getAttribute("href")?.slice(1);
+        if (!targetId) return;
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        event.preventDefault();
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        history.replaceState(null, "", `#${targetId}`);
       });
-    }
+    });
 
+    /* Evidence inspector tabs (if present on page) */
     const tabs = selectAll(root, "[data-evidence-tab]");
     const panels = selectAll(root, "[data-evidence-panel]");
     if (tabs.length && panels.length) {
