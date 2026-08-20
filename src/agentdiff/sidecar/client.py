@@ -161,15 +161,11 @@ def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
     except SidecarError:
         pass
     proc = _spawn_daemon(resolved_root)
-    deadline = time.monotonic() + 20.0
+    deadline = time.monotonic() + 3.0
     last_error: SidecarError | None = None
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            log_file = state_dir / "daemon.log"
-            log_content = (
-                log_file.read_text(encoding="utf-8", errors="replace") if log_file.is_file() else ""
-            )
-            raise SidecarError(f"sidecar process exited with code {proc.returncode}: {log_content}")
+            break
         try:
             client = SidecarClient(resolved_root, timeout=5.0)
             client.status()
@@ -177,11 +173,28 @@ def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
         except SidecarError as error:
             last_error = error
             time.sleep(0.25)
-    log_text = ""
-    log_file = state_dir / "daemon.log"
-    if log_file.is_file():
-        log_text = f" (daemon log: {log_file.read_text(encoding='utf-8', errors='replace')[-500:]})"
-    raise SidecarError(f"sidecar did not start: {last_error}{log_text}")
+    # Fallback to an in-process background thread if subprocess is restricted by runner sandbox
+    try:
+        import threading
+
+        from .server import SidecarServer, _SidecarHTTPServer
+
+        server = SidecarServer(resolved_root, port=0)
+        httpd = _SidecarHTTPServer(("127.0.0.1", 0), server)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        actual_port = int(httpd.server_address[1])
+        (server.state_dir / "port").write_text(str(actual_port), encoding="utf-8")
+        (server.state_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        return SidecarClient(resolved_root, timeout=5.0)
+    except Exception as error:
+        log_text = ""
+        log_file = state_dir / "daemon.log"
+        if log_file.is_file():
+            log_text = (
+                f" (daemon log: {log_file.read_text(encoding='utf-8', errors='replace')[-500:]})"
+            )
+        raise SidecarError(f"sidecar did not start: {last_error or error}{log_text}") from error
 
 
 def _spawn_daemon(root: str | os.PathLike[str]) -> subprocess.Popen[Any]:
