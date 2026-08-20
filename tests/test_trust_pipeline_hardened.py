@@ -104,6 +104,7 @@ def test_promotion_write_ahead_journal_and_recovery(tmp_path: Path) -> None:
     created_file.write_text("partially created", encoding="utf-8")
 
     import hashlib
+
     base_sha256 = hashlib.sha256(b"initial host state").hexdigest()
 
     created_sha256 = hashlib.sha256(b"partially created").hexdigest()

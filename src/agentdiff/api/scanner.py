@@ -1,4 +1,4 @@
-"""AST-based Python scanner for detecting external API usages."""
+"""AST-based Python scanner for detecting external API usages with provenance tracking."""
 
 from __future__ import annotations
 
@@ -33,30 +33,6 @@ _DEFAULT_IGNORED_DIRS = frozenset(
     }
 )
 
-_KNOWN_OPENAI_PREFIXES = (
-    "OpenAI",
-    "AsyncOpenAI",
-    "ChatCompletion",
-    "Completion",
-    "Embedding",
-)
-
-_KNOWN_STRIPE_PREFIXES = (
-    "Charge",
-    "PaymentIntent",
-    "Customer",
-    "Subscription",
-    "PaymentMethod",
-    "SetupIntent",
-    "Refund",
-    "Source",
-    "Token",
-    "Price",
-    "Plan",
-    "Product",
-    "Invoice",
-)
-
 
 def _get_call_name(node: ast.AST) -> str | None:
     """Recursively reconstruct dotted attribute/call expression name."""
@@ -83,7 +59,7 @@ def _extract_arg_literal(node: ast.AST) -> str:
 
 
 class _APIUsageVisitor(ast.NodeVisitor):
-    """AST visitor extracting API calls and imports."""
+    """AST visitor extracting proven API calls and imports."""
 
     def __init__(
         self,
@@ -98,7 +74,7 @@ class _APIUsageVisitor(ast.NodeVisitor):
 
         # Name bindings: local alias -> canonical qualified name
         self.imported_names: dict[str, str] = {}
-        # Client instances: local var -> provider name
+        # Client instances: local var or attr (e.g. "client", "self.client") -> provider name
         self.client_vars: dict[str, str] = {}
         # Scope stack (function and class names)
         self.scope_stack: list[str] = []
@@ -181,7 +157,7 @@ class _APIUsageVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        # Check client instantiation, e.g. client = OpenAI(...)
+        # Check client instantiation: e.g. client = OpenAI(...) or self.client = OpenAI(...)
         if isinstance(node.value, ast.Call):
             call_name = _get_call_name(node.value.func)
             if call_name:
@@ -189,16 +165,21 @@ class _APIUsageVisitor(ast.NodeVisitor):
                 if resolved in {
                     "openai.OpenAI",
                     "openai.AsyncOpenAI",
-                    "OpenAI",
-                    "AsyncOpenAI",
+                    "openai.AzureOpenAI",
+                    "openai.AsyncAzureOpenAI",
                 }:
                     for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            self.client_vars[target.id] = "openai"
-                elif resolved in {"stripe.StripeClient", "StripeClient"}:
+                        target_name = _get_call_name(target)
+                        if target_name:
+                            self.client_vars[target_name] = "openai"
+                elif resolved in {
+                    "stripe.StripeClient",
+                    "stripe.Client",
+                }:
                     for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            self.client_vars[target.id] = "stripe"
+                        target_name = _get_call_name(target)
+                        if target_name:
+                            self.client_vars[target_name] = "stripe"
 
         # Check configuration attribute assignments, e.g. openai.api_key = "..."
         for target in node.targets:
@@ -233,13 +214,9 @@ class _APIUsageVisitor(ast.NodeVisitor):
             if provider_name is not None and resolved_symbol is not None:
                 provider = next((p for p in self.providers if p.name == provider_name), None)
                 if provider is not None:
-                    args: list[str] = [
-                        _extract_arg_literal(arg) for arg in node.args
-                    ]
+                    args: list[str] = [_extract_arg_literal(arg) for arg in node.args]
                     kwargs: dict[str, str] = {
-                        kw.arg: _extract_arg_literal(kw.value)
-                        for kw in node.keywords
-                        if kw.arg
+                        kw.arg: _extract_arg_literal(kw.value) for kw in node.keywords if kw.arg
                     }
 
                     self.usages.append(
@@ -270,32 +247,23 @@ class _APIUsageVisitor(ast.NodeVisitor):
 
     def _resolve_call_symbol(self, raw_name: str) -> tuple[str | None, str | None]:
         parts = raw_name.split(".")
-        root = parts[0]
 
-        # 1. Variable is a tracked client instance
-        if root in self.client_vars:
-            provider_name = self.client_vars[root]
-            subpath = ".".join(parts[1:])
-            symbol = f"client.{subpath}" if subpath else "client"
-            return symbol, provider_name
+        # 1. Check if raw_name or any prefix is a proven client instance
+        for i in range(len(parts), 0, -1):
+            prefix = ".".join(parts[:i])
+            if prefix in self.client_vars:
+                provider_name = self.client_vars[prefix]
+                subpath = ".".join(parts[i:])
+                symbol = f"client.{subpath}" if subpath else "client"
+                return symbol, provider_name
 
-        # 2. Variable comes from imported names
+        # 2. Check if variable/module comes from imported names
         resolved = self._resolve_symbol(raw_name)
         provider = self._find_provider_for_symbol(resolved)
         if provider is not None:
             return resolved, provider.name
 
-        # 3. Direct library class references
-        for p in self.providers:
-            if p.name == "openai" and any(
-                raw_name.startswith(prefix) for prefix in _KNOWN_OPENAI_PREFIXES
-            ):
-                return f"openai.{raw_name}", "openai"
-            if p.name == "stripe" and any(
-                raw_name.startswith(prefix) for prefix in _KNOWN_STRIPE_PREFIXES
-            ):
-                return f"stripe.{raw_name}", "stripe"
-
+        # No ungrounded guessing - if not proven by import or client binding, return None
         return None, None
 
 
@@ -320,7 +288,7 @@ class APIScanner:
         """Scan a Python code string and extract API usages."""
         try:
             tree = ast.parse(code, filename=filepath)
-        except (SyntaxError, ValueError, UnicodeDecodeError):
+        except (SyntaxError, ValueError, TypeError):
             return []
 
         source_lines = code.splitlines()
@@ -332,60 +300,52 @@ class APIScanner:
         visitor.visit(tree)
         return visitor.usages
 
-    def scan_file(
-        self,
-        filepath: str | Path,
-        root: str | Path | None = None,
-    ) -> list[APIUsage]:
-        """Scan a single Python file on disk."""
-        path = Path(filepath).resolve()
-        if not path.is_file() or path.suffix != ".py":
+    def scan_file(self, path: str | Path) -> list[APIUsage]:
+        """Scan a single Python file."""
+        p = Path(path).resolve()
+        if not p.is_file():
             return []
+
         try:
-            content = path.read_text(encoding="utf-8", errors="replace")
+            code = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return []
 
-        rel_path = (
-            normalize_relative_path(str(path.relative_to(Path(root).resolve())))
-            if root is not None
-            else str(path)
-        )
-        return self.scan_code(content, filepath=rel_path)
+        return self.scan_code(code, filepath=str(p))
 
-    def scan_directory(
+    def scan_repository(
         self,
         root: str | Path,
     ) -> list[APIUsage]:
-        """Recursively scan all Python files in a directory tree."""
+        """Recursively scan a repository directory for all Python files and extract API usages."""
         root_path = Path(root).expanduser().resolve()
         if not root_path.is_dir():
-            if root_path.is_file() and root_path.suffix == ".py":
-                return self.scan_file(root_path, root=root_path.parent)
-            return []
+            raise FileNotFoundError(f"directory not found: {root}")
 
-        results: list[APIUsage] = []
-        for dirpath, dirnames, filenames in os.walk(root_path, topdown=True):
+        all_usages: list[APIUsage] = []
+
+        for dirpath, dirnames, filenames in os.walk(root_path, followlinks=False):
             dirnames[:] = [
-                d
-                for d in dirnames
-                if d not in self.ignored_dirs and not d.startswith(".")
+                d for d in dirnames if d not in self.ignored_dirs and not d.startswith(".")
             ]
 
             for fname in sorted(filenames):
-                if fname.endswith(".py"):
-                    full_file = Path(dirpath) / fname
-                    usages = self.scan_file(full_file, root=root_path)
-                    results.extend(usages)
+                if not fname.endswith(".py"):
+                    continue
 
-        return results
+                full_path = Path(dirpath) / fname
+                try:
+                    rel_path = normalize_relative_path(str(full_path.relative_to(root_path)))
+                except ValueError:
+                    rel_path = fname
 
-    def scan(
-        self,
-        target: str | Path,
-    ) -> list[APIUsage]:
-        """Convenience method to scan either a directory or a single file."""
-        p = Path(target).expanduser().resolve()
-        if p.is_file():
-            return self.scan_file(p, root=p.parent)
-        return self.scan_directory(p)
+                usages = self.scan_code(
+                    full_path.read_text(encoding="utf-8", errors="replace"),
+                    filepath=rel_path,
+                )
+                all_usages.extend(usages)
+
+        return all_usages
+
+    scan = scan_repository
+    scan_directory = scan_repository

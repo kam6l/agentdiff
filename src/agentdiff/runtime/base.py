@@ -58,9 +58,7 @@ class RuntimeCapabilities:
         return {
             "backend": self.backend,
             "filesystem": (
-                self.filesystem.value
-                if hasattr(self.filesystem, "value")
-                else str(self.filesystem)
+                self.filesystem.value if hasattr(self.filesystem, "value") else str(self.filesystem)
             ),
             "host_repository": (
                 self.host_repository.value
@@ -68,31 +66,21 @@ class RuntimeCapabilities:
                 else str(self.host_repository)
             ),
             "network": (
-                self.network.value
-                if hasattr(self.network, "value")
-                else str(self.network)
+                self.network.value if hasattr(self.network, "value") else str(self.network)
             ),
             "processes": (
-                self.processes.value
-                if hasattr(self.processes, "value")
-                else str(self.processes)
+                self.processes.value if hasattr(self.processes, "value") else str(self.processes)
             ),
             "resources": (
-                self.resources.value
-                if hasattr(self.resources, "value")
-                else str(self.resources)
+                self.resources.value if hasattr(self.resources, "value") else str(self.resources)
             ),
             "privileges": (
-                self.privileges.value
-                if hasattr(self.privileges, "value")
-                else str(self.privileges)
+                self.privileges.value if hasattr(self.privileges, "value") else str(self.privileges)
             ),
             "private_workspace": self.private_workspace,
             "supports_live_safety": self.supports_live_safety,
             "supports_source_snapshot": self.supports_source_snapshot,
         }
-
-
 
 
 @dataclass(frozen=True)

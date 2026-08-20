@@ -270,9 +270,7 @@ class RunStore:
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
-            rel_manifest = (
-                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
-            )
+            rel_manifest = "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
             return IntegrityReport(
                 present=True,
                 ok=False,
@@ -281,9 +279,7 @@ class RunStore:
                 issues=(IntegrityIssue(rel_manifest, type(error).__name__),),
             )
         if not isinstance(manifest, dict) or manifest.get("algorithm") != "sha256":
-            rel_manifest = (
-                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
-            )
+            rel_manifest = "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
             return IntegrityReport(
                 present=True,
                 ok=False,
@@ -293,9 +289,7 @@ class RunStore:
             )
         raw_files = manifest.get("files")
         if not isinstance(raw_files, dict):
-            rel_manifest = (
-                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
-            )
+            rel_manifest = "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
             return IntegrityReport(
                 present=True,
                 ok=False,

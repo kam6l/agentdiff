@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UV_VERSION: "latest"
+  UV_VERSION: "0.5.30"
   UV_LOCKED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
 

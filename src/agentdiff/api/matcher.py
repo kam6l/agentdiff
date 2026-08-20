@@ -13,6 +13,7 @@ from agentdiff.api.models import (
     MigrationImpact,
 )
 from agentdiff.api.providers import APIProvider, get_all_providers
+from agentdiff.api.version_detector import SDKVersionInfo, detect_installed_sdk_versions
 from agentdiff.impact.impact import ImpactEngine
 from agentdiff.scoring.blast_radius import (
     BlastRadiusResult,
@@ -55,9 +56,7 @@ class APIMatcher:
         self.providers: list[APIProvider] = (
             list(providers) if providers is not None else get_all_providers()
         )
-        self.changes: list[APIChange] = (
-            list(custom_changes) if custom_changes is not None else []
-        )
+        self.changes: list[APIChange] = list(custom_changes) if custom_changes is not None else []
         if not self.changes:
             for p in self.providers:
                 self.changes.extend(p.get_known_changes())
@@ -65,18 +64,22 @@ class APIMatcher:
     def match_usages(
         self,
         usages: Iterable[APIUsage],
+        sdk_versions: dict[str, SDKVersionInfo] | None = None,
     ) -> list[MatchedChange]:
         """Match a collection of API usages against the change catalog."""
         matched: list[MatchedChange] = []
         for usage in usages:
             provider = next((p for p in self.providers if p.name == usage.provider), None)
+            installed_sdk = sdk_versions.get(usage.provider) if sdk_versions else None
+
             for change in self.changes:
                 if change.provider != usage.provider:
                     continue
+
                 is_match = (
-                    provider.match_usage(usage, change)
+                    provider.match_usage(usage, change, installed_sdk=installed_sdk)
                     if provider is not None
-                    else (change.target_symbol in usage.symbol)
+                    else (usage.symbol in change.applicable_symbols)
                 )
                 if is_match:
                     points = _SEVERITY_WEIGHTS.get(change.severity, 10)
@@ -95,13 +98,15 @@ class APIMatcher:
         self,
         usages: Sequence[APIUsage],
         root: str | Path | None = None,
+        sdk_versions: dict[str, SDKVersionInfo] | None = None,
     ) -> MigrationImpact:
         """Analyze detected API usages, match breaking changes, and compute blast radius."""
-        matched = self.match_usages(usages)
+        if sdk_versions is None and root is not None:
+            sdk_versions = detect_installed_sdk_versions(root)
 
-        affected_files = tuple(
-            sorted({m.usage.filepath for m in matched if m.usage.filepath})
-        )
+        matched = self.match_usages(usages, sdk_versions=sdk_versions)
+
+        affected_files = tuple(sorted({m.usage.filepath for m in matched if m.usage.filepath}))
 
         counts: dict[str, int] = {
             "total_usages": len(usages),
@@ -109,16 +114,12 @@ class APIMatcher:
             "critical_changes": sum(
                 1 for m in matched if m.change.severity == ChangeSeverity.CRITICAL
             ),
-            "high_changes": sum(
-                1 for m in matched if m.change.severity == ChangeSeverity.HIGH
-            ),
+            "high_changes": sum(1 for m in matched if m.change.severity == ChangeSeverity.HIGH),
             "moderate_changes": sum(
                 1 for m in matched if m.change.severity == ChangeSeverity.MODERATE
             ),
             "low_changes": sum(
-                1
-                for m in matched
-                if m.change.severity in {ChangeSeverity.LOW, ChangeSeverity.INFO}
+                1 for m in matched if m.change.severity in {ChangeSeverity.LOW, ChangeSeverity.INFO}
             ),
         }
 
@@ -159,15 +160,25 @@ class APIMatcher:
         )
 
         impact_plan: ProofImpactPlan | None = None
+        impact_status = "ok"
+        impact_error: str | None = None
+
         if root is not None and Path(root).is_dir():
             try:
                 engine = ImpactEngine(root)
                 impact_plan = engine.plan(affected_files)
-            except (OSError, RuntimeError, ValueError, KeyError):
-                impact_plan = None
+            except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
+                impact_status = "error"
+                impact_error = f"ImpactEngine plan failed: {type(error).__name__}: {error}"
+        else:
+            impact_status = "skipped"
 
         remediations = tuple(
             dict.fromkeys(m.remediation_advice for m in matched if m.remediation_advice)
+        )
+
+        detected_sdk_payload = (
+            {k: v.to_dict() for k, v in sdk_versions.items()} if sdk_versions else {}
         )
 
         return MigrationImpact(
@@ -179,6 +190,9 @@ class APIMatcher:
             impact_plan=impact_plan,
             risk_level=risk_level,
             remediations=remediations,
+            detected_sdk_versions=detected_sdk_payload,
+            impact_status=impact_status,
+            impact_error=impact_error,
         )
 
     def _format_remediation(self, usage: APIUsage, change: APIChange) -> str:

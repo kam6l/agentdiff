@@ -36,7 +36,7 @@ def get_providers_for_selection(selection: str | Iterable[str] = "all") -> list[
             return get_all_providers()
         prov = get_provider(selection)
         return [prov] if prov is not None else []
-    
+
     result: list[APIProvider] = []
     for item in selection:
         prov = get_provider(item)

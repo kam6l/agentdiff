@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from agentdiff.api.version_detector import SDKVersionInfo, is_version_affected
+
 if TYPE_CHECKING:
     from agentdiff.api.models import APIChange, APIUsage
 
@@ -40,31 +42,28 @@ class APIProvider(ABC):
         root = module_name.split(".")[0]
         return root in self.import_names
 
-    def match_usage(self, usage: APIUsage, change: APIChange) -> bool:
-        """Default matching logic between a detected APIUsage and an APIChange."""
+    def match_usage(
+        self,
+        usage: APIUsage,
+        change: APIChange,
+        installed_sdk: SDKVersionInfo | None = None,
+    ) -> bool:
+        """Deterministic matching between a detected APIUsage and an APIChange."""
         if usage.provider != change.provider:
             return False
 
-        # 1. Symbol matching (exact match, case-insensitive, or variant match)
-        target = change.target_symbol
-        target_lower = target.lower()
-        usage_lower = usage.symbol.lower()
-
-        symbol_matches = (
-            usage.symbol == target
-            or usage_lower == target_lower
-            or usage_lower.endswith(f".{target_lower}")
-            or target_lower.endswith(f".{usage_lower}")
-            or (target_lower in usage_lower)
-            or (
-                target_lower.replace("completions", "completion")
-                in usage_lower.replace("completions", "completion")
-            )
-        )
-        if not symbol_matches:
+        # 1. Breaking version check
+        if change.breaking_version and not is_version_affected(
+            installed_sdk, change.breaking_version
+        ):
             return False
 
-        # 2. Parameter matching if target_parameter is specified
+        # 2. Canonical symbol matching (exact match or applicable symbols)
+        applicable = change.applicable_symbols
+        if usage.symbol not in applicable and change.target_symbol != usage.symbol:
+            return False
+
+        # 3. Parameter matching if target_parameter is specified
         if change.target_parameter:
             has_param = (
                 change.target_parameter in usage.keyword_arguments
@@ -73,22 +72,18 @@ class APIProvider(ABC):
             if not has_param:
                 return False
 
-        # 3. Model matching if target_model is specified
+        # 4. Model matching if target_model is specified
         if change.target_model:
             model_arg = usage.keyword_arguments.get("model") or usage.keyword_arguments.get(
                 "engine"
             )
-            if not model_arg:
-                # Check positional args or snippet
-                has_model = (
-                    change.target_model in usage.code_snippet
-                    or change.target_model in usage.arguments
-                )
+            if model_arg is not None:
+                clean_model = model_arg.strip("\"'")
+                if clean_model != change.target_model:
+                    return False
             else:
-                has_model = (
-                    change.target_model in model_arg or model_arg == change.target_model
-                )
-            if not has_model:
-                return False
+                clean_args = [a.strip("\"'") for a in usage.arguments]
+                if change.target_model not in clean_args:
+                    return False
 
         return True

@@ -30,6 +30,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="openai.ChatCompletion.create",
+                target_symbols=("openai.ChatCompletion.create",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.ChatCompletion.create()` method was removed in OpenAI"
@@ -52,6 +53,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="openai.Completion.create",
+                target_symbols=("openai.Completion.create",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.Completion.create()` method was removed in OpenAI v1.0.0+."
@@ -74,6 +76,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="openai.Embedding.create",
+                target_symbols=("openai.Embedding.create",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.Embedding.create()` method was removed in OpenAI v1.0.0+."
@@ -95,6 +98,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="openai.Audio.transcribe",
+                target_symbols=("openai.Audio.transcribe",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.Audio.transcribe()` method was removed in OpenAI v1.0.0+."
@@ -116,6 +120,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.HIGH,
                 target_symbol="openai.Image.create",
+                target_symbols=("openai.Image.create",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.Image.create()` method was removed in OpenAI v1.0.0+."
@@ -135,6 +140,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.REMOVAL,
                 severity=ChangeSeverity.MODERATE,
                 target_symbol="openai.Model.list",
+                target_symbols=("openai.Model.list",),
                 breaking_version=">=1.0.0",
                 description=(
                     "The global `openai.Model.list()` method was removed in OpenAI v1.0.0+."
@@ -151,6 +157,7 @@ class OpenAIProvider(APIProvider):
                 change_type=ChangeType.DEPRECATION,
                 severity=ChangeSeverity.MODERATE,
                 target_symbol="openai.api_key",
+                target_symbols=("openai.api_key",),
                 breaking_version=">=1.0.0",
                 description=(
                     "Setting `openai.api_key = '...'` globally is deprecated. Pass `api_key` to"
@@ -166,7 +173,11 @@ class OpenAIProvider(APIProvider):
                 title="`functions` deprecated in favor of `tools` and `tool_choice`",
                 change_type=ChangeType.PARAMETER_REMOVAL,
                 severity=ChangeSeverity.HIGH,
-                target_symbol="chat.completions.create",
+                target_symbol="client.chat.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "openai.ChatCompletion.create",
+                ),
                 target_parameter="functions",
                 breaking_version=">=1.0.0",
                 description=(
@@ -190,7 +201,13 @@ class OpenAIProvider(APIProvider):
                 title="`engine` parameter removed in favor of `model`",
                 change_type=ChangeType.PARAMETER_REMOVAL,
                 severity=ChangeSeverity.CRITICAL,
-                target_symbol="completions.create",
+                target_symbol="client.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "client.completions.create",
+                    "openai.ChatCompletion.create",
+                    "openai.Completion.create",
+                ),
                 target_parameter="engine",
                 breaking_version=">=1.0.0",
                 description=(
@@ -211,7 +228,13 @@ class OpenAIProvider(APIProvider):
                 title="Shutdown model `text-davinci-003`",
                 change_type=ChangeType.MODEL_DEPRECATION,
                 severity=ChangeSeverity.CRITICAL,
-                target_symbol="completions.create",
+                target_symbol="client.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "client.completions.create",
+                    "openai.ChatCompletion.create",
+                    "openai.Completion.create",
+                ),
                 target_model="text-davinci-003",
                 description=(
                     "`text-davinci-003` was shut down on January 4, 2024. Migrate to"
@@ -232,7 +255,13 @@ class OpenAIProvider(APIProvider):
                 title="Shutdown model `code-davinci-002`",
                 change_type=ChangeType.MODEL_DEPRECATION,
                 severity=ChangeSeverity.CRITICAL,
-                target_symbol="completions.create",
+                target_symbol="client.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "client.completions.create",
+                    "openai.ChatCompletion.create",
+                    "openai.Completion.create",
+                ),
                 target_model="code-davinci-002",
                 description=(
                     "`code-davinci-002` was shut down. Migrate to `gpt-4o` or `gpt-4o-mini`."
@@ -251,7 +280,13 @@ class OpenAIProvider(APIProvider):
                 title="Deprecated snapshot `gpt-3.5-turbo-0301`",
                 change_type=ChangeType.MODEL_DEPRECATION,
                 severity=ChangeSeverity.HIGH,
-                target_symbol="chat.completions.create",
+                target_symbol="client.chat.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "client.completions.create",
+                    "openai.ChatCompletion.create",
+                    "openai.Completion.create",
+                ),
                 target_model="gpt-3.5-turbo-0301",
                 description=(
                     "The `gpt-3.5-turbo-0301` snapshot has reached end of life."
@@ -271,7 +306,13 @@ class OpenAIProvider(APIProvider):
                 title="Deprecated snapshot `gpt-4-0314`",
                 change_type=ChangeType.MODEL_DEPRECATION,
                 severity=ChangeSeverity.HIGH,
-                target_symbol="chat.completions.create",
+                target_symbol="client.chat.completions.create",
+                target_symbols=(
+                    "client.chat.completions.create",
+                    "client.completions.create",
+                    "openai.ChatCompletion.create",
+                    "openai.Completion.create",
+                ),
                 target_model="gpt-4-0314",
                 description=(
                     "The `gpt-4-0314` snapshot has reached end of life."

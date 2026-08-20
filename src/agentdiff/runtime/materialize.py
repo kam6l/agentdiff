@@ -22,7 +22,6 @@ class MaterializationStrategy(str, Enum):
     STREAM_COPY = "stream_copy"
 
 
-
 @dataclass(frozen=True, slots=True)
 class MaterializationReport:
     strategy_used: str

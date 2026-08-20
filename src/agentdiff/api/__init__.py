@@ -19,6 +19,11 @@ from agentdiff.api.providers import (
     list_providers,
 )
 from agentdiff.api.scanner import APIScanner
+from agentdiff.api.version_detector import (
+    SDKVersionInfo,
+    detect_installed_sdk_versions,
+    is_version_affected,
+)
 
 __all__ = [
     "APIChange",
@@ -31,9 +36,12 @@ __all__ = [
     "MatchedChange",
     "MigrationImpact",
     "OpenAIProvider",
+    "SDKVersionInfo",
     "StripeProvider",
+    "detect_installed_sdk_versions",
     "get_all_providers",
     "get_provider",
     "get_providers_for_selection",
+    "is_version_affected",
     "list_providers",
 ]
