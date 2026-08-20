@@ -63,6 +63,7 @@ class IntegrityReport:
     present: bool
     ok: bool
     files_checked: int
+    version: int = 2
     issues: tuple[IntegrityIssue, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -71,6 +72,7 @@ class IntegrityReport:
             "present": self.present,
             "ok": self.ok,
             "files_checked": self.files_checked,
+            "version": self.version,
             "issues": [issue.to_dict() for issue in self.issues],
         }
 
@@ -239,35 +241,67 @@ class RunStore:
         self._ensure_run_dir_identity()
         v2_integrity = self.run_dir / "integrity" / "manifest.json"
         v1_integrity = self.run_dir / "integrity.json"
-        if not v2_integrity.exists() and not v1_integrity.exists():
+        integrity_dir = self.run_dir / "integrity"
+
+        if not v2_integrity.exists() and not v1_integrity.exists() and not integrity_dir.exists():
             return IntegrityReport(present=False, ok=False, files_checked=0)
+
         issues: list[IntegrityIssue] = []
-        if not v2_integrity.exists():
-            issues.append(IntegrityIssue("integrity/manifest.json", "missing integrity manifest"))
-            return IntegrityReport(present=True, ok=False, files_checked=0, issues=tuple(issues))
-        try:
-            manifest = self.read_json_path("integrity/manifest.json")
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+
+        # Check incomplete v2 seal
+        if integrity_dir.exists() and not v2_integrity.exists():
+            issues.append(
+                IntegrityIssue(
+                    "integrity/manifest.json",
+                    "missing integrity manifest (incomplete spec-v2 seal)",
+                )
+            )
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity/manifest.json", type(error).__name__),),
+                version=2,
+                issues=tuple(issues),
+            )
+
+        capsule_version = 2 if v2_integrity.exists() else 1
+        manifest_path = v2_integrity if capsule_version == 2 else v1_integrity
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+            rel_manifest = (
+                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
+            )
+            return IntegrityReport(
+                present=True,
+                ok=False,
+                files_checked=0,
+                version=capsule_version,
+                issues=(IntegrityIssue(rel_manifest, type(error).__name__),),
             )
         if not isinstance(manifest, dict) or manifest.get("algorithm") != "sha256":
+            rel_manifest = (
+                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
+            )
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity/manifest.json", "invalid integrity manifest"),),
+                version=capsule_version,
+                issues=(IntegrityIssue(rel_manifest, "invalid integrity manifest"),),
             )
         raw_files = manifest.get("files")
         if not isinstance(raw_files, dict):
+            rel_manifest = (
+                "integrity/manifest.json" if capsule_version == 2 else "integrity.json"
+            )
             return IntegrityReport(
                 present=True,
                 ok=False,
                 files_checked=0,
-                issues=(IntegrityIssue("integrity/manifest.json", "files must be an object"),),
+                version=capsule_version,
+                issues=(IntegrityIssue(rel_manifest, "files must be an object"),),
             )
 
         try:
@@ -313,6 +347,7 @@ class RunStore:
             present=True,
             ok=not issues,
             files_checked=checked,
+            version=capsule_version,
             issues=tuple(issues),
         )
 

@@ -39,6 +39,58 @@ class ProofPhaseResult:
         return value
 
 
+class ProofStrengthLevel(str, Enum):
+    L0_EXECUTION_ONLY = "L0_EXECUTION_ONLY"
+    L1_CLEAN_ROOM = "L1_CLEAN_ROOM"
+    L2_TRUSTED_COMMAND = "L2_TRUSTED_COMMAND"
+    L3_BASELINE_VERIFIER = "L3_BASELINE_VERIFIER"
+
+
+class ProofStrengthLabel(str, Enum):
+    WEAK = "WEAK"
+    REVIEW = "REVIEW"
+    STRONG = "STRONG"
+
+
+class VerifierIndependence(str, Enum):
+    WEAK = "WEAK"
+    REVIEW = "REVIEW"
+    STRONG = "STRONG"
+
+
+def compute_proof_strength(
+    *,
+    clean_environment: str,
+    verification_confirmed: bool,
+    baseline_verifier: str = "SKIPPED",
+    baseline_available: bool = False,
+    verifier_files_changed: int = 0,
+) -> tuple[ProofStrengthLevel, ProofStrengthLabel, VerifierIndependence]:
+    if clean_environment != "PASS":
+        return (
+            ProofStrengthLevel.L0_EXECUTION_ONLY,
+            ProofStrengthLabel.WEAK,
+            VerifierIndependence.WEAK,
+        )
+    if not verification_confirmed:
+        return (
+            ProofStrengthLevel.L1_CLEAN_ROOM,
+            ProofStrengthLabel.WEAK,
+            VerifierIndependence.WEAK,
+        )
+    if baseline_verifier == "PASS" and baseline_available:
+        return (
+            ProofStrengthLevel.L3_BASELINE_VERIFIER,
+            ProofStrengthLabel.STRONG,
+            VerifierIndependence.STRONG,
+        )
+    return (
+        ProofStrengthLevel.L2_TRUSTED_COMMAND,
+        ProofStrengthLabel.REVIEW,
+        VerifierIndependence.WEAK,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ProofResult:
     """Deterministic proof verdict bound to one immutable patch digest."""
@@ -61,6 +113,15 @@ class ProofResult:
     trusted_plan: bool = True
     cache_hit: bool = False
     cached_from_run: str = ""
+    verifier_files_changed: int = 0
+    verifier_changes: tuple[str, ...] = ()
+    baseline_available: bool = False
+    baseline_verifier: str = "SKIPPED"
+    patched_tests_total: int | None = None
+    baseline_tests_total: int | None = None
+    proof_strength: str = ProofStrengthLevel.L0_EXECUTION_ONLY.value
+    proof_strength_label: str = ProofStrengthLabel.WEAK.value
+    verifier_independence: str = VerifierIndependence.WEAK.value
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,4 +145,14 @@ class ProofResult:
             "trusted_plan": self.trusted_plan,
             "cache_hit": self.cache_hit,
             "cached_from_run": self.cached_from_run,
+            "verifier_files_changed": self.verifier_files_changed,
+            "verifier_changes": list(self.verifier_changes),
+            "baseline_available": self.baseline_available,
+            "baseline_verifier": self.baseline_verifier,
+            "patched_tests_total": self.patched_tests_total,
+            "baseline_tests_total": self.baseline_tests_total,
+            "proof_strength": self.proof_strength,
+            "proof_strength_label": self.proof_strength_label,
+            "verifier_independence": self.verifier_independence,
         }
+

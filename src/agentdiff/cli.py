@@ -9,6 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agentdiff.api import (
+    APIMatcher,
+    APIScanner,
+    ChangeSeverity,
+    get_providers_for_selection,
+)
 from agentdiff.cortex import (
     AgentMemoryStore,
     ContextCompressor,
@@ -43,6 +49,7 @@ from agentdiff.providers import (
 from agentdiff.redaction import safe_display
 from agentdiff.repair import RepairLoop
 from agentdiff.runtime import SandboxRuntime
+from agentdiff.scoring.blast_radius import RiskLevel
 from agentdiff.sidecar import (
     SidecarClient,
     SidecarError,
@@ -1015,6 +1022,102 @@ def cmd_workspace_prune(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_api_scan(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    providers = get_providers_for_selection(args.provider)
+    scanner = APIScanner(providers=providers)
+    usages = scanner.scan(root)
+
+    if args.format == "json":
+        print(
+            _json(
+                {
+                    "root": str(root),
+                    "provider": args.provider,
+                    "count": len(usages),
+                    "usages": [u.to_dict() for u in usages],
+                }
+            )
+        )
+    else:
+        print(f"External API Scan: {safe_display(root)}")
+        print(f"Provider filter:   {args.provider}")
+        print(f"Total API usages:  {len(usages)}")
+        if usages:
+            print("")
+            for u in usages:
+                print(f"  {u.filepath}:{u.line_number} [{u.provider}] {u.symbol} ({u.call_type})")
+                if u.code_snippet:
+                    print(f"    {u.code_snippet}")
+        else:
+            print("  No external API usages found.")
+    return 0
+
+
+def cmd_api_check(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    providers = get_providers_for_selection(args.provider)
+    scanner = APIScanner(providers=providers)
+    usages = scanner.scan(root)
+
+    matcher = APIMatcher(providers=providers)
+    impact = matcher.calculate_impact(usages, root=root)
+
+    if args.format == "json":
+        print(_json(impact.to_dict()))
+    else:
+        print(f"External API Breaking Change Check: {safe_display(root)}")
+        print(f"Provider filter:   {args.provider}")
+        print(f"Total usages:      {impact.total_usages}")
+        print(f"Affected usages:   {impact.affected_usages}")
+        print(f"Affected files:    {len(impact.affected_files)}")
+        print(
+            f"Risk level:        {impact.risk_level.value.upper()} "
+            f"(Blast Radius Score: {impact.blast_radius.score}/100)"
+        )
+
+        if impact.impact_plan is not None:
+            print(f"Proof Level:       {impact.impact_plan.level.upper()}")
+            if impact.impact_plan.tests:
+                print(f"Impacted tests:    {len(impact.impact_plan.tests)}")
+
+        if impact.matched_changes:
+            print("\nBreaking Changes & Deprecations Detected:")
+            for mc in impact.matched_changes:
+                loc = f"{mc.usage.filepath}:{mc.usage.line_number}"
+                print(f"\n  [{mc.change.severity.value.upper()}] {loc} -> {mc.change.title}")
+                print(f"    Symbol:      {mc.usage.symbol}")
+                if mc.change.replacement_symbol:
+                    print(f"    Migrate to:  {mc.change.replacement_symbol}")
+                if mc.change.migration_guide_url:
+                    print(f"    Docs:        {mc.change.migration_guide_url}")
+                if mc.change.replacement_code:
+                    code_indent = "\n      ".join(mc.change.replacement_code.splitlines())
+                    print(f"    Example:\n      {code_indent}")
+        else:
+            print("\n  All detected API usages are up-to-date. No breaking changes detected.")
+
+    fail_on = getattr(args, "fail_on", "high")
+    if fail_on == "never":
+        return 0
+    if fail_on == "any" and impact.affected_usages > 0:
+        return 1
+    if fail_on == "high" and (
+        impact.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}
+        or any(
+            m.change.severity in {ChangeSeverity.HIGH, ChangeSeverity.CRITICAL}
+            for m in impact.matched_changes
+        )
+    ):
+        return 1
+    if fail_on == "critical" and (
+        impact.risk_level == RiskLevel.CRITICAL
+        or any(m.change.severity == ChangeSeverity.CRITICAL for m in impact.matched_changes)
+    ):
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentdiff",
@@ -1355,6 +1458,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_ws_prune.add_argument("--root", default=".")
     p_ws_prune.add_argument("--keep", type=int, default=3)
     p_ws_prune.set_defaults(func=cmd_workspace_prune)
+
+    p_api = subparsers.add_parser(
+        "api", help="Self-maintaining external API scanner and breaking change checker"
+    )
+    api_commands = p_api.add_subparsers(dest="api_command", required=True)
+
+    p_api_scan = api_commands.add_parser(
+        "scan", help="Scan repository AST for external API usages"
+    )
+    p_api_scan.add_argument("--root", default=".", help="Project root to scan")
+    p_api_scan.add_argument(
+        "--provider", default="all", help="Provider filter (openai, stripe, all)"
+    )
+    p_api_scan.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_api_scan.set_defaults(func=cmd_api_scan)
+
+    p_api_check = api_commands.add_parser(
+        "check", help="Check for API breaking changes, calculate impact and blast radius"
+    )
+    p_api_check.add_argument("--root", default=".", help="Project root to check")
+    p_api_check.add_argument(
+        "--provider", default="all", help="Provider filter (openai, stripe, all)"
+    )
+    p_api_check.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_api_check.add_argument(
+        "--fail-on",
+        choices=["never", "any", "high", "critical"],
+        default="high",
+        help="Exit with non-zero on matching risk/severity",
+    )
+    p_api_check.set_defaults(func=cmd_api_check)
 
     return parser
 

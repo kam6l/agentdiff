@@ -97,6 +97,8 @@ agentdiff
 │   └── status / warm / prune
 ├── policy
 │   └── init / validate / explain
+├── api                         # self-maintaining external API scanner
+│   └── scan / check
 └── cortex                    # experimental, secondary surface
     ├── memory
     │   └── stats / search / index
