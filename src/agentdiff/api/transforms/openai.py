@@ -37,9 +37,7 @@ class _ChatToResponsesTransformer(ast.NodeTransformer):
             return False
         if not isinstance(node.func.value.value, ast.Attribute):
             return False
-        if node.func.value.value.attr != "chat":
-            return False
-        return True
+        return node.func.value.value.attr == "chat"
 
     def _get_client_node(self, node: ast.Call) -> ast.expr | None:
         """Extract the client node from client.chat.completions.create."""
@@ -131,7 +129,7 @@ class OpenAIChatToResponsesTransform(ASTMigrationTransform):
 
 # Legacy OpenAI transform: openai.ChatCompletion.create -> client.chat.completions.create
 class _LegacyChatCompletionTransformer(ast.NodeTransformer):
-    """AST transformer for migrating openai.ChatCompletion.create to client.chat.completions.create."""
+    """AST transformer for migrating openai.ChatCompletion.create to modern SDK."""
 
     def __init__(self, context: TransformContext) -> None:
         self.context = context
@@ -146,9 +144,8 @@ class _LegacyChatCompletionTransformer(ast.NodeTransformer):
                 for alias in stmt.names:
                     if alias.name == "openai":
                         self.has_openai_import = True
-            elif isinstance(stmt, ast.ImportFrom):
-                if stmt.module == "openai":
-                    self.has_openai_import = True
+            elif isinstance(stmt, ast.ImportFrom) and stmt.module == "openai":
+                self.has_openai_import = True
         return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
@@ -172,9 +169,7 @@ class _LegacyChatCompletionTransformer(ast.NodeTransformer):
             return False
         if not isinstance(node.func.value.value, ast.Name):
             return False
-        if node.func.value.value.id != "openai":
-            return False
-        return True
+        return node.func.value.value.id == "openai"
 
     def _transform_legacy_to_modern(self, node: ast.Call) -> ast.Call:
         """Transform openai.ChatCompletion.create to client.chat.completions.create."""

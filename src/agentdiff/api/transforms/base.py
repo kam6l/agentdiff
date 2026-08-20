@@ -105,7 +105,7 @@ class ASTMigrationTransform(MigrationTransform):
         # Convert back to source code
         try:
             modified_code = ast.unparse(new_tree)
-        except Exception as e:
+        except (TypeError, ValueError, AttributeError, RecursionError) as e:
             return TransformResult(
                 success=False,
                 modified_code=context.source_code,
@@ -148,7 +148,7 @@ class ASTMigrationTransform(MigrationTransform):
         changes: list[str] = []
 
         # Simple diff - find changed lines
-        for i, (orig, mod) in enumerate(zip(orig_lines, mod_lines)):
+        for i, (orig, mod) in enumerate(zip(orig_lines, mod_lines, strict=False)):
             if orig != mod:
                 changes.append(f"Line {i + 1}: {orig.strip()} -> {mod.strip()}")
 
