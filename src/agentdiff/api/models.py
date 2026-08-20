@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from agentdiff.impact.impact import ProofImpactPlan
     from agentdiff.scoring.blast_radius import BlastRadiusResult
+    from agentdiff.trust.graph import RepoImpactGraph
 from agentdiff.scoring.blast_radius import RiskLevel
 
 
@@ -183,6 +184,19 @@ class MigrationImpact:
     def has_breaking_changes(self) -> bool:
         return self.affected_usages > 0
 
+    @property
+    def verification_confidence(self) -> str:
+        """Return verification confidence level based on test coverage."""
+        if self.impact_plan is None:
+            return "UNKNOWN"
+        if not self.impact_plan.affected_code_has_tests:
+            return "LOW"
+        if self.impact_plan.level == "full":
+            return "HIGH"
+        if self.impact_plan.level == "targeted":
+            return "MEDIUM"
+        return "LOW"
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": 1,
@@ -197,4 +211,156 @@ class MigrationImpact:
             "detected_sdk_versions": dict(self.detected_sdk_versions),
             "impact_status": self.impact_status,
             "impact_error": self.impact_error,
+            "verification_confidence": self.verification_confidence,
         }
+
+
+class MigrationConfidence(str, Enum):
+    """Confidence level for migration strategy recommendation."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    UNKNOWN = "unknown"
+
+
+class MigrationStrategy(str, Enum):
+    """Recommended migration strategy."""
+
+    AST_TRANSFORM = "ast_transform"
+    CODING_AGENT = "coding_agent"
+    MANUAL = "manual"
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationAssessment:
+    """Assessment of migration feasibility and recommended approach."""
+
+    confidence: MigrationConfidence
+    strategy: MigrationStrategy
+    score: int  # 0-100
+    reasons: tuple[str, ...]
+    risk_factors: tuple[str, ...]
+
+    @property
+    def can_auto_migrate(self) -> bool:
+        return self.confidence in {MigrationConfidence.HIGH, MigrationConfidence.MEDIUM}
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "confidence": self.confidence.value,
+            "strategy": self.strategy.value,
+            "score": self.score,
+            "reasons": list(self.reasons),
+            "risk_factors": list(self.risk_factors),
+            "can_auto_migrate": self.can_auto_migrate,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MigrationAssessment":
+        return cls(
+            confidence=MigrationConfidence(data["confidence"]),
+            strategy=MigrationStrategy(data["strategy"]),
+            score=int(data["score"]),
+            reasons=tuple(data.get("reasons", [])),
+            risk_factors=tuple(data.get("risk_factors", [])),
+        )
+
+
+def assess_migration_confidence(
+    usages: tuple[APIUsage, ...],
+    impact: MigrationImpact,
+    graph: "RepoImpactGraph | None" = None,
+) -> MigrationAssessment:
+    """
+    Assess migration confidence and recommend strategy.
+
+    High confidence: direct SDK usage, known symbol, simple change, tests exist
+    Low confidence: wrapper functions, dynamic calls, no tests, unknown behavior
+    """
+    reasons: list[str] = []
+    risk_factors: list[str] = []
+    score = 50  # base score
+
+    # Factor 1: Direct vs wrapper usage
+    direct_usages = sum(
+        1 for u in usages if u.call_type == "call" and not u.enclosing_scope.startswith("wrapper")
+    )
+    wrapper_usages = sum(
+        1
+        for u in usages
+        if "wrapper" in u.enclosing_scope.lower() or "helper" in u.enclosing_scope.lower()
+    )
+    if wrapper_usages > 0:
+        risk_factors.append(f"{wrapper_usages} usage(s) in wrapper/helper functions")
+        score -= 15
+    if direct_usages > 0:
+        reasons.append(f"{direct_usages} direct SDK call(s) detected")
+        score += 10
+
+    # Factor 2: Test coverage
+    if impact.impact_plan and impact.impact_plan.affected_code_has_tests:
+        reasons.append("Affected code has test coverage")
+        score += 20
+    else:
+        risk_factors.append("No test coverage for affected code")
+        score -= 20
+
+    # Factor 3: Number of affected files
+    num_files = len(impact.affected_files)
+    if num_files <= 3:
+        reasons.append(f"Only {num_files} file(s) affected")
+        score += 10
+    elif num_files > 10:
+        risk_factors.append(f"{num_files} files affected - large migration surface")
+        score -= 15
+
+    # Factor 4: Change complexity
+    complex_changes = sum(
+        1
+        for m in impact.matched_changes
+        if m.change.change_type in {ChangeType.SIGNATURE_CHANGE, ChangeType.BEHAVIOR_CHANGE}
+    )
+    if complex_changes > 0:
+        risk_factors.append(f"{complex_changes} complex change(s) (signature/behavior)")
+        score -= 15
+    else:
+        reasons.append("Only simple changes (removal/rename/deprecation)")
+        score += 5
+
+    # Factor 5: Dynamic/indirect calls (heuristic)
+    dynamic_indicators = sum(
+        1 for u in usages if "getattr" in u.code_snippet or ".__getattr__" in u.code_snippet
+    )
+    if dynamic_indicators > 0:
+        risk_factors.append("Possible dynamic call patterns detected")
+        score -= 10
+
+    # Factor 6: Blast radius
+    if impact.blast_radius.score <= 20:
+        reasons.append(f"Low blast radius ({impact.blast_radius.score}/100)")
+        score += 10
+    elif impact.blast_radius.score > 50:
+        risk_factors.append(f"High blast radius ({impact.blast_radius.score}/100)")
+        score -= 10
+
+    score = max(0, min(100, score))
+
+    if score >= 70:
+        confidence = MigrationConfidence.HIGH
+        strategy = MigrationStrategy.AST_TRANSFORM
+    elif score >= 40:
+        confidence = MigrationConfidence.MEDIUM
+        strategy = MigrationStrategy.CODING_AGENT
+    else:
+        confidence = MigrationConfidence.LOW
+        strategy = MigrationStrategy.MANUAL
+
+    return MigrationAssessment(
+        confidence=confidence,
+        strategy=strategy,
+        score=score,
+        reasons=tuple(reasons),
+        risk_factors=tuple(risk_factors),
+    )

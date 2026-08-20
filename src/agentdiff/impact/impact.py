@@ -17,16 +17,14 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable
 
 from agentdiff.pathing import normalize_relative_path
 from agentdiff.trust.compiler import load_trust_lock
+from agentdiff.trust.graph import RepoImpactGraph
 from agentdiff.trust.inspect import _is_security_path
 
 from .cache import ProofCacheKey
-
-if TYPE_CHECKING:
-    from agentdiff.trust.graph import RepoImpactGraph
 
 _HIGH_RISK_TRIGGERS = (
     ".github/",
@@ -163,6 +161,9 @@ class ProofImpactPlan:
     full_build: tuple[tuple[str, ...], ...]
     full_tests: tuple[tuple[str, ...], ...]
     plan_digest: str
+    # Verification coverage awareness
+    affected_code_has_tests: bool = True
+    coverage_warning: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -179,6 +180,8 @@ class ProofImpactPlan:
             "full_build": [list(cmd) for cmd in self.full_build],
             "full_tests": [list(cmd) for cmd in self.full_tests],
             "plan_digest": self.plan_digest,
+            "affected_code_has_tests": self.affected_code_has_tests,
+            "coverage_warning": self.coverage_warning,
         }
 
 
@@ -196,6 +199,11 @@ class ImpactEngine:
         self.graph = graph
         self.proof_plan = proof_plan
 
+    def _ensure_graph(self) -> RepoImpactGraph:
+        if self.graph is None:
+            self.graph = RepoImpactGraph.from_inspection(self.root)
+        return self.graph
+
     def plan(self, changed_paths: Iterable[str]) -> ProofImpactPlan:
         normalized = tuple(sorted(normalize_relative_path(path) for path in changed_paths))
         triggers: list[str] = []
@@ -206,10 +214,11 @@ class ImpactEngine:
                 any_full = True
                 triggers.append(path)
 
-        impact = self.graph.affected(normalized) if self.graph is not None else None
-        modules = impact.modules if impact is not None else ()
-        tests = self._test_paths(impact.tests) if impact is not None else ()
-        build_targets = impact.build_targets if impact is not None else ()
+        graph = self._ensure_graph()
+        impact = graph.affected(normalized)
+        modules = impact.modules
+        tests = self._test_paths(impact.tests)
+        build_targets = impact.build_targets
 
         full_setup, full_build, full_tests, static_commands = self._phases()
         level = "full" if any_full or not normalized else "targeted"
@@ -221,6 +230,28 @@ class ImpactEngine:
             test_commands = targeted if targeted else full_tests
             if not test_commands:
                 level = "static"
+
+        # Verification coverage awareness: check if affected code has test coverage
+        affected_code_has_tests = True
+        coverage_warning: str | None = None
+        if modules and not tests:
+            affected_code_has_tests = False
+            mods = ", ".join(sorted(modules))
+            coverage_warning = (
+                f"No tests found for affected modules: {mods}. Verification confidence reduced."
+            )
+        elif modules and tests:
+            # Check if any affected module has no covering tests
+            if self.graph is not None:
+                uncovered_modules = [
+                    m for m in modules if not self.graph.module_to_tests.get(m, ())
+                ]
+                if uncovered_modules:
+                    affected_code_has_tests = False
+                    coverage_warning = (
+                        f"Modules without test coverage: {', '.join(sorted(uncovered_modules))}. "
+                        "Verification confidence reduced."
+                    )
 
         unsigned = {
             "schema_version": 1,
@@ -245,6 +276,8 @@ class ImpactEngine:
             full_build=full_build,
             full_tests=full_tests,
             plan_digest=_canonical_digest(unsigned),
+            affected_code_has_tests=affected_code_has_tests,
+            coverage_warning=coverage_warning,
         )
 
     def _test_paths(self, test_module_ids: Iterable[str]) -> tuple[str, ...]:
