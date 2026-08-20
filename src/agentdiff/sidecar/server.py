@@ -378,25 +378,37 @@ class _SidecarHTTPServer(HTTPServer):
 
 
 def serve(root: str | os.PathLike[str], *, port: int = 0, foreground: bool = True) -> None:
-    sidecar = SidecarServer(root, port=port)
-    if not foreground:
-        _daemonize(sidecar)
-        return
-    httpd = _SidecarHTTPServer(("127.0.0.1", sidecar.port), sidecar)
-    actual_port = int(httpd.server_address[1])
-    sidecar.port = actual_port
-    (sidecar.state_dir / "port").write_text(str(actual_port), encoding="utf-8")
-    (sidecar.state_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
     if os.name != "nt":
-        (sidecar.state_dir / "port").chmod(0o600)
-        (sidecar.state_dir / "pid").chmod(0o600)
-    print(f"agentdiff sidecar listening on 127.0.0.1:{actual_port} (root={sidecar.root})")
+        import signal
+
+        with contextlib.suppress(OSError, AttributeError):
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
     try:
-        while not sidecar._stopping.is_set():
-            httpd.handle_request()
-    finally:
-        httpd.server_close()
-        _cleanup_state(sidecar.state_dir)
+        sidecar = SidecarServer(root, port=port)
+        if not foreground:
+            _daemonize(sidecar)
+            return
+        httpd = _SidecarHTTPServer(("127.0.0.1", sidecar.port), sidecar)
+        actual_port = int(httpd.server_address[1])
+        sidecar.port = actual_port
+        (sidecar.state_dir / "port").write_text(str(actual_port), encoding="utf-8")
+        (sidecar.state_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        if os.name != "nt":
+            (sidecar.state_dir / "port").chmod(0o600)
+            (sidecar.state_dir / "pid").chmod(0o600)
+        print(
+            f"agentdiff sidecar listening on 127.0.0.1:{actual_port} (root={sidecar.root})",
+            flush=True,
+        )
+        try:
+            while not sidecar._stopping.is_set():
+                httpd.handle_request()
+        finally:
+            httpd.server_close()
+            _cleanup_state(sidecar.state_dir)
+    except Exception as error:
+        print(f"FATAL: sidecar serve failed: {error}", file=sys.stderr, flush=True)
+        raise
 
 
 def _daemonize(sidecar: SidecarServer) -> None:

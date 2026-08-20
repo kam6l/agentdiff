@@ -205,7 +205,10 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> None:
         if os.name == "nt":
             kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
         else:
+            import signal
+
             kwargs["start_new_session"] = True
+            kwargs["preexec_fn"] = lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN)
         subprocess.Popen(argv, **kwargs)  # nosec B603
     finally:
         log_file.close()

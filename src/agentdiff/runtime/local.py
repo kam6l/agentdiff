@@ -247,29 +247,32 @@ class LocalRuntime:
         owned: dict[tuple[int, float], OwnedProcess],
     ) -> None:
         self._observe_process_tree(root_pid, owned)
-        for process in psutil.process_iter(["pid", "create_time", "ppid"]):
-            with suppress(psutil.NoSuchProcess, psutil.AccessDenied):
-                pid = int(process.info["pid"])
-                parent_pid = process.info.get("ppid")
-                create_time = float(process.info["create_time"])
-                matching_parent = parent_pid is not None and any(
-                    owned_pid == parent_pid and create_time >= owned_created
-                    for owned_pid, owned_created in owned
-                )
-                matching_session = False
-                if os.name == "posix" and hasattr(os, "getsid"):
-                    with suppress(OSError):
-                        matching_session = os.getsid(pid) == root_pid
-                if matching_parent or matching_session:
-                    owned.setdefault(
-                        (pid, create_time),
-                        OwnedProcess(
-                            pid=pid,
-                            create_time=create_time,
-                            parent_pid=parent_pid,
-                            relation="reparented_descendant",
-                        ),
+        try:
+            for process in psutil.process_iter(["pid", "create_time", "ppid"]):
+                with suppress(psutil.Error, OSError, ValueError, TypeError):
+                    pid = int(process.info["pid"])
+                    parent_pid = process.info.get("ppid")
+                    create_time = float(process.info["create_time"])
+                    matching_parent = parent_pid is not None and any(
+                        owned_pid == parent_pid and create_time >= owned_created
+                        for owned_pid, owned_created in owned
                     )
+                    matching_session = False
+                    if os.name == "posix" and hasattr(os, "getsid"):
+                        with suppress(OSError):
+                            matching_session = os.getsid(pid) == root_pid
+                    if matching_parent or matching_session:
+                        owned.setdefault(
+                            (pid, create_time),
+                            OwnedProcess(
+                                pid=pid,
+                                create_time=create_time,
+                                parent_pid=parent_pid,
+                                relation="reparented_descendant",
+                            ),
+                        )
+        except (psutil.Error, OSError):
+            pass
 
     def cleanup(
         self,
