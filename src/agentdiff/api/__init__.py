@@ -1,6 +1,18 @@
 """Self-Maintaining APIs: AST scanning, breaking change matching, and migration impact."""
 
+from agentdiff.api.manifest import (
+    AffectedSymbols,
+    APIChangeManifest,
+    ManifestSource,
+    MigrationStrategyConfig,
+    MigrationStrategyType,
+    ReplacementSymbols,
+    SourceType,
+    get_builtin_manifest,
+    list_builtin_manifests,
+)
 from agentdiff.api.matcher import APIMatcher
+from agentdiff.api.migrate import MigrationEngine
 from agentdiff.api.models import (
     APIChange,
     APIUsage,
@@ -8,9 +20,14 @@ from agentdiff.api.models import (
     ChangeType,
     MatchedChange,
     MigrationAssessment,
+    MigrationCertificate,
     MigrationConfidence,
     MigrationImpact,
+    MigrationPlan,
+    MigrationResult,
+    MigrationStatus,
     MigrationStrategy,
+    VerificationLevel,
     assess_migration_confidence,
 )
 from agentdiff.api.providers import (
@@ -23,6 +40,13 @@ from agentdiff.api.providers import (
     list_providers,
 )
 from agentdiff.api.scanner import APIScanner
+from agentdiff.api.transforms import (
+    OpenAIChatToResponsesTransform,
+    OpenAILegacyChatCompletionTransform,
+    get_transform,
+    get_transforms_for_usage,
+    list_transforms,
+)
 from agentdiff.api.version_detector import (
     SDKVersionInfo,
     detect_installed_sdk_versions,
@@ -31,25 +55,45 @@ from agentdiff.api.version_detector import (
 
 __all__ = [
     "APIChange",
+    "APIChangeManifest",
     "APIMatcher",
     "APIProvider",
     "APIScanner",
     "APIUsage",
+    "AffectedSymbols",
     "ChangeSeverity",
     "ChangeType",
+    "ManifestSource",
     "MatchedChange",
     "MigrationAssessment",
+    "MigrationCertificate",
     "MigrationConfidence",
+    "MigrationEngine",
     "MigrationImpact",
+    "MigrationPlan",
+    "MigrationResult",
+    "MigrationStatus",
     "MigrationStrategy",
+    "MigrationStrategyConfig",
+    "MigrationStrategyType",
+    "OpenAIChatToResponsesTransform",
+    "OpenAILegacyChatCompletionTransform",
     "OpenAIProvider",
+    "ReplacementSymbols",
     "SDKVersionInfo",
+    "SourceType",
     "StripeProvider",
+    "VerificationLevel",
     "assess_migration_confidence",
     "detect_installed_sdk_versions",
     "get_all_providers",
+    "get_builtin_manifest",
     "get_provider",
     "get_providers_for_selection",
+    "get_transform",
+    "get_transforms_for_usage",
     "is_version_affected",
+    "list_builtin_manifests",
     "list_providers",
+    "list_transforms",
 ]
