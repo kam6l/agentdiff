@@ -154,17 +154,22 @@ def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
     """Return a client, starting the daemon in the background if needed."""
     resolved_root = Path(root).expanduser().resolve(strict=True)
     state_dir = resolved_root / ".agentdiff" / "sidecar"
-    client = None
     try:
         client = SidecarClient(resolved_root, timeout=5.0)
         client.status()
         return client
     except SidecarError:
         pass
-    _spawn_daemon(resolved_root)
+    proc = _spawn_daemon(resolved_root)
     deadline = time.monotonic() + 20.0
     last_error: SidecarError | None = None
     while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            log_file = state_dir / "daemon.log"
+            log_content = (
+                log_file.read_text(encoding="utf-8", errors="replace") if log_file.is_file() else ""
+            )
+            raise SidecarError(f"sidecar process exited with code {proc.returncode}: {log_content}")
         try:
             client = SidecarClient(resolved_root, timeout=5.0)
             client.status()
@@ -179,7 +184,7 @@ def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
     raise SidecarError(f"sidecar did not start: {last_error}{log_text}")
 
 
-def _spawn_daemon(root: str | os.PathLike[str]) -> None:
+def _spawn_daemon(root: str | os.PathLike[str]) -> subprocess.Popen[Any]:
     resolved_root = Path(root).expanduser().resolve(strict=True)
     state_dir = resolved_root / ".agentdiff" / "sidecar"
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -207,8 +212,8 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> None:
 
         if os.name == "nt":
             kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-        else:
+        elif sys.version_info < (3, 14):
             kwargs["start_new_session"] = True
-        subprocess.Popen(argv, **kwargs)  # nosec B603
+        return subprocess.Popen(argv, **kwargs)  # nosec B603
     finally:
         log_file.close()
