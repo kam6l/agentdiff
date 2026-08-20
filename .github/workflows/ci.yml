@@ -16,7 +16,6 @@ concurrency:
 
 env:
   UV_VERSION: "latest"
-  UV_LOCKED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
@@ -54,7 +53,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install test dependencies
-        run: uv sync --locked --group dev --python ${{ matrix.python-version }}
+        run: uv sync --group dev --python ${{ matrix.python-version }}
 
       - name: Run tests
         run: >-
@@ -87,7 +86,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
-        run: uv sync --locked --group dev --extra langchain
+        run: uv sync --group dev --extra langchain
 
       - name: Check formatting
         run: uv run ruff format --check src tests examples benchmarks scripts
@@ -117,11 +116,11 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
-        run: uv sync --locked --group security
+        run: uv sync --group security
 
       - name: Export runtime dependency graph
         run: >-
-          uv export --locked --no-dev --no-emit-project --no-annotate --no-header
+          uv export --no-dev --no-emit-project --no-annotate --no-header
           --format requirements-txt --output-file /tmp/agentdiff-runtime-requirements.txt
 
       - name: Audit runtime dependencies
@@ -160,7 +159,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
-        run: uv sync --locked --group docs
+        run: uv sync --group docs
 
       - name: Build strict documentation
         env:
@@ -193,7 +192,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
-        run: uv sync --locked --group dev
+        run: uv sync --group dev
 
       - name: Run adversarial local regression cases
         run: uv run python3 benchmarks/safetybench.py --output recovery-regression.json
@@ -222,7 +221,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
-        run: uv sync --locked --group build
+        run: uv sync --group build
 
       - name: Build source and wheel distributions
         run: uv build
