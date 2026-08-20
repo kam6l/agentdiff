@@ -151,49 +151,61 @@ class SidecarClient:
 
 def ensure_sidecar(root: str | os.PathLike[str]) -> SidecarClient:
     """Return a client, starting the daemon in the background if needed."""
+    resolved_root = Path(root).expanduser().resolve(strict=True)
+    state_dir = resolved_root / ".agentdiff" / "sidecar"
     client = None
     try:
-        client = SidecarClient(root, timeout=5.0)
+        client = SidecarClient(resolved_root, timeout=5.0)
         client.status()
         return client
     except SidecarError:
         pass
-    _spawn_daemon(root)
+    _spawn_daemon(resolved_root)
     deadline = time.monotonic() + 20.0
     last_error: SidecarError | None = None
     while time.monotonic() < deadline:
         try:
-            client = SidecarClient(root, timeout=5.0)
+            client = SidecarClient(resolved_root, timeout=5.0)
             client.status()
             return client
         except SidecarError as error:
             last_error = error
             time.sleep(0.25)
-    raise SidecarError(f"sidecar did not start: {last_error}")
+    log_text = ""
+    log_file = state_dir / "daemon.log"
+    if log_file.is_file():
+        log_text = f" (daemon log: {log_file.read_text(encoding='utf-8', errors='replace')[-500:]})"
+    raise SidecarError(f"sidecar did not start: {last_error}{log_text}")
 
 
 def _spawn_daemon(root: str | os.PathLike[str]) -> None:
-    state_dir = Path(root).expanduser().resolve(strict=True) / ".agentdiff" / "sidecar"
+    resolved_root = Path(root).expanduser().resolve(strict=True)
+    state_dir = resolved_root / ".agentdiff" / "sidecar"
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     executable = sys.executable
     module = "agentdiff.sidecar.server"
-    argv = [executable, "-m", module, "--root", str(root)]
-    kwargs: dict[str, Any] = {
-        "shell": False,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-        "stdin": subprocess.DEVNULL,
-    }
-    env = dict(os.environ)
-    src_dir = str(Path(__file__).resolve().parent.parent.parent)
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_dir
-    kwargs["env"] = env
+    argv = [executable, "-u", "-m", module, "--root", str(resolved_root)]
+    log_file = open(state_dir / "daemon.log", "a", encoding="utf-8")  # noqa: SIM115
+    try:
+        kwargs: dict[str, Any] = {
+            "shell": False,
+            "stdout": log_file,
+            "stderr": log_file,
+            "stdin": subprocess.DEVNULL,
+            "close_fds": True,
+        }
+        env = dict(os.environ)
+        src_dir = str(Path(__file__).resolve().parent.parent.parent)
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = src_dir
+        kwargs["env"] = env
 
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-    else:
-        kwargs["start_new_session"] = True
-    subprocess.Popen(argv, **kwargs)  # nosec B603
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        else:
+            kwargs["start_new_session"] = True
+        subprocess.Popen(argv, **kwargs)  # nosec B603
+    finally:
+        log_file.close()

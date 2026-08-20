@@ -373,6 +373,7 @@ class _SidecarHandler(BaseHTTPRequestHandler):
 class _SidecarHTTPServer(HTTPServer):
     def __init__(self, address: tuple[str, int], sidecar: SidecarServer) -> None:
         self.sidecar = sidecar
+        self.timeout = 0.5
         super().__init__(address, _SidecarHandler)
 
 
