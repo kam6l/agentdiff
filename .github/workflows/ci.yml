@@ -83,7 +83,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install quality and LangChain dependencies
@@ -113,7 +113,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install security tooling
@@ -121,7 +121,7 @@ jobs:
 
       - name: Export runtime dependency graph
         run: >-
-          uv export --locked --no-dev --no-emit-project --no-annotate --no-header
+          uv export --locked --no-dev --no-emit-project --no-header
           --format requirements-txt --output-file /tmp/agentdiff-runtime-requirements.txt
 
       - name: Audit runtime dependencies
@@ -156,7 +156,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install documentation dependencies
@@ -189,7 +189,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install benchmark dependencies
@@ -218,7 +218,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-          python-version: "3.14"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install build tools
@@ -235,7 +235,7 @@ jobs:
 
       - name: Smoke-test the wheel in a clean environment
         run: |
-          uv venv /tmp/agentdiff-wheel --python 3.14
+          uv venv /tmp/agentdiff-wheel --python 3.12
           uv pip install --python /tmp/agentdiff-wheel/bin/python dist/*.whl
           /tmp/agentdiff-wheel/bin/python -c "import agentdiff; print(agentdiff.__version__)"
           /tmp/agentdiff-wheel/bin/agentdiff --help
