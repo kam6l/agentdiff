@@ -132,44 +132,49 @@ search:
       <div class="ad-pipeline" aria-label="AgentDiff pipeline stages">
         <article class="ad-pipeline__step">
           <div class="ad-pipeline__badge">STEP 01</div>
-          <strong>API change detected</strong>
+          <h3>API change detected</h3>
           <p>Provider deprecation matched against structured change catalogs with SDK version awareness.</p>
-          <div class="ad-pipeline__code"><code>openai 0.28 → 1.0 (ChatCompletion removal)</code></div>
+          <div class="ad-pipeline__code"><code>openai 0.28 → 1.0 (ChatCompletion)</code></div>
         </article>
 
         <article class="ad-pipeline__step">
           <div class="ad-pipeline__badge">STEP 02</div>
-          <strong>Affected code found</strong>
+          <h3>Affected code found</h3>
           <p>AST analysis locates every call site in your repository. Provenance-tracked, zero false positives.</p>
-          <div class="ad-pipeline__code"><code>src/llm.py:42 · src/agent.py:118 · 3 call sites</code></div>
+          <div class="ad-pipeline__code"><code>src/llm.py:42 · 3 call sites</code></div>
         </article>
 
         <article class="ad-pipeline__step">
           <div class="ad-pipeline__badge">STEP 03</div>
-          <strong>Blast radius scored</strong>
+          <h3>Blast radius scored</h3>
           <p>Deterministic 0–100 score accounting for affected files, dependency risk, and policy rules.</p>
-          <div class="ad-pipeline__score"><strong>72</strong><small>/100 · HIGH IMPACT</small></div>
+          <div class="ad-pipeline__score">
+            <div class="ad-pipeline__score-num"><strong>72</strong><small>/100</small></div>
+            <span class="ad-pipeline__score-tag">HIGH IMPACT</span>
+          </div>
         </article>
 
         <article class="ad-pipeline__step">
           <div class="ad-pipeline__badge">STEP 04</div>
-          <strong>Migration generated</strong>
+          <h3>Migration generated</h3>
           <p>Deterministic AST transforms for known patterns; supervised agent fallback for complex logic.</p>
-          <div class="ad-pipeline__code"><code>AST transform: 3 files modified · 0 hallucinated</code></div>
+          <div class="ad-pipeline__code"><code>AST transform: 3 files · 0 hallucinated</code></div>
         </article>
 
         <article class="ad-pipeline__step">
           <div class="ad-pipeline__badge">STEP 05</div>
-          <strong>Clean-room verification</strong>
+          <h3>Clean-room verification</h3>
           <p>Patch replayed in an isolated worktree. Syntax, types, targeted tests, and full suite executed.</p>
-          <div class="ad-pipeline__code"><code>V0 syntax ✓  V1 types ✓  V2 targeted ✓  V3 full ✓</code></div>
+          <div class="ad-pipeline__code"><code>V0 syntax ✓  V1 types ✓  V2 tests ✓</code></div>
         </article>
 
         <article class="ad-pipeline__step ad-pipeline__step--final">
           <div class="ad-pipeline__badge ad-pipeline__badge--lime">STEP 06</div>
-          <strong>Trusted PR delivered</strong>
+          <h3>Trusted PR delivered</h3>
           <p>PR opened with machine-readable Migration Certificate, test results, digest, and rollback instructions.</p>
-          <div class="ad-pipeline__verdict"><b>VERIFIED BY AGENTDIFF</b></div>
+          <div class="ad-pipeline__verdict">
+            <b>VERIFIED BY AGENTDIFF</b>
+          </div>
         </article>
       </div>
     </section>
