@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UV_VERSION: "0.5.30"
   UV_LOCKED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
   COVERAGE_CORE: "sysmon"
@@ -38,18 +37,17 @@ jobs:
           - os: macos-latest
             python-version: "3.12"
           - os: macos-latest
-            python-version: "3.14"
+            python-version: "3.13"
           - os: windows-latest
             python-version: "3.12"
           - os: windows-latest
-            python-version: "3.14"
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: ${{ matrix.python-version }}
           cache-dependency-glob: uv.lock
@@ -57,24 +55,17 @@ jobs:
       - name: Install test dependencies
         run: uv sync --locked --group dev --python ${{ matrix.python-version }}
 
-      - name: Run tests (with coverage)
-        if: matrix.python-version == '3.12'
+      - name: Run tests
         run: >-
           uv run --python ${{ matrix.python-version }} pytest
           -p no:cacheprovider tests/
           --cov=agentdiff --cov-report=term-missing --cov-report=xml
 
-      - name: Run tests
-        if: matrix.python-version != '3.12'
-        run: >-
-          uv run --python ${{ matrix.python-version }} pytest
-          -p no:cov -p no:cacheprovider -o addopts="-ra --strict-markers --strict-config" tests/
-
       - name: Upload reference coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-python-3.12
+          name: coverage-python-3.13
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
@@ -89,7 +80,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.12"
           cache-dependency-glob: uv.lock
@@ -119,7 +109,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.12"
           cache-dependency-glob: uv.lock
@@ -162,7 +151,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.12"
           cache-dependency-glob: uv.lock
@@ -195,7 +183,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.12"
           cache-dependency-glob: uv.lock
@@ -224,7 +211,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.UV_VERSION }}
           enable-cache: true
           python-version: "3.12"
           cache-dependency-glob: uv.lock

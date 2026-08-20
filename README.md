@@ -7,8 +7,8 @@
 <h1 align="center">AgentDiff</h1>
 
 <p align="center">
-  <strong>Zero-touch trust automation for coding agents.</strong><br>
-  Understand the repository, run the agent safely, prove the minimum strong result, retry in scope, and ask the human only when the trust boundary changes.
+  <strong>The trust layer for self-maintaining APIs.</strong><br>
+  When an API changes, AgentDiff finds affected customer code, generates or supervises the migration, independently proves the patch in a clean room, and opens a reviewable PR with evidence.
 </p>
 
 <p align="center">
@@ -36,29 +36,43 @@ The documentation shell is responsive across desktop and mobile, with an indexed
 > [!IMPORTANT]
 > The local runtime observes a host subprocess; it is not a kernel sandbox and does not block network access. Recovery covers only eligible filesystem changes. Use a real isolation backend for untrusted code.
 
-## Why install it?
+## Why AgentDiff?
 
-A command can exit successfully while leaving one intended edit, one dependency change, and one protected secret file. AgentDiff records the real workspace state independently of the agent, classifies every mutation with deterministic policy, explains the risk score, proves the patch in a clean room, retries failures in scope, and promotes only proven changes — interrupting the human only when the trust boundary changes.
+API providers (Stripe, OpenAI, etc.) deprecate endpoints, shut down models, and release breaking SDK versions. Customers are left with broken integrations, manual migration guides, and no verification that the migration actually works.
 
-## Zero-touch automation
+AgentDiff solves this by making **verified migrations** the default:
 
-Normal use can become:
+1. **Scan** — AST-based detection of every API usage in customer code (provenance-tracked, no false positives)
+2. **Match** — Deterministic matching against provider breaking-change catalogs with SDK version awareness
+3. **Migrate** — Deterministic AST transforms for known migrations; coding agent for complex ones (all patches untrusted until proven)
+4. **Prove** — Clean-room verification in isolated workspace: syntax, types, targeted tests, full repo tests
+5. **Certify** — Machine-readable Migration Certificate with blast radius, test results, proof digest, rollback info
+6. **Deliver** — Conflict-safe promotion to a GitHub PR with full evidence attached
+
+The coding agent is probabilistic. AgentDiff is the deterministic verifier that decides whether the result is trustworthy.
+
+## Self-Maintaining APIs (MVP)
+
+AgentDiff analyzes Python AST to detect third-party API usages (starting with **OpenAI** and **Stripe**), matches usages against known breaking changes, and calculates migration blast radius and test proof requirements:
+
+```bash
+# Scan repository for all external API calls
+agentdiff api scan --root .
+
+# Check for breaking changes, calculate impact, and report remediation
+agentdiff api check --root . --fail-on high
+```
+
+## Zero-Touch Trust Engine (Foundation)
+
+The same trust infrastructure that verifies API migrations also powers safe coding-agent automation:
 
 ```bash
 agentdiff init                          # compile canonical trust configuration
 agentdiff wrap -- codex exec "Fix authentication timeout"
 ```
 
-AgentDiff then automatically understands the repository, prepares a private
-warm workspace, observes and enforces the agent's work, runs the minimum
-strong proof (impact-aware, cache-backed), retries failures while the repair
-stays in scope, and promotes the proven result. Or run the sidecar and call
-your agent directly:
-
-```bash
-agentdiff init --daemon
-codex exec "Fix authentication timeout"
-```
+AgentDiff automatically understands the repository, prepares a private warm workspace, observes and enforces the agent's work, runs the minimum strong proof (impact-aware, cache-backed), retries failures while the repair stays in scope, and promotes the proven result — interrupting the human only when the trust boundary changes.
 
 | Outcome | Action |
 |---|---|
@@ -67,16 +81,11 @@ codex exec "Fix authentication timeout"
 | Dependency added / CI changed / config changed | **HUMAN** review |
 | Agent requests new scope / high future risk | **HUMAN** |
 
-The [trust pipeline](https://kam6l.github.io/agentdiff/docs/concepts/trust-pipeline/)
-remains the security foundation. New systems: [trust compiler](https://kam6l.github.io/agentdiff/docs/concepts/trust-compiler/),
-[impact-aware proof + cache](https://kam6l.github.io/agentdiff/docs/concepts/impact-proof/),
-[automatic repair loop](https://kam6l.github.io/agentdiff/docs/concepts/repair-loop/),
-[warm workspaces](https://kam6l.github.io/agentdiff/docs/concepts/warm-workspaces/), and the
-[zero-touch sidecar](https://kam6l.github.io/agentdiff/docs/concepts/zero-touch/).
+The [trust pipeline](https://kam6l.github.io/agentdiff/docs/concepts/trust-pipeline/) remains the security foundation. Systems: [trust compiler](https://kam6l.github.io/agentdiff/docs/concepts/trust-compiler/), [impact-aware proof + cache](https://kam6l.github.io/agentdiff/docs/concepts/impact-proof/), [automatic repair loop](https://kam6l.github.io/agentdiff/docs/concepts/repair-loop/), [warm workspaces](https://kam6l.github.io/agentdiff/docs/concepts/warm-workspaces/), and the [zero-touch sidecar](https://kam6l.github.io/agentdiff/docs/concepts/zero-touch/).
 
 ## Start in under a minute
 
-AgentDiff `0.1.0` requires Python 3.12+ and is currently installed from source:
+AgentDiff `0.3.0` requires Python 3.12+ and is currently installed from source:
 
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
@@ -128,7 +137,7 @@ agentdiff rollback <run-id> --safe-only
 
 | Status | Surface |
 |---|---|
-| **Beta** | Local transactions, policy, capsules, verification, scoring, regular-file recovery, trust compiler, impact-aware proof + cache, warm workspaces, repair loop, sidecar (tested on Python 3.12-3.14) |
+| **Beta** | Local transactions, policy, capsules, verification, scoring, regular-file recovery, trust compiler, impact-aware proof + cache, warm workspaces, repair loop, sidecar (tested on Python 3.12-3.13) |
 | **Experimental** | Cortex evidence memory and provider routing, Anthropic `srt` adapter, transport-neutral MCP policy hook, LangChain callback, and the in-repository composite Action |
 | **Planned** | PyPI/binary releases, authenticated evidence, telemetry export, and a maintained hosted sandbox integration |
 
@@ -155,18 +164,6 @@ There is no hosted dashboard or hosted service: the sidecar is a local daemon, a
 | `agentdiff cortex ...` | Open the optional evidence-memory, skill-card, and provider tool namespace |
 
 The earlier `snapshot`, `diff`, and `eval` implementation remains importable for compatibility testing but is no longer exposed as a public CLI path.
-
-### Self-Maintaining APIs
-
-AgentDiff analyzes Python AST to detect third-party API usages (starting with **OpenAI** and **Stripe**), matches usages against known breaking changes, and calculates migration blast radius and test proof requirements without manual intervention:
-
-```bash
-# Scan repository for all external API calls
-agentdiff api scan --root .
-
-# Check for breaking changes, calculate impact, and report remediation
-agentdiff api check --root . --fail-on high
-```
 
 ### Optional Cortex tools
 
