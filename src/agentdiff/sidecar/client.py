@@ -202,10 +202,13 @@ def _spawn_daemon(root: str | os.PathLike[str]) -> subprocess.Popen[Any]:
         }
         env = dict(os.environ)
         src_dir = str(Path(__file__).resolve().parent.parent.parent)
-        if "PYTHONPATH" in env:
-            env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
-        else:
-            env["PYTHONPATH"] = src_dir
+        sys_paths = [str(p) for p in sys.path if p]
+        if src_dir not in sys_paths:
+            sys_paths.insert(0, src_dir)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        if existing_pythonpath:
+            sys_paths.append(existing_pythonpath)
+        env["PYTHONPATH"] = os.pathsep.join(sys_paths)
         env["PYTHONUNBUFFERED"] = "1"
         kwargs["env"] = env
         kwargs["cwd"] = str(resolved_root)

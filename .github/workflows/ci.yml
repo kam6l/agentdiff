@@ -68,7 +68,7 @@ jobs:
         if: matrix.python-version != '3.12'
         run: >-
           uv run --python ${{ matrix.python-version }} pytest
-          -p no:cacheprovider -o addopts="-ra --strict-markers --strict-config" tests/
+          -p no:cov -p no:cacheprovider -o addopts="-ra --strict-markers --strict-config" tests/
 
       - name: Upload reference coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
