@@ -145,7 +145,7 @@ def test_real_docker_openai_migration_proves_and_verifies_certificate(tmp_path: 
     assert result.unexpected_files == ()
     assert result.certificate is not None
     assert result.certificate.verified is True
-    assert result.certificate.git_base_sha not in {"", "unknown", "UNCOMMITTED"}
+    assert result.certificate.repository_base_sha not in {"", "unknown", "UNCOMMITTED"}
     assert (repository / "src" / "app.py").read_text(encoding="utf-8") == original
 
     certificate_path = (
