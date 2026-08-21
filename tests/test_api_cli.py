@@ -94,7 +94,7 @@ def test_cli_api_check_clean_repo(tmp_path: Path) -> None:
     (src / "modern.py").write_text(
         "from openai import OpenAI\nimport stripe\n"
         "client = OpenAI()\n"
-        "client.chat.completions.create(model='gpt-4o', messages=[])\n"
+        "client.responses.create(model='gpt-4o', input='hello')\n"
         "stripe.PaymentIntent.create(amount=1000, currency='usd')\n",
         encoding="utf-8",
     )

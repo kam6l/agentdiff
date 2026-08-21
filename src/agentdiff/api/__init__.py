@@ -1,5 +1,17 @@
 """Self-Maintaining APIs: AST scanning, breaking change matching, and migration impact."""
 
+from agentdiff.api.intel import (
+    ChangelogChange,
+    ChangelogParser,
+    IntelArtifact,
+    ManifestCandidate,
+    OpenAPIBreakingChange,
+    OpenAPIDiffAnalyzer,
+    ProviderIntelEngine,
+    SDKReleaseAnalyzer,
+    SDKReleaseChange,
+)
+
 from agentdiff.api.manifest import (
     AffectedSymbols,
     APIChangeManifest,
@@ -29,6 +41,13 @@ from agentdiff.api.models import (
     MigrationStrategy,
     VerificationLevel,
     assess_migration_confidence,
+)
+from agentdiff.api.plugins import (
+    ProviderPlugin,
+    discover_plugins,
+    install_plugin,
+    list_plugins,
+    load_plugin,
 )
 from agentdiff.api.providers import (
     APIProvider,
@@ -63,6 +82,10 @@ __all__ = [
     "AffectedSymbols",
     "ChangeSeverity",
     "ChangeType",
+    "ChangelogChange",
+    "ChangelogParser",
+    "IntelArtifact",
+    "ManifestCandidate",
     "ManifestSource",
     "MatchedChange",
     "MigrationAssessment",
@@ -79,6 +102,13 @@ __all__ = [
     "OpenAIChatToResponsesTransform",
     "OpenAILegacyChatCompletionTransform",
     "OpenAIProvider",
+    "OpenAPIBreakingChange",
+    "OpenAPIDiffAnalyzer",
+    "ProviderIntelEngine",
+    "ProviderPlugin",
+    "ReplacementSymbols",
+    "SDKReleaseAnalyzer",
+    "SDKReleaseChange",
     "ReplacementSymbols",
     "SDKVersionInfo",
     "SourceType",
@@ -86,12 +116,20 @@ __all__ = [
     "VerificationLevel",
     "assess_migration_confidence",
     "detect_installed_sdk_versions",
+    "discover_plugins",
     "get_all_providers",
     "get_builtin_manifest",
     "get_provider",
     "get_providers_for_selection",
     "get_transform",
     "get_transforms_for_usage",
+    "install_plugin",
+    "is_version_affected",
+    "list_builtin_manifests",
+    "list_plugins",
+    "list_providers",
+    "list_transforms",
+    "load_plugin",
     "is_version_affected",
     "list_builtin_manifests",
     "list_providers",

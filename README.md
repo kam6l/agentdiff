@@ -51,9 +51,11 @@ AgentDiff solves this by making **verified migrations** the default:
 
 The coding agent is probabilistic. AgentDiff is the deterministic verifier that decides whether the result is trustworthy.
 
-## Self-Maintaining APIs (MVP)
+## Self-Maintaining APIs
 
-AgentDiff analyzes Python AST to detect third-party API usages (starting with **OpenAI** and **Stripe**), matches usages against known breaking changes, and calculates migration blast radius and test proof requirements:
+AgentDiff turns API changes into verified migrations. The pipeline is:
+
+**Detect → Plan → Execute → Verify → Certify → Deliver**
 
 ```bash
 # Scan repository for all external API calls
@@ -61,7 +63,47 @@ agentdiff api scan --root .
 
 # Check for breaking changes, calculate impact, and report remediation
 agentdiff api check --root . --fail-on high
+
+# Generate + verify a migration in a private workspace, emit a certificate
+agentdiff api migrate --provider openai --change chat_to_responses
+
+# Turn upstream signals into validated manifest candidates
+agentdiff api intel --provider openai --changelog CHANGELOG.md
+
+# Install provider migration plugins
+agentdiff provider install stripe ./providers/stripe
+agentdiff provider list
 ```
+
+### Provider Intelligence Layer
+
+AgentDiff can ingest upstream signals and produce validated `APIChangeManifest`
+candidates — **suggestion only, never applied directly**:
+
+- `--changelog` — parse markdown changelogs for removals/deprecations/renames
+- `--openapi-before/--openapi-after` — diff two OpenAPI specs for breaking changes
+- `--release` — analyze SDK release notes
+- AI-assisted suggestions are accepted as candidates that must still pass
+  deterministic validation before they can drive a migration
+
+### Provider Plugin System
+
+Providers and community members ship migrations without touching core code:
+
+```
+providers/<name>/
+    metadata.yaml     # name, library, version
+    manifests/        # *.yaml APIChangeManifest files
+    transforms/       # python modules registering AST transforms
+    tests/            # optional plugin tests
+```
+
+### Trust model
+
+The coding agent (or AST transform) generates the migration. AgentDiff decides
+whether it is trustworthy — deterministic policy, blast radius, clean-room proof,
+and a MigrationCertificate recording exactly what was verified. **The AI is
+probabilistic; the trust decision is deterministic.**
 
 ## Zero-Touch Trust Engine (Foundation)
 
@@ -161,6 +203,9 @@ There is no hosted dashboard or hosted service: the sidecar is a local daemon, a
 | `agentdiff workspace status/warm/prune` | Trusted warm workspace snapshots |
 | `agentdiff policy init/validate/explain` | Create and inspect versioned policy |
 | `agentdiff api scan` / `check` | Self-maintaining API usage scanner and breaking change checker |
+| `agentdiff api migrate` | Generate and verify an API migration in a private workspace |
+| `agentdiff api intel` | Analyze changelog/OpenAPI/release signals into manifest candidates |
+| `agentdiff provider list` / `install` | Manage provider migration plugins |
 | `agentdiff cortex ...` | Open the optional evidence-memory, skill-card, and provider tool namespace |
 
 The earlier `snapshot`, `diff`, and `eval` implementation remains importable for compatibility testing but is no longer exposed as a public CLI path.

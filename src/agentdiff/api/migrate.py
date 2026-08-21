@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from agentdiff.api.certificate import write_certificate
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -28,12 +34,23 @@ from agentdiff.api.transforms import (
     get_transform,
     get_transforms_for_usage,
 )
+from agentdiff.api.verification import MigrationVerifier, VerificationResult, create_certificate
+from agentdiff.policy import load_policy, load_policy_file
+from agentdiff.workspace import WarmWorkspaceFactory, compute_identity
+
+
+@dataclass(frozen=True, slots=True)
+class RepairResult:
+    """Outcome of a bounded repair attempt on a failed migration."""
+
+    success: bool
+    verification: VerificationResult
+    errors: tuple[str, ...] = ()
 from agentdiff.policy import load_policy, load_policy_file
 from agentdiff.workspace import WarmWorkspaceFactory, compute_identity
 
 if TYPE_CHECKING:
     from agentdiff.api.models import MigrationImpact
-
 
 class MigrationEngine:
     """Orchestrates the end-to-end migration workflow."""
@@ -106,6 +123,20 @@ class MigrationEngine:
         manifest = self._load_manifest()
         assessment = assess_migration_confidence(tuple(usages), impact)
 
+        # Filter to only usages that match the manifest's affected symbols
+        affected_symbols = manifest.affected.symbols
+        migratable_usages = [
+            u
+            for u in usages
+            if u.symbol in affected_symbols or any(u.symbol.endswith(s) for s in affected_symbols)
+        ]
+        # Fall back to impact-matched usages when symbol filtering is too strict
+        if not migratable_usages and impact.matched_changes:
+            migratable_usages = [m.usage for m in impact.matched_changes]
+
+        # Create steps for each affected file/usage
+        steps: list[MigrationStep] = []
+        for i, usage in enumerate(migratable_usages):
         # Create steps for each affected file/usage
         steps: list[MigrationStep] = []
         for i, usage in enumerate(usages):
@@ -148,6 +179,8 @@ class MigrationEngine:
             provider=manifest.provider,
             change_id=manifest.change_id,
             manifest=manifest,
+            affected_usages=tuple(migratable_usages),
+            affected_files=tuple(sorted({u.filepath for u in migratable_usages})),
             affected_usages=tuple(usages),
             affected_files=impact.affected_files,
             assessment=assessment,
@@ -232,6 +265,7 @@ class MigrationEngine:
 
         return workspace, errors
 
+=======
     def verify_migration(
         self,
         plan: MigrationPlan,
@@ -294,6 +328,8 @@ class MigrationEngine:
         # 4. Create private workspace
         identity = compute_identity(self.root, policy=self.policy)
         factory = WarmWorkspaceFactory(self.root)
+        agent_workspace = factory.create_workspace(identity)
+        workspace = agent_workspace.path
         workspace = factory.ensure_base(identity).path
 
         # 5. Execute plan
@@ -307,6 +343,46 @@ class MigrationEngine:
                 errors=tuple(errors),
             )
 
+        # 6. Verify migration using MigrationVerifier
+        verifier = MigrationVerifier(
+            root=self.root,
+            plan=plan,
+            workspace=workspace,
+            policy=self.policy,
+        )
+        verification = verifier.verify()
+
+        if not verification.passed:
+            # Attempt repair if verification failed
+            repair_result = self._attempt_repair(plan, workspace, verification)
+            if repair_result.success:
+                # Re-verify after repair
+                verification = repair_result.verification
+                if not verification.passed:
+                    return MigrationResult(
+                        plan=plan,
+                        migration_status=MigrationStatus.FAILED,
+                        verification_level=verification.level,
+                        errors=tuple(verification.reasons) + tuple(repair_result.errors),
+                    )
+            else:
+                return MigrationResult(
+                    plan=plan,
+                    migration_status=MigrationStatus.FAILED,
+                    verification_level=verification.level,
+                    errors=tuple(verification.reasons),
+                )
+
+        # 7. Generate certificate
+        certificate = create_certificate(plan, workspace, verification, impact)
+        write_certificate(certificate, self.root)
+
+        return MigrationResult(
+            plan=plan,
+            migration_status=MigrationStatus.COMPLETED,
+            verification_level=verification.level,
+            proof_digest=verification.proof_digest,
+            capsule_id=verification.capsule_id,
         # 6. Verify migration
         verification_level, proof_digest, capsule_id = self.verify_migration(plan, workspace)
 
@@ -339,6 +415,24 @@ class MigrationEngine:
             certificate=certificate,
             errors=tuple(errors),
         )
+
+    def _attempt_repair(
+        self,
+        plan: MigrationPlan,
+        workspace: Path,
+        verification: VerificationResult,
+    ) -> "RepairResult":
+        """Attempt to repair a failed migration using RepairLoop."""
+        # The full RepairLoop integration requires a repair command builder
+        # (coding agent or deterministic re-transform). Until that is wired,
+        # a failed migration is reported with its failure evidence intact.
+        del plan, workspace
+        return RepairResult(
+            success=False,
+            verification=verification,
+            errors=("Repair not yet fully implemented",),
+        )
+
 
     def _compute_migration_digest(self, plan: MigrationPlan, workspace: Path) -> str:
         """Compute a content hash of the migration."""
