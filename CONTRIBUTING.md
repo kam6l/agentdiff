@@ -13,7 +13,7 @@ AgentDiff welcomes focused fixes, adversarial tests, documentation improvements,
 ```bash
 git clone https://github.com/kam6l/agentdiff.git
 cd agentdiff
-uv sync --locked --all-groups
+uv sync --locked --all-groups --extra langchain
 ```
 
 ## Change workflow
@@ -21,14 +21,14 @@ uv sync --locked --all-groups
 1. Create a focused branch from `main`.
 2. Add a regression test that demonstrates the missing behavior.
 3. Implement the smallest complete change.
-4. Update `README.md`, `docs_src/`, examples, and security guidance when public behavior changes.
-5. Run the local quality gates documented in [the contributor guide](docs_src/contributing.md).
+4. Update `README.md`, examples, security guidance, and the separate React documentation project when public behavior changes.
+5. Run the local quality gates documented in `README.md`.
 6. Open a pull request that states behavior, trust-boundary impact, limitations, and real verification output.
 
 ## Security-sensitive changes
 
 Scanner, policy, persistence, process, redaction, and rollback changes require tests for failure and refusal paths—not only success paths. Recovery must preserve current data when identity or post-run equality is uncertain.
 
-Do not commit generated `site/`, coverage, cache, virtual-environment, distribution, or `.agentdiff/` run artifacts.
+Do not commit coverage, cache, virtual-environment, distribution, or `.agentdiff/` run artifacts. The product website and React documentation source live in the separate `agentdiff-web` project; this Python repository has no generated website tree.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

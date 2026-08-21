@@ -413,6 +413,7 @@ def test_docker_runtime_security_defaults_do_not_mount_host_or_socket(tmp_path: 
     assert "--cap-drop" in argv and "ALL" in argv
     assert "no-new-privileges" in argv
     assert argv[argv.index("--network") + 1] == "none"
+    assert argv[argv.index("--mount") + 1] == (f"type=bind,src={workspace},dst=/workspace")
     assert str(tmp_path) not in argv
     assert "/var/run/docker.sock" not in " ".join(argv)
     assert config["host_repository_mounted"] is False

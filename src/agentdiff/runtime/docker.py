@@ -211,7 +211,9 @@ class DockerRuntime:
         user: str,
         command: tuple[str, ...],
     ) -> list[str]:
-        mount = f"type=bind,src={workspace},dst=/workspace,rw"
+        # Writable is the default for a bind mount. Docker 28 rejects a bare
+        # `rw` field in the key/value `--mount` syntax.
+        mount = f"type=bind,src={workspace},dst=/workspace"
         argv = [
             self.executable,
             "create",

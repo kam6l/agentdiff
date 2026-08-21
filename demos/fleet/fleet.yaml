@@ -1,0 +1,11 @@
+version: 1
+campaign: openai-responses-2026
+provider: openai
+change: chat_to_responses
+repositories:
+  - name: supported-service
+    path: ../openai-success
+  - name: dynamic-service
+    path: ../openai-review
+  - name: status-service
+    path: ../openai-unaffected

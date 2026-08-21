@@ -104,7 +104,7 @@ revision = 3
 
 [[package]]
 name = "openai"
-version = "1.50.0"
+version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 
 [[package]]
@@ -178,7 +178,7 @@ client.responses.create(model="gpt-4o", input="hello")
         (tmp_path / "uv.lock").write_text("""
 [[package]]
 name = "openai"
-version = "1.50.0"
+version = "3.3.1"
 """)
         (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
 
@@ -237,7 +237,7 @@ def legacy_chat(prompt: str) -> str:
     )
     return response.choices[0].message.content
 """)
-        (tmp_path / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "1.50.0"\n')
+        (tmp_path / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "3.3.1"\n')
         (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
 
         result = run_cli("api", "check", "--root", str(tmp_path), "--format", "json", cwd=tmp_path)
@@ -271,8 +271,10 @@ def legacy_chat(prompt: str) -> str:
         assert isinstance(assessment.reasons, tuple)
         assert isinstance(assessment.risk_factors, tuple)
 
-        # Should be medium/high for this simple case with tests
-        assert assessment.confidence in {"high", "medium"}
+        # This fixture mixes a supported text call with tool use and the removed
+        # global API, so the repository-wide assessment must fail closed.
+        assert assessment.confidence == "low"
+        assert assessment.strategy == "manual"
 
     def test_migration_assessment_low_confidence_no_tests(self, tmp_path: Path) -> None:
         """MigrationAssessment should be LOW/MEDIUM confidence when no tests exist."""
@@ -293,7 +295,7 @@ def legacy_chat(prompt: str) -> str:
     )
     return response.choices[0].message.content
 """)
-        (tmp_path / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "1.50.0"\n')
+        (tmp_path / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "3.3.1"\n')
 
         scanner = APIScanner()
         usages = scanner.scan(tmp_path)

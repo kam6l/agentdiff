@@ -458,6 +458,10 @@ class MigrationResult:
     capsule_id: str | None = None
     certificate: "MigrationCertificate | None" = None
     errors: tuple[str, ...] = ()
+    run_id: str | None = None
+    expected_files: tuple[str, ...] = ()
+    actual_modified_files: tuple[str, ...] = ()
+    unexpected_files: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -469,12 +473,16 @@ class MigrationResult:
             "capsule_id": self.capsule_id,
             "certificate": self.certificate.to_dict() if self.certificate else None,
             "errors": list(self.errors),
+            "run_id": self.run_id,
+            "expected_files": list(self.expected_files),
+            "actual_modified_files": list(self.actual_modified_files),
+            "unexpected_files": list(self.unexpected_files),
         }
 
 
 @dataclass(frozen=True, slots=True)
 class MigrationCertificate:
-    """Verifiable migration certificate."""
+    """Integrity-protected statement about one exact repository patch."""
 
     certificate_id: str
     provider: str
@@ -487,9 +495,34 @@ class MigrationCertificate:
     migration_digest: str
     created_at: str
     verified: bool = False
+    schema_version: int = 1
+    final_verdict: str = "NOT_PROVEN"
+    upstream_source: str = ""
+    upstream_source_digest: str = ""
+    repository_base_sha: str = ""
+    repository_base_digest: str = ""
+    sdk_package: str = ""
+    sdk_version: str = ""
+    affected_symbols: tuple[str, ...] = ()
+    affected_usages: int = 0
+    expected_files: tuple[str, ...] = ()
+    actual_modified_files: tuple[str, ...] = ()
+    unexpected_files: tuple[str, ...] = ()
+    migration_generator: str = ""
+    migration_strategy: str = ""
+    policy_result: str = ""
+    policy_digest: str = ""
+    blast_radius_level: str = ""
+    verification_requested: VerificationLevel = VerificationLevel.V0
+    build_result: str = "NOT_RUN"
+    type_check_result: str = "NOT_RUN"
+    affected_test_result: str = "NOT_RUN"
+    full_test_result: str = "NOT_RUN"
+    integrity_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": self.schema_version,
             "certificate_id": self.certificate_id,
             "provider": self.provider,
             "change_id": self.change_id,
@@ -501,4 +534,27 @@ class MigrationCertificate:
             "migration_digest": self.migration_digest,
             "created_at": self.created_at,
             "verified": self.verified,
+            "final_verdict": self.final_verdict,
+            "upstream_source": self.upstream_source,
+            "upstream_source_digest": self.upstream_source_digest,
+            "repository_base_sha": self.repository_base_sha,
+            "repository_base_digest": self.repository_base_digest,
+            "sdk_package": self.sdk_package,
+            "sdk_version": self.sdk_version,
+            "affected_symbols": list(self.affected_symbols),
+            "affected_usages": self.affected_usages,
+            "expected_files": list(self.expected_files),
+            "actual_modified_files": list(self.actual_modified_files),
+            "unexpected_files": list(self.unexpected_files),
+            "migration_generator": self.migration_generator,
+            "migration_strategy": self.migration_strategy,
+            "policy_result": self.policy_result,
+            "policy_digest": self.policy_digest,
+            "blast_radius_level": self.blast_radius_level,
+            "verification_requested": self.verification_requested.value,
+            "build_result": self.build_result,
+            "type_check_result": self.type_check_result,
+            "affected_test_result": self.affected_test_result,
+            "full_test_result": self.full_test_result,
+            "integrity_sha256": self.integrity_sha256,
         }

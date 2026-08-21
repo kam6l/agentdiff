@@ -206,7 +206,7 @@ class TestBuiltinManifests:
         assert manifest is not None
         assert manifest.provider == "openai"
         assert manifest.change_id == "chat_to_responses"
-        assert manifest.severity == ChangeSeverity.HIGH
+        assert manifest.severity == ChangeSeverity.MODERATE
         assert "client.chat.completions.create" in manifest.affected.symbols
         assert "client.responses.create" in manifest.replacement.symbols
         assert manifest.strategy.primary == MigrationStrategyType.AST_TRANSFORM

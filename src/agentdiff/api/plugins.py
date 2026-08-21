@@ -11,10 +11,11 @@ Layout of an installed provider plugin (local directory or git checkout)::
 
 from __future__ import annotations
 
-import importlib
+import hashlib
 import importlib.util
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,14 @@ from agentdiff.api.manifest import APIChangeManifest, register_builtin_manifest
 from agentdiff.api.transforms.base import MigrationTransform, register_transform
 
 _PLUGIN_ROOT_NAME = "providers"
+
+
+class PluginTrust(str, Enum):
+    """Execution trust assigned by the local operator."""
+
+    DATA_ONLY = "DATA_ONLY"
+    UNTRUSTED_CODE = "UNTRUSTED_CODE"
+    TRUSTED_CODE = "TRUSTED_CODE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +45,10 @@ class ProviderPlugin:
     manifests: tuple[APIChangeManifest, ...]
     transforms: tuple[MigrationTransform, ...]
     metadata: dict[str, Any]
+    trust: PluginTrust = PluginTrust.DATA_ONLY
+    source_digest: str = ""
+    executable_code_present: bool = False
+    code_loaded: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,6 +58,10 @@ class ProviderPlugin:
             "manifest_count": len(self.manifests),
             "transform_count": len(self.transforms),
             "metadata": self.metadata,
+            "trust": self.trust.value,
+            "source_digest": self.source_digest,
+            "executable_code_present": self.executable_code_present,
+            "code_loaded": self.code_loaded,
         }
 
 
@@ -56,8 +73,13 @@ def discover_plugins(plugins_dir: str | Path = _PLUGIN_ROOT_NAME) -> list[Path]:
     return sorted(d for d in root.iterdir() if d.is_dir() and (d / "metadata.yaml").is_file())
 
 
-def load_plugin(plugin_dir: str | Path) -> ProviderPlugin:
-    """Load one provider plugin, registering its manifests and transforms."""
+def load_plugin(plugin_dir: str | Path, *, allow_code: bool = False) -> ProviderPlugin:
+    """Load plugin data; execute code only after two explicit trust gates.
+
+    A plugin must declare ``TRUSTED_CODE`` *and* the caller must pass
+    ``allow_code=True``. Installed or discovered Python is never executed by
+    default.
+    """
     root = Path(plugin_dir).expanduser().resolve(strict=True)
     metadata_path = root / "metadata.yaml"
     if not metadata_path.is_file():
@@ -69,6 +91,10 @@ def load_plugin(plugin_dir: str | Path) -> ProviderPlugin:
 
     name = str(metadata["name"])
     library = str(metadata.get("library", name))
+    try:
+        trust = PluginTrust(str(metadata.get("trust", PluginTrust.DATA_ONLY.value)).upper())
+    except ValueError as error:
+        raise ValueError(f"plugin {name} has invalid trust level") from error
 
     # Load manifests
     manifests: list[APIChangeManifest] = []
@@ -94,10 +120,14 @@ def load_plugin(plugin_dir: str | Path) -> ProviderPlugin:
     # Load transforms from python modules in transforms/
     transforms: list[MigrationTransform] = []
     transforms_dir = root / "transforms"
-    if transforms_dir.is_dir():
-        for module_file in sorted(transforms_dir.glob("*.py")):
-            if module_file.name.startswith("_"):
-                continue
+    code_files = (
+        tuple(path for path in sorted(transforms_dir.glob("*.py")) if not path.name.startswith("_"))
+        if transforms_dir.is_dir()
+        else ()
+    )
+    code_loaded = bool(code_files) and trust is PluginTrust.TRUSTED_CODE and allow_code
+    if code_loaded:
+        for module_file in code_files:
             # Load by file path with a unique module name to avoid collisions
             # with real provider packages (e.g. `stripe`).
             module_name = f"_agentdiff_plugin_{name}_{module_file.stem}"
@@ -134,6 +164,10 @@ def load_plugin(plugin_dir: str | Path) -> ProviderPlugin:
         manifests=tuple(manifests),
         transforms=tuple(transforms),
         metadata=metadata,
+        trust=trust,
+        source_digest=_source_digest(root),
+        executable_code_present=bool(code_files),
+        code_loaded=code_loaded,
     )
 
 
@@ -141,10 +175,15 @@ def install_plugin(
     name: str, source: str | Path, plugins_dir: str | Path = _PLUGIN_ROOT_NAME
 ) -> Path:
     """Install a provider plugin by copying a local source directory."""
+    if not name or any(
+        character not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for character in name.lower()
+    ):
+        raise ValueError("plugin name may contain only letters, digits, hyphens, and underscores")
     src = Path(source).expanduser().resolve(strict=True)
     if not (src / "metadata.yaml").is_file():
         raise ValueError(f"source is not a provider plugin (missing metadata.yaml): {src}")
-    root = Path(plugins_dir)
+    _source_digest(src)
+    root = Path(plugins_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     dest = root / name
     if dest.exists():
@@ -156,8 +195,22 @@ def install_plugin(
 
 
 def list_plugins(plugins_dir: str | Path = _PLUGIN_ROOT_NAME) -> list[ProviderPlugin]:
-    """Load and return all discovered plugins."""
+    """Load provider data without executing third-party code."""
     return [load_plugin(d) for d in discover_plugins(plugins_dir)]
+
+
+def _source_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        if path.is_symlink():
+            raise ValueError(f"plugin contains a symlink: {path.relative_to(root)}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
 
 
 def _replaced_change_id(manifest: APIChangeManifest, new_id: str) -> APIChangeManifest:

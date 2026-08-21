@@ -1,0 +1,19 @@
+version: 2
+filesystem:
+  allow_write:
+    - "src/app.py"
+  deny:
+    - ".github/**"
+    - "agentdiff.yaml"
+  default: deny
+process:
+  default: allow
+network:
+  mode: observe
+proof:
+  image: "python:3.12-slim"
+  network: false
+  build:
+    - ["python", "-m", "compileall", "-q", "src"]
+  tests:
+    - ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from agentdiff.api.manifest import get_builtin_manifest
 from agentdiff.api.plugins import (
+    PluginTrust,
     discover_plugins,
     install_plugin,
     list_plugins,
@@ -15,7 +19,7 @@ from agentdiff.api.plugins import (
 )
 
 
-def _make_plugin(root: Path, name: str = "stripe") -> Path:
+def _make_plugin(root: Path, name: str = "stripe", *, trust: str = "DATA_ONLY") -> Path:
     plugin_dir = root / name
     manifests = plugin_dir / "manifests"
     transforms = plugin_dir / "transforms"
@@ -25,7 +29,7 @@ def _make_plugin(root: Path, name: str = "stripe") -> Path:
     tests.mkdir()
 
     (plugin_dir / "metadata.yaml").write_text(
-        f"name: {name}\nlibrary: {name}\nversion: '1.0.0'\n",
+        f"name: {name}\nlibrary: {name}\nversion: '1.0.0'\ntrust: {trust}\n",
         encoding="utf-8",
     )
 
@@ -102,10 +106,22 @@ class TestPluginLoading:
         assert registered.provider == "stripe"
 
     def test_load_plugin_registers_transforms(self, tmp_path: Path) -> None:
-        plugin_dir = _make_plugin(tmp_path)
-        plugin = load_plugin(plugin_dir)
+        plugin_dir = _make_plugin(tmp_path, trust="TRUSTED_CODE")
+        plugin = load_plugin(plugin_dir, allow_code=True)
         assert len(plugin.transforms) == 1
         assert plugin.transforms[0].transform_id == "test-plugin-transform"
+        assert plugin.code_loaded is True
+
+    def test_plugin_code_is_not_executed_by_default(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(tmp_path, trust="TRUSTED_CODE")
+
+        plugin = load_plugin(plugin_dir)
+
+        assert plugin.trust is PluginTrust.TRUSTED_CODE
+        assert plugin.executable_code_present is True
+        assert plugin.code_loaded is False
+        assert plugin.transforms == ()
+        assert plugin.source_digest.startswith("sha256:")
 
     def test_missing_metadata_rejected(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad"
