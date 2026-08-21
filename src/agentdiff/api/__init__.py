@@ -11,6 +11,7 @@ from agentdiff.api.intel import (
     SDKReleaseAnalyzer,
     SDKReleaseChange,
 )
+
 from agentdiff.api.manifest import (
     AffectedSymbols,
     APIChangeManifest,
@@ -108,6 +109,7 @@ __all__ = [
     "ReplacementSymbols",
     "SDKReleaseAnalyzer",
     "SDKReleaseChange",
+    "ReplacementSymbols",
     "SDKVersionInfo",
     "SourceType",
     "StripeProvider",
@@ -128,4 +130,8 @@ __all__ = [
     "list_providers",
     "list_transforms",
     "load_plugin",
+    "is_version_affected",
+    "list_builtin_manifests",
+    "list_providers",
+    "list_transforms",
 ]

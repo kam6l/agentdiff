@@ -1279,6 +1279,7 @@ def cmd_api_intel(args: argparse.Namespace) -> int:
     return 0
 
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentdiff",
