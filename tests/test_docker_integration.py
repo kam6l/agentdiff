@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +18,25 @@ from agentdiff.promotion import PromotionEngine
 from agentdiff.proof import ProofEngine, ProofVerdict
 from agentdiff.runtime import DockerRuntime
 from agentdiff.transaction import AgentRunTransaction
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
+class DiagnosticDockerRuntime(DockerRuntime):
+    """Surface daemon errors in the capability-gated CI test only."""
+
+    def _docker_call(
+        self,
+        argv: Sequence[str],
+        *,
+        capture_output: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        result = super()._docker_call(argv, capture_output=capture_output)
+        if result.returncode != 0:
+            operation = argv[1] if len(argv) > 1 else "unknown"
+            print(f"Docker {operation} failed: {(result.stderr or result.stdout).strip()}")
+        return result
 
 
 def _docker_available() -> bool:
@@ -65,7 +85,7 @@ def test_real_docker_run_prove_promote_keeps_host_untouched_until_gate(
             },
         }
     )
-    runtime = DockerRuntime(tmp_path, image="python:3.12-slim")
+    runtime = DiagnosticDockerRuntime(tmp_path, image="python:3.12-slim")
 
     result = AgentRunTransaction(
         root=tmp_path,

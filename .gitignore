@@ -55,6 +55,7 @@ dmypy.json
 # AgentDiff local run artifacts
 /.agentdiff/
 agentdiff.yaml
+!demos/*/agentdiff.yaml
 snapshot_*.json
 trajectory*.json
 report*.json
