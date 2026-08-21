@@ -36,6 +36,7 @@ AgentDiff is pre-release software. APIs and artifact schemas may change before t
 - Trust decisions (policy, risk, proof, promotion, repair routing) remain fully deterministic; Cortex stays outside deterministic trust decisions.
 - Corrected custom-generator runtime evidence: a private working copy is an observation boundary, not an OS sandbox. Custom commands retain the caller's host permissions and must be trusted until a sandbox-backed generator runtime is configured.
 - Campaign config/report/certificate control paths reject symlinks, reports are written atomically, aggregate verdicts are recomputed during verification, and every `PROVEN` child certificate is re-verified against sealed repository evidence.
+- Corrected Docker 28 bind-mount syntax so the real container runtime and clean-room proof environment request their writable private workspace without an invalid bare `rw` field.
 - The Docker proof backend keeps the host repository unmounted; the proof cache is content-addressed, integrity-sealed, and invalidated by any input change; warm base snapshots are immutable.
 
 ## 0.2.0

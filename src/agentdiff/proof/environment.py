@@ -42,7 +42,9 @@ class DockerProofEnvironment:
 
     def start(self) -> dict[str, Any]:
         user = self._container_user()
-        mount = f"type=bind,src={self.workspace},dst=/workspace,rw"
+        # Writable is the default for a bind mount. Docker 28 rejects a bare
+        # `rw` field in the key/value `--mount` syntax.
+        mount = f"type=bind,src={self.workspace},dst=/workspace"
         argv = [
             self.executable,
             "create",
