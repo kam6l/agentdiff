@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any
 
+from agentdiff.api.certificate import write_certificate
 from agentdiff.api.manifest import APIChangeManifest, get_builtin_manifest
 from agentdiff.api.matcher import APIMatcher
 from agentdiff.api.models import (
     APIUsage,
     MigrationAssessment,
-    MigrationCertificate,
     MigrationConfidence,
     MigrationImpact,
     MigrationPlan,
@@ -28,11 +29,18 @@ from agentdiff.api.transforms import (
     get_transform,
     get_transforms_for_usage,
 )
+from agentdiff.api.verification import MigrationVerifier, VerificationResult, create_certificate
 from agentdiff.policy import load_policy, load_policy_file
 from agentdiff.workspace import WarmWorkspaceFactory, compute_identity
 
-if TYPE_CHECKING:
-    from agentdiff.api.models import MigrationImpact
+
+@dataclass(frozen=True, slots=True)
+class RepairResult:
+    """Outcome of a bounded repair attempt on a failed migration."""
+
+    success: bool
+    verification: VerificationResult
+    errors: tuple[str, ...] = ()
 
 
 class MigrationEngine:
@@ -106,9 +114,20 @@ class MigrationEngine:
         manifest = self._load_manifest()
         assessment = assess_migration_confidence(tuple(usages), impact)
 
+        # Filter to only usages that match the manifest's affected symbols
+        affected_symbols = manifest.affected.symbols
+        migratable_usages = [
+            u
+            for u in usages
+            if u.symbol in affected_symbols or any(u.symbol.endswith(s) for s in affected_symbols)
+        ]
+        # Fall back to impact-matched usages when symbol filtering is too strict
+        if not migratable_usages and impact.matched_changes:
+            migratable_usages = [m.usage for m in impact.matched_changes]
+
         # Create steps for each affected file/usage
         steps: list[MigrationStep] = []
-        for i, usage in enumerate(usages):
+        for i, usage in enumerate(migratable_usages):
             # Find applicable transform
             transforms = get_transforms_for_usage(usage)
             applicable = [
@@ -148,8 +167,8 @@ class MigrationEngine:
             provider=manifest.provider,
             change_id=manifest.change_id,
             manifest=manifest,
-            affected_usages=tuple(usages),
-            affected_files=impact.affected_files,
+            affected_usages=tuple(migratable_usages),
+            affected_files=tuple(sorted({u.filepath for u in migratable_usages})),
             assessment=assessment,
             steps=tuple(steps),
             verification_level=verification_level,
@@ -232,29 +251,6 @@ class MigrationEngine:
 
         return workspace, errors
 
-    def verify_migration(
-        self,
-        plan: MigrationPlan,
-        workspace: Path,
-    ) -> tuple[VerificationLevel, Optional[str], Optional[str]]:
-        """Run verification on the migrated code."""
-        # This is a simplified verification - in reality, we'd run the ProofEngine
-        # For now, we return the target verification level
-
-        # Run syntax/type check (V1)
-        try:
-            # Check syntax by parsing all Python files
-            for py_file in workspace.rglob("*.py"):
-                if py_file.is_file():
-                    source = py_file.read_text(encoding="utf-8")
-                    compile(source, str(py_file), "exec")
-        except SyntaxError as e:
-            return VerificationLevel.V0, None, f"Syntax error: {e}"
-
-        # If V2 or higher requested, we'd run tests
-        # For now, return the target level
-        return plan.verification_level, None, None
-
     def run(self) -> MigrationResult:
         """Execute the full migration workflow."""
 
@@ -294,7 +290,8 @@ class MigrationEngine:
         # 4. Create private workspace
         identity = compute_identity(self.root, policy=self.policy)
         factory = WarmWorkspaceFactory(self.root)
-        workspace = factory.ensure_base(identity).path
+        agent_workspace = factory.create_workspace(identity)
+        workspace = agent_workspace.path
 
         # 5. Execute plan
         workspace, errors = self.execute_plan(plan, workspace)
@@ -307,37 +304,65 @@ class MigrationEngine:
                 errors=tuple(errors),
             )
 
-        # 6. Verify migration
-        verification_level, proof_digest, capsule_id = self.verify_migration(plan, workspace)
+        # 6. Verify migration using MigrationVerifier
+        verifier = MigrationVerifier(
+            root=self.root,
+            plan=plan,
+            workspace=workspace,
+            policy=self.policy,
+        )
+        verification = verifier.verify()
+
+        if not verification.passed:
+            # Attempt repair if verification failed
+            repair_result = self._attempt_repair(plan, workspace, verification)
+            if repair_result.success:
+                # Re-verify after repair
+                verification = repair_result.verification
+                if not verification.passed:
+                    return MigrationResult(
+                        plan=plan,
+                        migration_status=MigrationStatus.FAILED,
+                        verification_level=verification.level,
+                        errors=tuple(verification.reasons) + tuple(repair_result.errors),
+                    )
+            else:
+                return MigrationResult(
+                    plan=plan,
+                    migration_status=MigrationStatus.FAILED,
+                    verification_level=verification.level,
+                    errors=tuple(verification.reasons),
+                )
 
         # 7. Generate certificate
-        certificate = None
-        if verification_level != VerificationLevel.V0:
-            # Compute migration digest
-            migration_digest = self._compute_migration_digest(plan, workspace)
-
-            certificate = MigrationCertificate(
-                certificate_id=f"cert-{hashlib.sha256(migration_digest.encode()).hexdigest()[:16]}",
-                provider=plan.provider,
-                change_id=plan.change_id,
-                verification_level=verification_level,
-                affected_files=plan.affected_files,
-                blast_radius_score=impact.blast_radius.score,
-                proof_digest=proof_digest or "",
-                capsule_id=capsule_id or "",
-                migration_digest=migration_digest,
-                created_at=datetime.now(timezone.utc).isoformat(),
-                verified=True,
-            )
+        certificate = create_certificate(plan, workspace, verification, impact)
+        write_certificate(certificate, self.root)
 
         return MigrationResult(
             plan=plan,
-            migration_status=MigrationStatus.COMPLETED if not errors else MigrationStatus.FAILED,
-            verification_level=verification_level,
-            proof_digest=proof_digest,
-            capsule_id=capsule_id,
+            migration_status=MigrationStatus.COMPLETED,
+            verification_level=verification.level,
+            proof_digest=verification.proof_digest,
+            capsule_id=verification.capsule_id,
             certificate=certificate,
             errors=tuple(errors),
+        )
+
+    def _attempt_repair(
+        self,
+        plan: MigrationPlan,
+        workspace: Path,
+        verification: VerificationResult,
+    ) -> "RepairResult":
+        """Attempt to repair a failed migration using RepairLoop."""
+        # The full RepairLoop integration requires a repair command builder
+        # (coding agent or deterministic re-transform). Until that is wired,
+        # a failed migration is reported with its failure evidence intact.
+        del plan, workspace
+        return RepairResult(
+            success=False,
+            verification=verification,
+            errors=("Repair not yet fully implemented",),
         )
 
     def _compute_migration_digest(self, plan: MigrationPlan, workspace: Path) -> str:

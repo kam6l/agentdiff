@@ -16,9 +16,12 @@ from agentdiff.api import (
     ChangeSeverity,
     MigrationEngine,
     MigrationStatus,
+    ProviderIntelEngine,
     detect_installed_sdk_versions,
     get_builtin_manifest,
     get_providers_for_selection,
+    install_plugin,
+    list_plugins,
 )
 from agentdiff.cortex import (
     AgentMemoryStore,
@@ -1209,6 +1212,73 @@ def cmd_api_migrate(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_provider_list(args: argparse.Namespace) -> int:
+    """List installed provider plugins."""
+    plugins = list_plugins(args.plugins_dir)
+    if args.format == "json":
+        print(_json([p.to_dict() for p in plugins]))
+        return 0
+    if not plugins:
+        print("No provider plugins installed.")
+        return 0
+    print(f"Provider plugins ({len(plugins)}):")
+    for plugin in plugins:
+        print(
+            f"  {plugin.name:16} manifests={len(plugin.manifests)} "
+            f"transforms={len(plugin.transforms)}"
+        )
+    return 0
+
+
+def cmd_provider_install(args: argparse.Namespace) -> int:
+    """Install a provider plugin from a local source directory."""
+    try:
+        dest = install_plugin(args.name, args.source, args.plugins_dir)
+    except (FileExistsError, ValueError) as error:
+        print(f"agentdiff: {safe_display(error)}", file=sys.stderr)
+        return 1
+    print(f"Installed provider plugin {args.name} -> {safe_display(dest)}")
+    return 0
+
+
+def cmd_api_intel(args: argparse.Namespace) -> int:
+    """Run the provider intelligence layer on upstream signals."""
+    engine = ProviderIntelEngine(args.provider, args.library)
+    artifact = None
+
+    if args.changelog:
+        artifact = engine.from_changelog(args.changelog)
+    elif args.openapi_before and args.openapi_after:
+        artifact = engine.from_openapi_diff(args.openapi_before, args.openapi_after)
+    elif args.release:
+        artifact = engine.from_sdk_release(args.release)
+
+    if artifact is None:
+        print(
+            "agentdiff: provide --changelog, --openapi-before/--after, or --release",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.output:
+        path = engine.save_artifact(artifact, args.output)
+        print(f"Artifact saved: {safe_display(path)}")
+
+    if args.format == "json":
+        print(_json(artifact.to_dict()))
+    else:
+        print(f"Provider intelligence: {artifact.kind}")
+        print(f"Candidates: {len(artifact.candidates)}")
+        for candidate in artifact.candidates:
+            valid, errors = engine.validate_candidate(candidate)
+            status = "VALID" if valid else f"INVALID ({errors})"
+            print(
+                f"  [{candidate.severity.value.upper()}] "
+                f"{candidate.change_id} ({candidate.change_type.value}) {status}"
+            )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentdiff",
@@ -1591,6 +1661,40 @@ def build_parser() -> argparse.ArgumentParser:
     p_api_migrate.add_argument("--policy", help="Policy file (default: ROOT/agentdiff.yaml)")
     p_api_migrate.add_argument("--format", choices=["json", "summary"], default="summary")
     p_api_migrate.set_defaults(func=cmd_api_migrate)
+
+    p_api_intel = api_commands.add_parser(
+        "intel",
+        help="Analyze upstream signals (changelog/OpenAPI/release) into manifest candidates",
+    )
+    p_api_intel.add_argument("--provider", required=True, help="Provider name (e.g., openai)")
+    p_api_intel.add_argument("--library", default="", help="Library package name")
+    p_api_intel.add_argument("--changelog", help="Path to changelog markdown")
+    p_api_intel.add_argument("--openapi-before", help="Path to previous OpenAPI spec")
+    p_api_intel.add_argument("--openapi-after", help="Path to current OpenAPI spec")
+    p_api_intel.add_argument("--release", help="Path to SDK release notes")
+    p_api_intel.add_argument("--output", help="Directory to persist analysis artifact")
+    p_api_intel.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_api_intel.set_defaults(func=cmd_api_intel)
+
+    p_provider = subparsers.add_parser(
+        "provider", help="Install and manage provider migration plugins"
+    )
+    provider_commands = p_provider.add_subparsers(dest="provider_command", required=True)
+    p_provider_list = provider_commands.add_parser("list", help="List installed provider plugins")
+    p_provider_list.add_argument(
+        "--plugins-dir", default="providers", help="Directory containing plugins"
+    )
+    p_provider_list.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_provider_list.set_defaults(func=cmd_provider_list)
+    p_provider_install = provider_commands.add_parser(
+        "install", help="Install a provider plugin from a local directory"
+    )
+    p_provider_install.add_argument("name", help="Plugin name")
+    p_provider_install.add_argument("source", help="Path to plugin source directory")
+    p_provider_install.add_argument(
+        "--plugins-dir", default="providers", help="Destination plugins directory"
+    )
+    p_provider_install.set_defaults(func=cmd_provider_install)
 
     return parser
 

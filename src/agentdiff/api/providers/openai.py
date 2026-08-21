@@ -326,4 +326,24 @@ class OpenAIProvider(APIProvider):
                     ")"
                 ),
             ),
+            APIChange(
+                change_id="openai-chat-to-responses",
+                provider="openai",
+                title="Migrate from Chat Completions to Responses API",
+                change_type=ChangeType.DEPRECATION,
+                severity=ChangeSeverity.HIGH,
+                target_symbol="client.chat.completions.create",
+                target_symbols=("client.chat.completions.create",),
+                breaking_version="",
+                description=(
+                    "The Chat Completions API is being superseded by the Responses API. "
+                    "The Responses API provides a unified interface for chat, tool use, "
+                    "and multi-turn conversations with better streaming and state management."
+                ),
+                migration_guide_url="https://platform.openai.com/docs/guides/responses-api/migration",
+                replacement_symbol="client.responses.create",
+                replacement_code=(
+                    "response = client.responses.create(\n    model='gpt-4o', input=messages\n)"
+                ),
+            ),
         ]

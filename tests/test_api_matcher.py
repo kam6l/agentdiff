@@ -51,11 +51,11 @@ def test_matcher_with_no_breaking_changes() -> None:
         APIUsage(
             provider="openai",
             library="openai",
-            symbol="client.chat.completions.create",
+            symbol="client.responses.create",
             call_type="call",
             filepath="src/modern_llm.py",
             line_number=15,
-            keyword_arguments={"model": "gpt-4o", "tools": "[]"},
+            keyword_arguments={"model": "gpt-4o", "input": "hello"},
         ),
         APIUsage(
             provider="stripe",

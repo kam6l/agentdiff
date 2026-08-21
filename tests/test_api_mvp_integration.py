@@ -173,7 +173,7 @@ class TestAPIMigrationMVP:
         (src / "modern.py").write_text("""
 import openai
 client = openai.OpenAI()
-client.chat.completions.create(model="gpt-4o", messages=[])
+client.responses.create(model="gpt-4o", input="hello")
 """)
         (tmp_path / "uv.lock").write_text("""
 [[package]]

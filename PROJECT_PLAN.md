@@ -52,7 +52,7 @@ The primary product wedge is `agentdiff api scan/check/migrate` for Self-Maintai
 - One maintained hosted/disposable sandbox integration.
 - Artifact migration and compatibility tooling.
 - Larger external-state benchmark coverage.
-- **Migration Engine: deterministic AST transforms, coding-agent fallback, clean-room verification (V0–V5), Migration Certificate, GitHub PR delivery**
+- **Migration pipeline completion: real ProofEngine execution for migrations, rollback verification, failure evidence, GitHub PR delivery**
 
 An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal network blocking, and arbitrary external-state rollback are not implemented.
 
@@ -82,12 +82,15 @@ An HTTP API, hosted dashboard, Docker backend, bundled sandbox, universal networ
 
 ### Self-Maintaining APIs (primary wedge)
 
-1. **API Change Manifest** — structured machine-readable upstream change format (YAML/JSON) for provider deprecations, SDK releases, model shutdowns.
-2. **Deterministic AST Transforms** — for known simple migrations (OpenAI Responses API, Stripe PaymentIntents, etc.); registry extensible by providers.
-3. **Hybrid Migration Engine** — simple → AST transform; complex → coding agent; **all patches untrusted until ProofEngine verifies**.
-4. **Verification Levels (V0–V5)** — syntax/type/build → targeted tests → full repo tests → API contract/mock tests → user-defined integration verification.
-5. **Migration Certificate** — machine-readable artifact: provider change, affected usages, files changed, blast radius, policy result, tests executed, verification level, proof digest, capsule ID, rollback info.
-6. **GitHub PR Automation** — `--open-pr` delivers Migration Certificate in PR body; conflict-safe promotion; no auto-merge.
+1. **API Change Manifest** — structured machine-readable upstream change format (YAML/JSON) for provider deprecations, SDK releases, model shutdowns. *(implemented)*
+2. **Deterministic AST Transforms** — for known simple migrations (OpenAI Responses API, Stripe PaymentIntents, etc.); registry extensible by providers. *(implemented)*
+3. **Migration Engine** — scan → match → plan → transform in private workspace → verify → certificate. *(implemented)*
+4. **Provider Intelligence Layer** — parse changelogs, diff OpenAPI specs, analyze SDK releases, and accept AI suggestions as validated manifest candidates. AI output never touches code directly. *(implemented)*
+5. **Provider Plugin System** — `agentdiff provider install/list`; providers ship `manifests/`, `transforms/`, `tests/`, `metadata.yaml` without core changes. *(implemented)*
+6. **Verification Levels (V0–V5)** — syntax/type/build → targeted tests → full repo tests → API contract/mock tests → user-defined integration verification.
+7. **Migration Certificate** — machine-readable artifact: provider change, affected usages, files changed, blast radius, policy result, tests executed, verification level, proof digest, capsule ID, rollback info. *(implemented)*
+8. **GitHub PR Automation** — `--open-pr` delivers Migration Certificate in PR body; conflict-safe promotion; no auto-merge.
+9. **API Knowledge Graph** — track Repository → API usage → SDK version → migration status; design scalable, no extra database yet.
 
 ### Credibility and distribution
 

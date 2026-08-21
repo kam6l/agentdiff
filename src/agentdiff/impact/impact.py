@@ -241,10 +241,20 @@ class ImpactEngine:
                 f"No tests found for affected modules: {mods}. Verification confidence reduced."
             )
         elif modules and tests:
-            # Check if any affected module has no covering tests
+            # Check if any affected SOURCE module has no covering tests.
+            # Test modules themselves are expected to have no tests covering them,
+            # so they are excluded from the uncovered-modules check.
             if self.graph is not None:
+                test_modules = {self.graph._module_for(t) or t for t in tests}
+                source_modules = [
+                    m
+                    for m in modules
+                    if not m.endswith("_test")
+                    and m not in test_modules
+                    and not m.startswith("tests.")
+                ]
                 uncovered_modules = [
-                    m for m in modules if not self.graph.module_to_tests.get(m, ())
+                    m for m in source_modules if not self.graph.module_to_tests.get(m, ())
                 ]
                 if uncovered_modules:
                     affected_code_has_tests = False
