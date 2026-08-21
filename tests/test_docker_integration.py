@@ -6,14 +6,12 @@ import json
 import os
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
+from agentdiff.api import MigrationEngine, MigrationStatus, VerificationLevel, get_builtin_manifest
+from agentdiff.api.certificate import CertificateStatus, verify_certificate
 from agentdiff.policy import load_policy
 from agentdiff.promotion import PromotionEngine
 from agentdiff.proof import ProofEngine, ProofVerdict
@@ -89,3 +87,49 @@ def test_real_docker_run_prove_promote_keeps_host_untouched_until_gate(
     promotion = PromotionEngine(tmp_path, result.run_id).promote(safe_only=True)
     assert promotion.status == "PROMOTED"
     assert target.read_text(encoding="utf-8") == "agent"
+
+
+def test_real_docker_openai_migration_proves_and_verifies_certificate(tmp_path: Path) -> None:
+    """The launch-wedge migration must earn PROVEN in the real container backend."""
+    fixture = Path(__file__).parents[1] / "demos" / "openai-success"
+    repository = tmp_path / "openai-success"
+    shutil.copytree(fixture, repository)
+    subprocess.run(["git", "init", "-b", "main"], cwd=repository, check=True)
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=AgentDiff CI",
+            "-c",
+            "user.email=ci@agentdiff.dev",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+        cwd=repository,
+        check=True,
+    )
+    original = (repository / "src" / "app.py").read_text(encoding="utf-8")
+
+    result = MigrationEngine(
+        repository,
+        policy_path=repository / "agentdiff.yaml",
+        manifest=get_builtin_manifest("openai", "chat_to_responses"),
+        proof_timeout_seconds=180,
+    ).run()
+
+    assert result.migration_status is MigrationStatus.COMPLETED, result.errors
+    assert result.proof_verdict == "PROVEN"
+    assert result.verification_level is VerificationLevel.V3
+    assert result.unexpected_files == ()
+    assert result.certificate is not None
+    assert result.certificate.verified is True
+    assert result.certificate.git_base_sha not in {"", "unknown", "UNCOMMITTED"}
+    assert (repository / "src" / "app.py").read_text(encoding="utf-8") == original
+
+    certificate_path = (
+        repository / ".agentdiff" / "certificates" / (f"{result.certificate.certificate_id}.json")
+    )
+    verification = verify_certificate(certificate_path, root=repository)
+    assert verification.status is CertificateStatus.VALID, verification.reasons

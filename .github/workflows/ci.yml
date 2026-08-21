@@ -172,10 +172,38 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  docker-proof:
+    name: Real Docker proof - OpenAI migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          python-version: "3.12"
+          cache-dependency-glob: uv.lock
+
+      - name: Install test dependencies
+        run: uv sync --locked --group dev
+
+      - name: Verify Docker and prefetch proof image
+        run: |
+          docker info
+          docker pull python:3.12-slim
+
+      - name: Run real container-backed proof gates
+        env:
+          AGENTDIFF_DOCKER_TESTS: "1"
+        run: uv run pytest -p no:cacheprovider tests/test_docker_integration.py -v -rs
+
   package:
     name: Package validation
     runs-on: ubuntu-latest
-    needs: [tests, quality, security, safetybench]
+    needs: [tests, quality, security, safetybench, docker-proof]
     timeout-minutes: 10
 
     steps:
