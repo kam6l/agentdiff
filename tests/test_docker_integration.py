@@ -151,5 +151,5 @@ def test_real_docker_openai_migration_proves_and_verifies_certificate(tmp_path: 
     certificate_path = (
         repository / ".agentdiff" / "certificates" / (f"{result.certificate.certificate_id}.json")
     )
-    verification = verify_certificate(certificate_path, root=repository)
-    assert verification.status is CertificateStatus.VALID, verification.reasons
+    status, reason = verify_certificate(certificate_path, root=repository)
+    assert status is CertificateStatus.VALID, reason
