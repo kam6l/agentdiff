@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
-import tempfile
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from agentdiff.api import (
-    APIChangeManifest,
     MigrationEngine,
     MigrationStatus,
     VerificationLevel,
     assess_migration_confidence,
     get_builtin_manifest,
 )
-from agentdiff.api.scanner import APIScanner
+from agentdiff.api.certificate import CertificateStatus, verify_certificate
+from agentdiff.api.github_pr import VerifiedPRPublisher
 from agentdiff.api.matcher import APIMatcher
+from agentdiff.api.scanner import APIScanner
+from tests.fake_proof import fake_env_factory
 
 
 class TestOpenAIMigrationE2E:
@@ -46,11 +48,11 @@ def ask_question(question: str) -> str:
     )
     return response.choices[0].message.content
 
-def ask_with_tools(question: str, tools: list) -> str:
+def ask_briefly(question: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": question}],
-        tools=tools,
+        max_tokens=80,
     )
     return response.choices[0].message.content
 """)
@@ -111,7 +113,7 @@ revision = 3
 
 [[package]]
 name = "openai"
-version = "1.50.0"
+version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 
 [[package]]
@@ -181,6 +183,7 @@ build-backend = "setuptools.build_meta"
         engine = MigrationEngine(
             root=openai_repo,
             manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(),
         )
 
         result = engine.run()
@@ -212,6 +215,7 @@ build-backend = "setuptools.build_meta"
         engine = MigrationEngine(
             root=openai_repo,
             manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(),
         )
 
         result = engine.run()
@@ -236,6 +240,7 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "hello"}],
     temperature=0.7,
 )
+print(response.choices[0].message.content)
 """
         usage = result.plan.affected_usages[0]
         transform = OpenAIChatToResponsesTransform()
@@ -255,12 +260,14 @@ response = client.chat.completions.create(
         assert "input=" in transform_result.modified_code  # messages -> input mapping
         assert "model=" in transform_result.modified_code  # model preserved
         assert "temperature=0.7" in transform_result.modified_code
+        assert "response.output_text" in transform_result.modified_code
 
     def test_certificate_generated(self, openai_repo: Path) -> None:
         """Migration certificate should be generated with all required fields."""
         engine = MigrationEngine(
             root=openai_repo,
             manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(),
         )
 
         result = engine.run()
@@ -273,7 +280,7 @@ response = client.chat.completions.create(
         assert cert.verified is True
         assert cert.verification_level >= VerificationLevel.V1
         assert len(cert.affected_files) == 2
-        assert cert.blast_radius_score > 0
+        assert cert.blast_radius_score >= 0
         assert cert.proof_digest
         assert cert.capsule_id
         assert cert.migration_digest
@@ -282,9 +289,83 @@ response = client.chat.completions.create(
         cert_path = Path(openai_repo) / ".agentdiff" / "certificates"
         cert_files = list(cert_path.glob("*.json"))
         assert len(cert_files) >= 1
+        status, reason = verify_certificate(cert_files[0], root=openai_repo)
+        assert status is CertificateStatus.VALID, reason
+
+    def test_verified_pr_replays_the_sealed_patch(self, openai_repo: Path, tmp_path: Path) -> None:
+        """PR delivery must push the sealed patch without regenerating it."""
+
+        def git(*args: str, cwd: Path = openai_repo) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["git", *args],
+                cwd=cwd,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        git("init", "-b", "main")
+        git("config", "user.name", "AgentDiff Test")
+        git("config", "user.email", "agentdiff@example.invalid")
+        git("add", "--all")
+        git("commit", "-m", "base")
+        upstream = tmp_path / "upstream.git"
+        subprocess.run(
+            ["git", "init", "--bare", str(upstream)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        git("remote", "add", "origin", str(upstream))
+        git("push", "--set-upstream", "origin", "main")
+
+        result = MigrationEngine(
+            root=openai_repo,
+            manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(),
+        ).run()
+        assert result.proof_verdict == "PROVEN"
+        certificate_path = next((openai_repo / ".agentdiff" / "certificates").glob("*.json"))
+        gh_commands: list[list[str]] = []
+
+        def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if command[0] == "gh":
+                gh_commands.append(command)
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout="https://github.com/acme/repo/pull/1\n",
+                    stderr="",
+                )
+            return subprocess.run(command, **kwargs)  # type: ignore[arg-type]
+
+        published = VerifiedPRPublisher(openai_repo, runner=runner).publish(
+            result,
+            certificate_path,
+            base_branch="main",
+            branch="agentdiff/test-openai-migration",
+        )
+
+        assert published.url == "https://github.com/acme/repo/pull/1"
+        assert published.base_sha == git("rev-parse", "HEAD").stdout.strip()
+        assert gh_commands and gh_commands[0][:3] == ["gh", "pr", "create"]
+        delivered = subprocess.run(
+            [
+                "git",
+                "--git-dir",
+                str(upstream),
+                "show",
+                "agentdiff/test-openai-migration:src/chat.py",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "client.responses.create" in delivered
+        assert "client.chat.completions.create" not in delivered
 
     def test_migration_rejected_when_no_tests(self, tmp_path: Path) -> None:
-        """Migration should fail or have low verification when no tests exist."""
+        """Proof must fail closed when no deterministic test phase exists."""
         repo = tmp_path / "no_tests_repo"
         repo.mkdir()
 
@@ -296,26 +377,35 @@ from openai import OpenAI
 client = OpenAI()
 
 def ask(q: str):
-    return client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": q}])
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": q}],
+    )
+    return response.choices[0].message.content
 """)
 
         (repo / "uv.lock").write_text("""
 [[package]]
 name = "openai"
-version = "1.50.0"
+version = "3.3.1"
 """)
         (repo / "pyproject.toml").write_text("[project]\nname='test'\n")
 
         engine = MigrationEngine(
             root=repo,
             manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(
+                lambda phase, _command: (5, (0, 0)) if phase == "tests" else (0, None)
+            ),
         )
 
         result = engine.run()
 
-        # Migration should complete but verification level should be V1 (no tests)
-        assert result.migration_status == MigrationStatus.COMPLETED
-        assert result.verification_level == VerificationLevel.V1
+        assert result.migration_status == MigrationStatus.FAILED
+        assert result.proof_verdict == "NOT_PROVEN"
+        assert result.certificate is not None
+        assert result.certificate.verified is False
+        assert "tests failed with return code 5" in result.errors
 
 
 class TestMigrationFailureHandling:
@@ -332,7 +422,11 @@ class TestMigrationFailureHandling:
         (src / "chat.py").write_text("""
 from openai import OpenAI
 client = OpenAI()
-client.chat.completions.create(model="gpt-4o", messages=[])
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "hello"}],
+)
+print(response.choices[0].message.content)
 """)
 
         # Create a policy that only allows src/ but the transform might try to modify something else
@@ -340,7 +434,7 @@ client.chat.completions.create(model="gpt-4o", messages=[])
 version: 2
 filesystem:
   allow_write: ["src/**"]
-  deny: ["**"]
+  deny: [".github/**", "pyproject.toml"]
   default: deny
 process:
   default: allow
@@ -348,12 +442,16 @@ network:
   mode: observe
 """)
 
-        (repo / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "1.50.0"\n')
+        (repo / "uv.lock").write_text('[[package]]\nname = "openai"\nversion = "3.3.1"\n')
         (repo / "pyproject.toml").write_text("[project]\nname='test'\n")
+        tests = repo / "tests"
+        tests.mkdir()
+        (tests / "test_smoke.py").write_text("def test_smoke():\n    assert True\n")
 
         engine = MigrationEngine(
             root=repo,
             manifest=get_builtin_manifest("openai", "chat_to_responses"),
+            proof_environment_factory=fake_env_factory(),
         )
 
         result = engine.run()

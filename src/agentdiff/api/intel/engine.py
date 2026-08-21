@@ -39,6 +39,7 @@ class ManifestCandidate:
     source_url: str = ""
     description: str = ""
     confidence: float = 0.5
+    advisory_only: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +53,7 @@ class ManifestCandidate:
             "source_type": self.source_type.value,
             "source_url": self.source_url,
             "confidence": self.confidence,
+            "advisory_only": self.advisory_only,
         }
 
 
@@ -193,6 +195,7 @@ class ProviderIntelEngine:
                 source_url=str(suggestion.get("source_url", "")),
                 description=str(suggestion.get("description", "")),
                 confidence=float(suggestion.get("confidence", 0.5)),
+                advisory_only=True,
             )
         except (KeyError, ValueError, TypeError) as error:
             del error
@@ -214,14 +217,25 @@ class ProviderIntelEngine:
     def validate_candidate(self, candidate: ManifestCandidate) -> tuple[bool, list[str]]:
         """Deterministically validate a candidate before it becomes a manifest."""
         errors: list[str] = []
-        if not candidate.provider:
-            errors.append("provider is required")
-        if not candidate.change_id:
-            errors.append("change_id is required")
+        if candidate.provider != self.provider:
+            errors.append("provider must match the intelligence engine")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,79}", candidate.change_id):
+            errors.append("change_id has an invalid format")
+        if not candidate.title.strip():
+            errors.append("title is required")
         if not candidate.affected_symbols:
             errors.append("at least one affected symbol is required")
+        symbol_pattern = re.compile(r"[A-Za-z_][A-Za-z0-9_.]{0,199}")
+        all_symbols = (*candidate.affected_symbols, *candidate.replacement_symbols)
+        if len(candidate.affected_symbols) > 100 or any(
+            not isinstance(symbol, str) or not symbol_pattern.fullmatch(symbol)
+            for symbol in all_symbols
+        ):
+            errors.append("symbols must be bounded dotted identifiers")
         if not 0.0 <= candidate.confidence <= 1.0:
             errors.append("confidence must be between 0.0 and 1.0")
+        if candidate.advisory_only:
+            errors.append("AI suggestion requires independent source validation")
         return len(errors) == 0, errors
 
     def candidate_to_manifest(self, candidate: ManifestCandidate) -> APIChangeManifest:

@@ -1,5 +1,17 @@
 """Self-Maintaining APIs: AST scanning, breaking change matching, and migration impact."""
 
+from agentdiff.api.fetch import FetchArtifact, ProviderFetchError, SafeProviderFetcher
+from agentdiff.api.fleet import (
+    FleetCampaignResult,
+    FleetConfig,
+    FleetRepository,
+    FleetRepositoryResult,
+    migrate_fleet,
+    simulate_fleet,
+    verify_campaign_report,
+    write_campaign_report,
+)
+from agentdiff.api.github_pr import PullRequestResult, VerifiedPRPublisher
 from agentdiff.api.intel import (
     ChangelogChange,
     ChangelogParser,
@@ -11,7 +23,6 @@ from agentdiff.api.intel import (
     SDKReleaseAnalyzer,
     SDKReleaseChange,
 )
-
 from agentdiff.api.manifest import (
     AffectedSymbols,
     APIChangeManifest,
@@ -43,11 +54,17 @@ from agentdiff.api.models import (
     assess_migration_confidence,
 )
 from agentdiff.api.plugins import (
+    PluginTrust,
     ProviderPlugin,
     discover_plugins,
     install_plugin,
     list_plugins,
     load_plugin,
+)
+from agentdiff.api.provider_config import (
+    ProviderDiscovery,
+    discover_provider,
+    init_provider,
 )
 from agentdiff.api.providers import (
     APIProvider,
@@ -84,6 +101,11 @@ __all__ = [
     "ChangeType",
     "ChangelogChange",
     "ChangelogParser",
+    "FetchArtifact",
+    "FleetCampaignResult",
+    "FleetConfig",
+    "FleetRepository",
+    "FleetRepositoryResult",
     "IntelArtifact",
     "ManifestCandidate",
     "ManifestSource",
@@ -104,25 +126,32 @@ __all__ = [
     "OpenAIProvider",
     "OpenAPIBreakingChange",
     "OpenAPIDiffAnalyzer",
+    "PluginTrust",
+    "ProviderDiscovery",
+    "ProviderFetchError",
     "ProviderIntelEngine",
     "ProviderPlugin",
+    "PullRequestResult",
     "ReplacementSymbols",
     "SDKReleaseAnalyzer",
     "SDKReleaseChange",
-    "ReplacementSymbols",
     "SDKVersionInfo",
+    "SafeProviderFetcher",
     "SourceType",
     "StripeProvider",
     "VerificationLevel",
+    "VerifiedPRPublisher",
     "assess_migration_confidence",
     "detect_installed_sdk_versions",
     "discover_plugins",
+    "discover_provider",
     "get_all_providers",
     "get_builtin_manifest",
     "get_provider",
     "get_providers_for_selection",
     "get_transform",
     "get_transforms_for_usage",
+    "init_provider",
     "install_plugin",
     "is_version_affected",
     "list_builtin_manifests",
@@ -130,8 +159,8 @@ __all__ = [
     "list_providers",
     "list_transforms",
     "load_plugin",
-    "is_version_affected",
-    "list_builtin_manifests",
-    "list_providers",
-    "list_transforms",
+    "migrate_fleet",
+    "simulate_fleet",
+    "verify_campaign_report",
+    "write_campaign_report",
 ]

@@ -1,9 +1,9 @@
-"""AgentDiff runtime evidence, deterministic policy, and selective recovery.
+"""AgentDiff deterministic proof and delivery for AI-generated changes.
 
-The transaction API and trust pipeline are the primary product surfaces.
+Verified API migration and the underlying trust pipeline are the primary surfaces.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"
 
 from .analyzers import FutureBlastEngine, FutureBlastResult
 from .cortex import (

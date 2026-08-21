@@ -4,14 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentdiff"
-version = "0.2.0"
-description = "Runtime evidence, mutation policy, and conflict-safe recovery for AI agents"
+version = "0.4.0"
+description = "Deterministic proof and delivery for AI-generated code migrations"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "kam6l"}]
-keywords = ["ai-agents", "runtime-safety", "policy", "rollback", "evaluation", "observability"]
+keywords = [
+    "ai-agents",
+    "api-migration",
+    "code-verification",
+    "developer-tools",
+    "policy",
+    "runtime-safety",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -29,8 +36,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://kam6l.github.io/agentdiff/"
-Documentation = "https://kam6l.github.io/agentdiff/docs/"
+Homepage = "https://agentdiff.usernameort.chatgpt.site/"
+Documentation = "https://agentdiff.usernameort.chatgpt.site/docs/"
 Repository = "https://github.com/kam6l/agentdiff"
 Issues = "https://github.com/kam6l/agentdiff/issues"
 
@@ -45,13 +52,6 @@ dev = [
     "ruff>=0.5",
     "types-psutil>=5.9",
     "types-PyYAML>=6.0",
-]
-docs = [
-    "mkdocs>=1.6.1",
-    "mkdocs-autorefs>=1.4",
-    "mkdocs-material>=9.7.7",
-    "mkdocstrings>=1.0.6",
-    "mkdocstrings-python>=2.0.5",
 ]
 build = [
     "build>=1.2",

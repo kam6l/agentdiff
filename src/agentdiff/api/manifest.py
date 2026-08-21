@@ -274,43 +274,39 @@ def _register_builtin_manifests() -> None:
             provider="openai",
             change_id="chat_to_responses",
             title="Migrate from Chat Completions to Responses API",
-            change_type=ChangeType.DEPRECATION,
-            severity=ChangeSeverity.HIGH,
+            change_type=ChangeType.BEHAVIOR_CHANGE,
+            severity=ChangeSeverity.MODERATE,
             description=(
-                "The Chat Completions API is being superseded by the Responses API. "
-                "The Responses API provides a unified interface for chat, tool use, "
-                "and multi-turn conversations with better streaming and state management."
+                "Chat Completions remains supported. OpenAI recommends Responses for new "
+                "projects; this optional migration changes endpoint, response objects, "
+                "state, structured output, function calling, and streaming semantics."
             ),
             source=ManifestSource(
                 type=SourceType.OFFICIAL_DOCS,
-                url="https://platform.openai.com/docs/guides/responses-api",
-                version="2025-01",
+                url="https://developers.openai.com/api/docs/guides/migrate-to-responses",
+                version="2026-08-21",
             ),
             affected=AffectedSymbols(
                 symbols=("client.chat.completions.create",),
                 parameters=(
                     "model",
                     "messages",
-                    "tools",
-                    "tool_choice",
                     "temperature",
                     "max_tokens",
+                    "max_completion_tokens",
+                    "store",
+                    "top_p",
                 ),
             ),
             replacement=ReplacementSymbols(
                 symbols=("client.responses.create",),
                 parameter_mapping={
                     "messages": "input",
-                    "tools": "tools",
-                    "tool_choice": "tool_choice",
+                    "max_tokens": "max_output_tokens",
+                    "max_completion_tokens": "max_output_tokens",
                 },
                 code_template=(
-                    "response = client.responses.create(\n"
-                    "    model={model},\n"
-                    "    input={input},\n"
-                    "    tools={tools},\n"
-                    "    tool_choice={tool_choice},\n"
-                    ")"
+                    "response = client.responses.create(\n    model={model},\n    input={input},\n)"
                 ),
             ),
             strategy=MigrationStrategyConfig(
@@ -319,9 +315,11 @@ def _register_builtin_manifests() -> None:
                 transform_id="openai-chat-to-responses",
             ),
             confidence=0.85,
-            migration_guide_url="https://platform.openai.com/docs/guides/responses-api/migration",
+            migration_guide_url=(
+                "https://developers.openai.com/api/docs/guides/migrate-to-responses"
+            ),
             breaking_version="",
-            minimum_sdk_version="1.50.0",
+            minimum_sdk_version="1.66.0",
         )
     )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,14 +15,28 @@ from agentdiff.api import (
     APIMatcher,
     APIScanner,
     ChangeSeverity,
+    FleetConfig,
     MigrationEngine,
     MigrationStatus,
     ProviderIntelEngine,
+    VerifiedPRPublisher,
     detect_installed_sdk_versions,
+    discover_provider,
     get_builtin_manifest,
     get_providers_for_selection,
+    init_provider,
     install_plugin,
     list_plugins,
+    migrate_fleet,
+    simulate_fleet,
+    verify_campaign_report,
+    write_campaign_report,
+)
+from agentdiff.api.certificate import verify_certificate
+from agentdiff.api.generators import (
+    CustomCommandGenerator,
+    DeterministicASTGenerator,
+    MigrationGenerator,
 )
 from agentdiff.cortex import (
     AgentMemoryStore,
@@ -1143,24 +1158,58 @@ def cmd_api_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_api_migrate(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-
-    # Load manifest
-    manifest: APIChangeManifest | None = None
+def _api_manifest(args: argparse.Namespace) -> APIChangeManifest | None:
     if args.manifest:
         manifest_path = Path(args.manifest)
         if manifest_path.suffix in {".yaml", ".yml"}:
-            manifest = APIChangeManifest.from_yaml(manifest_path)
+            return APIChangeManifest.from_yaml(manifest_path)
         elif manifest_path.suffix == ".json":
-            manifest = APIChangeManifest.from_json(manifest_path)
+            return APIChangeManifest.from_json(manifest_path)
         else:
-            print(
-                f"agentdiff: Unsupported manifest format: {manifest_path.suffix}", file=sys.stderr
-            )
-            return 2
+            raise ValueError(f"unsupported manifest format: {manifest_path.suffix}")
+    return get_builtin_manifest(args.provider, args.change)
+
+
+def cmd_api_simulate(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    manifest = _api_manifest(args)
+    if manifest is None:
+        print(f"agentdiff: No built-in manifest for {args.provider}:{args.change}", file=sys.stderr)
+        return 1
+    simulation = MigrationEngine(root=root, policy_path=args.policy, manifest=manifest).simulate()
+    if args.format == "json":
+        print(_json(simulation.to_dict()))
     else:
-        manifest = get_builtin_manifest(args.provider, args.change)
+        print("AgentDiff Migration Simulation")
+        print(f"\nProvider:               {simulation.provider.title()}")
+        print(f"Change:                 {manifest.title}")
+        print(f"Affected usages:        {simulation.affected_usages}")
+        print(f"Affected files:         {len(simulation.affected_files)}")
+        print(f"Migration strategy:     {simulation.strategy.value.upper()}")
+        print(f"Expected modifications: {simulation.expected_modifications} files")
+        print(f"Unexpected modifications: {simulation.unexpected_modifications}")
+        print(f"Tests detected:         {'YES' if simulation.tests_detected else 'NO'}")
+        print(f"Requested verification: {simulation.requested_verification.value.upper()}")
+        print(f"Risk:                   {simulation.risk}")
+        print(f"Automation status:      {simulation.automation_status}")
+        for reason in simulation.reasons:
+            print(f"  - {reason}")
+    return 0 if simulation.automation_status == "SAFE_TO_ATTEMPT" else 1
+
+
+def cmd_api_certificate_verify(args: argparse.Namespace) -> int:
+    status, reason = verify_certificate(args.path, root=args.root)
+    if args.format == "json":
+        print(_json({"status": status.value, "reason": reason, "path": args.path}))
+    else:
+        print(status.value)
+        print(reason)
+    return 0 if status.value == "VALID" else 1
+
+
+def cmd_api_migrate(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    manifest = _api_manifest(args)
 
     if manifest is None:
         print(f"agentdiff: No built-in manifest for {args.provider}:{args.change}", file=sys.stderr)
@@ -1173,25 +1222,56 @@ def cmd_api_migrate(args: argparse.Namespace) -> int:
             print(f"agentdiff: Invalid manifest: {e}", file=sys.stderr)
         return 1
 
-    # Create migration engine
+    generator: MigrationGenerator = DeterministicASTGenerator()
+    if args.generator == "command":
+        argv = tuple(args.generator_argv or ())
+        if len(argv) == 1:
+            argv = tuple(shlex.split(argv[0]))
+        if not argv:
+            print("agentdiff: --generator command requires --generator-argv", file=sys.stderr)
+            return 2
+        generator = CustomCommandGenerator(argv)
+
     engine = MigrationEngine(
         root=root,
         policy_path=args.policy,
         manifest=manifest,
+        generator=generator,
     )
 
     # Run migration
     result = engine.run()
+    published = None
+    if args.open_pr:
+        if result.proof_verdict != "PROVEN" or result.certificate is None:
+            print("agentdiff: PR NOT CREATED: migration is NOT_PROVEN", file=sys.stderr)
+            return 1
+        certificate_path = (
+            root / ".agentdiff" / "certificates" / f"{result.certificate.certificate_id}.json"
+        )
+        published = VerifiedPRPublisher(root).publish(
+            result,
+            certificate_path,
+            base_branch=args.base_branch,
+            branch=args.branch,
+            draft=args.draft,
+        )
 
     if args.format == "json":
-        print(_json(result.to_dict()))
+        payload = result.to_dict()
+        if published is not None:
+            payload["pull_request"] = published.to_dict()
+        print(_json(payload))
     else:
-        print(f"Migration: {manifest.provider}:{manifest.change_id}")
-        print(f"Title: {manifest.title}")
-        print(f"Status: {result.migration_status.value}")
-        print(f"Verification: {result.verification_level.value}")
-        print(f"Affected files: {len(result.plan.affected_files)}")
+        print("AgentDiff Verified Migration")
+        print(f"\nProvider:        {manifest.provider.title()}")
+        print(f"Change:          {manifest.title}")
+        print(f"Generator:       {generator.name}")
+        print("Patch status:    UNTRUSTED")
+        print(f"Affected files:  {len(result.plan.affected_files)}")
         print(f"Affected usages: {len(result.plan.affected_usages)}")
+        print(f"Modified files:  {len(result.actual_modified_files)}")
+        print(f"Unexpected files:{len(result.unexpected_files):>3}")
 
         if result.plan.steps:
             print("\nSteps:")
@@ -1204,12 +1284,99 @@ def cmd_api_migrate(args: argparse.Namespace) -> int:
                 print(f"  - {err}")
 
         if result.certificate:
-            print(f"\nCertificate: {result.certificate.certificate_id}")
-            print(f"Verified: {result.certificate.verified}")
+            certificate_path = (
+                root / ".agentdiff" / "certificates" / f"{result.certificate.certificate_id}.json"
+            )
+            print(f"\nPolicy:          {result.certificate.policy_result}")
+            print(f"Blast radius:    {result.certificate.blast_radius_level}")
+            print(f"Build:           {result.certificate.build_result}")
+            print(f"Full tests:      {result.certificate.full_test_result}")
+            print(f"Proof:           {result.certificate.final_verdict}")
+            print(f"Verification:    {result.verification_level.value.upper()}")
+            print(f"Patch digest:    {result.certificate.migration_digest}")
+            print(f"Certificate:     {safe_display(certificate_path)}")
+            print(f"Evidence:        {result.certificate.capsule_id}")
+        if published is not None:
+            print(f"Verified PR:     {published.url}")
 
     return (
         0 if result.migration_status in {MigrationStatus.COMPLETED, MigrationStatus.PLANNED} else 1
     )
+
+
+def _fleet_generator(args: argparse.Namespace) -> MigrationGenerator:
+    if args.generator == "ast":
+        return DeterministicASTGenerator()
+    argv = tuple(args.generator_argv or ())
+    if len(argv) == 1:
+        argv = tuple(shlex.split(argv[0]))
+    if not argv:
+        raise ValueError("--generator command requires --generator-argv")
+    return CustomCommandGenerator(argv)
+
+
+def _print_fleet_summary(result: Any, output: Path | None = None) -> None:
+    print("AgentDiff Verified Campaign")
+    print(f"\nCampaign:  {result.campaign}")
+    print(f"Provider:  {result.provider}")
+    print(f"Change:    {result.change_id}")
+    print(f"Mode:      {result.mode.upper()}")
+    print(f"Verdict:   {result.verdict}")
+    print(f"Digest:    {result.campaign_digest}")
+    print("\nRepositories:")
+    for repository in result.repositories:
+        detail = f"{repository.affected_usages} usage(s), {len(repository.affected_files)} file(s)"
+        print(f"  {repository.status:16} {repository.name:24} {detail}")
+        for error in repository.errors:
+            print(f"    - {safe_display(error)}")
+    if output is not None:
+        print(f"\nReport:    {safe_display(output)}")
+
+
+def cmd_fleet_simulate(args: argparse.Namespace) -> int:
+    """Assess an explicit local repository campaign without mutation."""
+
+    config = FleetConfig.load(args.config)
+    result = simulate_fleet(config)
+    output = write_campaign_report(result, args.output) if args.output else None
+    if args.format == "json":
+        payload = result.to_dict()
+        if output is not None:
+            payload["report_path"] = str(output)
+        print(_json(payload))
+    else:
+        _print_fleet_summary(result, output)
+    return 0 if result.verdict == "SAFE_TO_ATTEMPT" else 1
+
+
+def cmd_fleet_migrate(args: argparse.Namespace) -> int:
+    """Run a proof-backed migration independently in each configured repository."""
+
+    config = FleetConfig.load(args.config)
+    result = migrate_fleet(config, generator=_fleet_generator(args))
+    requested_output = args.output or (
+        config.config_path.parent / ".agentdiff" / "campaigns" / f"{config.campaign}.json"
+    )
+    output = write_campaign_report(result, requested_output)
+    if args.format == "json":
+        payload = result.to_dict()
+        payload["report_path"] = str(output)
+        print(_json(payload))
+    else:
+        _print_fleet_summary(result, output)
+    return 0 if result.verdict in {"PROVEN", "NO_CHANGE"} else 1
+
+
+def cmd_fleet_verify(args: argparse.Namespace) -> int:
+    """Verify a campaign digest and every PROVEN child certificate."""
+
+    status, reason = verify_campaign_report(args.report)
+    if args.format == "json":
+        print(_json({"status": status.value, "reason": reason, "path": args.report}))
+    else:
+        print(status.value)
+        print(reason)
+    return 0 if status.value == "VALID" else 1
 
 
 def cmd_provider_list(args: argparse.Namespace) -> int:
@@ -1238,6 +1405,33 @@ def cmd_provider_install(args: argparse.Namespace) -> int:
         print(f"agentdiff: {safe_display(error)}", file=sys.stderr)
         return 1
     print(f"Installed provider plugin {args.name} -> {safe_display(dest)}")
+    return 0
+
+
+def cmd_provider_init(args: argparse.Namespace) -> int:
+    """Create a declarative provider skeleton without executable code."""
+    path = init_provider(args.name, args.providers_dir)
+    print(f"Initialized DATA_ONLY provider {args.name} -> {safe_display(path)}")
+    print("Configure official HTTPS sources in sources.yaml, then run provider discover.")
+    return 0
+
+
+def cmd_provider_discover(args: argparse.Namespace) -> int:
+    """Fetch configured sources and produce untrusted manifest candidates."""
+    discovery = discover_provider(
+        args.name,
+        args.providers_dir,
+        cache_dir=args.cache_dir,
+    )
+    if args.format == "json":
+        print(_json(discovery.to_dict()))
+    else:
+        candidates = sum(len(artifact.candidates) for artifact in discovery.artifacts)
+        print(f"Provider discovery: {discovery.provider}")
+        print(f"Official sources:   {len(discovery.sources)}")
+        print(f"Candidates:         {candidates} (UNTRUSTED)")
+        print(f"Artifact:           {safe_display(discovery.output_path)}")
+        print("Candidates require deterministic validation before use.")
     return 0
 
 
@@ -1277,7 +1471,6 @@ def cmd_api_intel(args: argparse.Namespace) -> int:
                 f"{candidate.change_id} ({candidate.change_type.value}) {status}"
             )
     return 0
-
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1621,6 +1814,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_ws_prune.add_argument("--keep", type=int, default=3)
     p_ws_prune.set_defaults(func=cmd_workspace_prune)
 
+    p_fleet = subparsers.add_parser(
+        "fleet", help="Run integrity-bound API change campaigns across local repositories"
+    )
+    fleet_commands = p_fleet.add_subparsers(dest="fleet_command", required=True)
+    p_fleet_simulate = fleet_commands.add_parser(
+        "simulate", help="Read-only assessment of every configured repository"
+    )
+    p_fleet_simulate.add_argument("--config", required=True, help="Campaign YAML/JSON file")
+    p_fleet_simulate.add_argument("--output", help="Optional campaign report path")
+    p_fleet_simulate.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_fleet_simulate.set_defaults(func=cmd_fleet_simulate)
+    p_fleet_migrate = fleet_commands.add_parser(
+        "migrate", help="Migrate and prove every configured repository independently"
+    )
+    p_fleet_migrate.add_argument("--config", required=True, help="Campaign YAML/JSON file")
+    p_fleet_migrate.add_argument("--output", help="Campaign report path")
+    p_fleet_migrate.add_argument(
+        "--generator", choices=["ast", "command"], default="ast", help="Untrusted patch worker"
+    )
+    p_fleet_migrate.add_argument(
+        "--generator-argv", nargs="+", help="Exact argv for the custom-command generator"
+    )
+    p_fleet_migrate.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_fleet_migrate.set_defaults(func=cmd_fleet_migrate)
+    p_fleet_verify = fleet_commands.add_parser(
+        "verify", help="Verify campaign integrity and PROVEN child evidence"
+    )
+    p_fleet_verify.add_argument("report", help="Campaign report JSON path")
+    p_fleet_verify.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_fleet_verify.set_defaults(func=cmd_fleet_verify)
+
     p_api = subparsers.add_parser(
         "api", help="Self-maintaining external API scanner and breaking change checker"
     )
@@ -1651,7 +1875,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_api_check.set_defaults(func=cmd_api_check)
 
     p_api_migrate = api_commands.add_parser(
-        "migrate", help="Generate and verify API migration (experimental)"
+        "migrate", help="Generate an untrusted patch and prove it independently"
     )
     p_api_migrate.add_argument("--root", default=".", help="Project root to migrate")
     p_api_migrate.add_argument("--provider", default="openai", help="Provider (openai, stripe)")
@@ -1660,8 +1884,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_api_migrate.add_argument("--manifest", help="Path to custom manifest YAML/JSON")
     p_api_migrate.add_argument("--policy", help="Policy file (default: ROOT/agentdiff.yaml)")
+    p_api_migrate.add_argument(
+        "--generator", choices=["ast", "command"], default="ast", help="Untrusted patch worker"
+    )
+    p_api_migrate.add_argument(
+        "--generator-argv", nargs="+", help="Exact argv for the custom-command generator"
+    )
+    p_api_migrate.add_argument("--open-pr", action="store_true", help="Open a PR only if PROVEN")
+    p_api_migrate.add_argument("--base-branch", default="main", help="GitHub PR base branch")
+    p_api_migrate.add_argument("--branch", help="Explicit PR head branch")
+    p_api_migrate.add_argument("--draft", action="store_true", help="Open the PR as a draft")
     p_api_migrate.add_argument("--format", choices=["json", "summary"], default="summary")
     p_api_migrate.set_defaults(func=cmd_api_migrate)
+
+    p_api_simulate = api_commands.add_parser(
+        "simulate", help="Plan an API migration without modifying the repository"
+    )
+    p_api_simulate.add_argument("--root", default=".", help="Project root to inspect")
+    p_api_simulate.add_argument("--provider", default="openai", help="Provider")
+    p_api_simulate.add_argument("--change", required=True, help="Change ID")
+    p_api_simulate.add_argument("--manifest", help="Path to custom manifest YAML/JSON")
+    p_api_simulate.add_argument("--policy", help="Policy file")
+    p_api_simulate.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_api_simulate.set_defaults(func=cmd_api_simulate)
+
+    p_api_certificate = api_commands.add_parser(
+        "certificate", help="Inspect migration certificate integrity"
+    )
+    api_certificate_commands = p_api_certificate.add_subparsers(
+        dest="certificate_command", required=True
+    )
+    p_api_certificate_verify = api_certificate_commands.add_parser(
+        "verify", help="Verify certificate and sealed evidence bindings"
+    )
+    p_api_certificate_verify.add_argument("path")
+    p_api_certificate_verify.add_argument("--root", default=".")
+    p_api_certificate_verify.add_argument(
+        "--format", choices=["json", "summary"], default="summary"
+    )
+    p_api_certificate_verify.set_defaults(func=cmd_api_certificate_verify)
 
     p_api_intel = api_commands.add_parser(
         "intel",
@@ -1696,6 +1957,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--plugins-dir", default="providers", help="Destination plugins directory"
     )
     p_provider_install.set_defaults(func=cmd_provider_install)
+    p_provider_init = provider_commands.add_parser(
+        "init", help="Create a DATA_ONLY custom-provider skeleton"
+    )
+    p_provider_init.add_argument("name", help="Provider name")
+    p_provider_init.add_argument("--providers-dir", default="providers")
+    p_provider_init.set_defaults(func=cmd_provider_init)
+    p_provider_discover = provider_commands.add_parser(
+        "discover", help="Safely fetch official sources into untrusted candidates"
+    )
+    p_provider_discover.add_argument("name", help="Provider name")
+    p_provider_discover.add_argument("--providers-dir", default="providers")
+    p_provider_discover.add_argument("--cache-dir", default=".agentdiff/provider-cache")
+    p_provider_discover.add_argument("--format", choices=["json", "summary"], default="summary")
+    p_provider_discover.set_defaults(func=cmd_provider_discover)
 
     return parser
 
