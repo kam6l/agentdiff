@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from agentdiff.api.certificate import create_certificate, write_certificate
-from agentdiff.api.generation_runtime import PrivateGenerationRuntime
-from agentdiff.api.generators import DeterministicASTGenerator, MigrationGenerator
+from agentdiff.api.generation_runtime import (
+    DockerGeneratorRuntime,
+    GeneratorRuntime,
+    PrivateGenerationRuntime,
+)
+from agentdiff.api.generators import (
+    CustomCommandGenerator,
+    DeterministicASTGenerator,
+    MigrationGenerator,
+)
 from agentdiff.api.manifest import APIChangeManifest, get_builtin_manifest
 from agentdiff.api.matcher import APIMatcher
 from agentdiff.api.models import (
@@ -29,6 +38,8 @@ from agentdiff.api.transforms import TransformContext, get_transforms_for_usage
 from agentdiff.api.verification import MigrationVerifier
 from agentdiff.policy import load_policy, load_policy_file, policy_to_dict
 from agentdiff.transaction import AgentRunTransaction
+
+GeneratorRuntimeFactory = Callable[[MigrationPlan, MigrationGenerator], GeneratorRuntime]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +89,8 @@ class MigrationEngine:
         provider: str | None = None,
         change_id: str | None = None,
         generator: MigrationGenerator | None = None,
+        generator_image: str = "python:3.12-slim",
+        generator_runtime_factory: GeneratorRuntimeFactory | None = None,
         proof_environment_factory: Any | None = None,
         proof_cache: Any | None = None,
         proof_timeout_seconds: float = 900.0,
@@ -87,6 +100,8 @@ class MigrationEngine:
         self.provider = provider
         self.change_id = change_id
         self.generator = generator or DeterministicASTGenerator()
+        self.generator_image = generator_image
+        self.generator_runtime_factory = generator_runtime_factory
         self.proof_environment_factory = proof_environment_factory
         self.proof_cache = proof_cache
         self.proof_timeout_seconds = proof_timeout_seconds
@@ -242,13 +257,13 @@ class MigrationEngine:
             )
 
         migration_policy = self._migration_policy(plan)
-        runtime = PrivateGenerationRuntime(plan, self.generator)
+        runtime = self._generation_runtime(plan)
         transaction = AgentRunTransaction(
             self.root,
             migration_policy,
             task=f"api migration {plan.provider}:{plan.change_id}",
             runtime=runtime,
-        ).run([self.generator.command_label], timeout_seconds=900)
+        ).run(runtime.command_argv, timeout_seconds=900)
         actual_files = tuple(sorted(change.path for change in transaction.changes))
         unexpected_files = tuple(sorted(set(actual_files) - set(plan.affected_files)))
         missing_files = tuple(sorted(set(plan.affected_files) - set(actual_files)))
@@ -312,6 +327,32 @@ class MigrationEngine:
             process["allow"] = [*process.get("allow", []), self.generator.command_label]
         payload["process"] = process
         return load_policy(payload)
+
+    def _generation_runtime(self, plan: MigrationPlan) -> GeneratorRuntime:
+        if self.generator_runtime_factory is not None:
+            runtime = self.generator_runtime_factory(plan, self.generator)
+            if not isinstance(runtime, GeneratorRuntime):
+                raise TypeError("generator runtime factory returned an invalid runtime")
+            if (
+                type(self.generator) is not DeterministicASTGenerator
+                and runtime.enforcement != "isolated_private_workspace"
+            ):
+                raise TypeError(
+                    "non-deterministic generators require an isolated private workspace runtime"
+                )
+            return runtime
+        if type(self.generator) is DeterministicASTGenerator:
+            return PrivateGenerationRuntime(plan, self.generator)
+        if isinstance(self.generator, CustomCommandGenerator):
+            return DockerGeneratorRuntime(
+                self.root,
+                plan,
+                self.generator,
+                image=self.generator_image,
+            )
+        raise TypeError(
+            "unrecognized migration generators require an explicit isolated runtime factory"
+        )
 
     def _empty_result(self, manifest: APIChangeManifest) -> MigrationResult:
         plan = MigrationPlan(

@@ -12,7 +12,7 @@ from .base import (
     RuntimeControlLevel,
     RuntimeResult,
 )
-from .docker import DockerRuntime
+from .docker import DockerLifecycleError, DockerRuntime
 from .local import LocalRuntime
 from .materialize import (
     MaterializationReport,
@@ -24,6 +24,7 @@ from .sandbox import SandboxRuntime
 __all__ = [
     "CleanupOutcome",
     "CleanupReport",
+    "DockerLifecycleError",
     "DockerRuntime",
     "LocalRuntime",
     "MaterializationReport",

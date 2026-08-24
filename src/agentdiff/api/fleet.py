@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import yaml
 
 from agentdiff.api.certificate import CertificateStatus, verify_certificate
+from agentdiff.api.generators import CustomCommandGenerator
 from agentdiff.api.manifest import APIChangeManifest, get_builtin_manifest
 from agentdiff.api.migrate import MigrationEngine, MigrationSimulation
 from agentdiff.api.models import MigrationResult, MigrationStatus
@@ -351,6 +352,7 @@ def migrate_fleet(
     config: FleetConfig,
     *,
     generator: MigrationGenerator,
+    generator_image: str = "python:3.12-slim",
     engine_factory: EngineFactory = MigrationEngine,
 ) -> FleetCampaignResult:
     """Run the authoritative migration pipeline independently for every repository."""
@@ -359,10 +361,15 @@ def migrate_fleet(
     results: list[FleetRepositoryResult] = []
     for repository in config.repositories:
         try:
+            engine_kwargs: dict[str, Any] = {
+                "root": repository.path,
+                "manifest": manifest,
+                "generator": generator,
+            }
+            if isinstance(generator, CustomCommandGenerator):
+                engine_kwargs["generator_image"] = generator_image
             migration = engine_factory(
-                root=repository.path,
-                manifest=manifest,
-                generator=generator,
+                **engine_kwargs,
             ).run()
             results.append(_migration_result(repository, migration))
         except (OSError, RuntimeError, TypeError, ValueError) as error:
