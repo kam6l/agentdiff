@@ -1237,6 +1237,7 @@ def cmd_api_migrate(args: argparse.Namespace) -> int:
         policy_path=args.policy,
         manifest=manifest,
         generator=generator,
+        generator_image=args.generator_image,
     )
 
     # Run migration
@@ -1353,7 +1354,11 @@ def cmd_fleet_migrate(args: argparse.Namespace) -> int:
     """Run a proof-backed migration independently in each configured repository."""
 
     config = FleetConfig.load(args.config)
-    result = migrate_fleet(config, generator=_fleet_generator(args))
+    result = migrate_fleet(
+        config,
+        generator=_fleet_generator(args),
+        generator_image=args.generator_image,
+    )
     requested_output = args.output or (
         config.config_path.parent / ".agentdiff" / "campaigns" / f"{config.campaign}.json"
     )
@@ -1836,6 +1841,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_fleet_migrate.add_argument(
         "--generator-argv", nargs="+", help="Exact argv for the custom-command generator"
     )
+    p_fleet_migrate.add_argument(
+        "--generator-image",
+        default="python:3.12-slim",
+        help="Docker image for command generators (host execution is never used)",
+    )
     p_fleet_migrate.add_argument("--format", choices=["json", "summary"], default="summary")
     p_fleet_migrate.set_defaults(func=cmd_fleet_migrate)
     p_fleet_verify = fleet_commands.add_parser(
@@ -1889,6 +1899,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_api_migrate.add_argument(
         "--generator-argv", nargs="+", help="Exact argv for the custom-command generator"
+    )
+    p_api_migrate.add_argument(
+        "--generator-image",
+        default="python:3.12-slim",
+        help="Docker image for command generators (host execution is never used)",
     )
     p_api_migrate.add_argument("--open-pr", action="store_true", help="Open a PR only if PROVEN")
     p_api_migrate.add_argument("--base-branch", default="main", help="GitHub PR base branch")

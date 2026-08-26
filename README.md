@@ -1,28 +1,46 @@
 # AgentDiff
 
-**Let any coding agent write the patch. Independently prove the exact change before it ships.**
+**Your software changes itself. AgentDiff proves every change before it ships.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/kam6l/agentdiff/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/kam6l/agentdiff/actions/workflows/ci.yml)
 [![Python 3.12–3.14](https://img.shields.io/badge/Python-3.12%E2%80%933.14-171916?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![MIT](https://img.shields.io/badge/license-MIT-78f2c2?style=flat-square)](LICENSE)
 
-[Website](https://agentdiff.usernameort.chatgpt.site/) · [Documentation](https://agentdiff.usernameort.chatgpt.site/docs) · [Quick start](https://agentdiff.usernameort.chatgpt.site/docs/getting-started) · [Security](SECURITY.md)
+[Website](https://kam6l.github.io/agentdiff-web/) · [Documentation](https://kam6l.github.io/agentdiff-web/docs/) · [Getting started](https://kam6l.github.io/agentdiff-web/docs/getting-started) · [Security](SECURITY.md)
 
-AgentDiff is a local, deterministic trust layer for autonomous software changes. Its first complete product path is verified API migration:
+AgentDiff is an open-source deterministic trust layer around coding agents and maintenance automation. A built-in recipe, Codex, Claude, Gemini, Copilot, or a custom worker may propose code. AgentDiff independently decides whether the exact patch is authorized, reproducible, sufficiently minimal, and proven.
 
 ```text
-provider signal → usage scan → migration plan → untrusted patch
-                → policy → impact → clean-room proof → certificate → reviewable PR
+upstream change → exposure → untrusted patch → policy + proof
+                → exact certificate → reviewable PR → outcome evidence
 ```
 
-The generator is replaceable. The trust decision is not delegated to the generator.
+The generator is replaceable. The proof authority is not.
 
-> [!IMPORTANT]
-> The default `ProofEngine` uses Docker for clean-room verification. The general `agentdiff run` local backend observes a normal host subprocess and is not a security sandbox. Read [SECURITY.md](SECURITY.md) before running untrusted commands.
+![A real AgentDiff rejection certificate: an unauthorized workflow change remains NOT_PROVEN](https://kam6l.github.io/agentdiff-web/product/unsafe-patch-proof.svg)
 
-## Install from source
+This image is rendered from the checked-in `demos/openai-failure` artifact. The worker exited successfully; AgentDiff still rejected the patch because it changed `.github/workflows/deploy.yml` outside the authorized scope.
 
-AgentDiff 0.4.0 requires Python 3.12–3.14. The package is not yet published on PyPI; install the current source revision explicitly.
+## What ships today
+
+The complete product path is verified Python API migration:
+
+- bounded provider-source discovery and data-only plugin candidates;
+- read-only SDK usage scan, change matching, and migration simulation;
+- a narrow, fail-closed OpenAI Chat Completions → Responses AST transform;
+- private generation, deterministic mutation policy, and impact analysis;
+- authoritative Docker-backed clean-room proof;
+- integrity-bound migration certificates;
+- sealed GitHub PR delivery with no regeneration and no auto-merge; and
+- explicit multi-repository Verified Campaigns with independent proof per repository.
+
+This repository also contains tested foundations for generic `ChangeSpec`, the Maintenance Graph, deterministic priority and scheduling, DeltaProof, adversarial proof, flake classification, bounded patch minimization, Proof Lease, PR reconciliation, and post-merge outcome aggregation. They are intentionally labeled **Foundation** until wired into the default operational loop.
+
+See the [implementation status](docs/engineering/IMPLEMENTATION_STATUS.md) for exact boundaries.
+
+## Install
+
+AgentDiff 0.4.x requires Python 3.12–3.14. It is not yet published on PyPI; install the current source revision explicitly:
 
 ```bash
 uv tool install git+https://github.com/kam6l/agentdiff.git
@@ -38,18 +56,18 @@ uv sync --locked --all-groups --extra langchain
 uv run agentdiff --help
 ```
 
-## Verified API migration
+Docker is required for the default clean-room proof path and for custom/external generators. Read-only scan and simulation do not require it.
 
-Start read-only:
+## Start with a read-only assessment
 
 ```bash
 agentdiff api check --provider openai
 agentdiff api simulate --provider openai --change chat_to_responses
 ```
 
-`simulate` reports affected usages and files, the generation strategy, required verification level, test/build coverage, policy constraints, and review blockers without modifying the repository.
+`simulate` reports exact affected usages and files, generation strategy, required verification level, test/build coverage, policy constraints, and review blockers. It does not create a generation workspace, certificate, branch, commit, or pull request.
 
-Run the migration only after the simulation is reviewable:
+When the assessment is reviewable:
 
 ```bash
 agentdiff api migrate \
@@ -57,45 +75,24 @@ agentdiff api migrate \
   --change chat_to_responses
 ```
 
-The default OpenAI transform automates only a narrow, text-only shape:
+The built-in transform automates only direct keyword-based, text-only calls with supported parameters and the known `choices[0].message.content` consumer. Tools/functions, streaming, structured output, `n`, multimodal input, dynamic message builders, wrappers, expanded keyword arguments, and unusual response consumers fail closed as `NEEDS_REVIEW`.
 
-- keyword-only `client.chat.completions.create(...)` calls;
-- literal system/user/assistant message dictionaries with text content;
-- `model`, `store`, `temperature`, `top_p`, and token-limit parameters; and
-- response values consumed as `choices[0].message.content`.
+Chat Completions remains supported by OpenAI. AgentDiff treats this as an optional behavior change; it does not invent a provider deadline.
 
-Tools/functions, streaming, structured output, `n`, multimodal content, dynamic message builders, wrappers, expanded keyword arguments, and unusual response consumers fail closed as `NEEDS_REVIEW`. Chat Completions is still supported by OpenAI; this migration is optional and classified as a behavior change.
+## Independent proof
 
-The generated patch remains in a private workspace and is captured as untrusted evidence. The host source tree is not changed by `api migrate`.
+There is one normal verifier: `agentdiff.proof.ProofEngine`. A migration becomes `PROVEN` only when all configured conditions agree:
 
-## Verified Campaigns
-
-Coordinate the same provider change across an explicit set of local repositories:
-
-```bash
-agentdiff fleet simulate --config fleet.yaml
-agentdiff fleet migrate --config fleet.yaml
-agentdiff fleet verify .agentdiff/campaigns/openai-responses-2026.json
-```
-
-Every affected repository runs through the existing `MigrationEngine` and authoritative `ProofEngine` independently. The campaign report records per-repository `PROVEN`, `NEEDS_REVIEW`, `REJECTED`, `UNAFFECTED`, or `ERROR` outcomes. Its SHA-256 digest binds each child certificate ID, certificate integrity digest, patch digest, and proof digest.
-
-Campaigns accept only explicitly configured local directories. They do not discover repositories, clone URLs, create bulk pull requests, merge changes, or provide a hosted dashboard. A campaign cannot become `PROVEN` unless every affected repository is independently proven.
-
-## Proof and certificates
-
-There is one authoritative verifier: `agentdiff.proof.ProofEngine`. The final migration verdict is `PROVEN` only when all required conditions agree:
-
-- generation completed;
-- actual files exactly match the expected scope;
-- deterministic mutation policy allows the change;
-- the requested proof level was actually achieved;
-- build, type-check, affected tests, and full tests satisfy the proof plan; and
-- the exact patch and evidence capsule remain integrity-valid.
+1. generation completed in the permitted runtime;
+2. actual paths exactly match authorized scope;
+3. deterministic mutation policy allows the change;
+4. the required proof level was actually achieved;
+5. trusted build, type-check, affected-test, and full-test phases pass; and
+6. the exact patch, base, plan, environment, and evidence remain integrity-valid.
 
 Anything weaker is `NOT_PROVEN`.
 
-Migration certificates bind the provider source, repository base SHA, expected and actual files, generator, policy, blast radius, verification plan/results, patch digest, proof digest, and evidence capsule. They provide SHA-256 integrity and freshness checks; they are **not cryptographic signatures**.
+Migration certificates bind source provenance, repository base, expected and actual paths, generator, policy, impact, verification plan/results, patch digest, proof digest, and evidence capsule. Their SHA-256 integrity detects local modification; it is not an authenticated signature.
 
 ```bash
 agentdiff api certificate verify .agentdiff/certificates/<certificate>.json
@@ -103,9 +100,26 @@ agentdiff api certificate verify .agentdiff/certificates/<certificate>.json
 
 Verification reports `VALID`, `INVALID`, `STALE`, or `MISMATCH`.
 
-## Verified pull requests
+## Use a custom coding agent without trusting it
 
-After a `PROVEN` result, `--open-pr` can replay the sealed patch into a temporary Git worktree and open a GitHub pull request:
+Custom and external workers are exact-argv specifications. They do not have a host `generate()` path and never fall back to local execution:
+
+```bash
+agentdiff api migrate \
+  --provider openai \
+  --change chat_to_responses \
+  --generator command \
+  --generator-image your-reviewed-worker@sha256:<digest> \
+  --generator-argv your-agent migrate-source
+```
+
+The Docker generator runtime uses a private working copy, exact argv, an empty inherited environment, non-root execution, a read-only root filesystem, dropped capabilities, no-new-privileges, no network by default, CPU/memory/PID limits, bounded output, and bounded lifecycle calls. It never mounts the live repository or Docker socket. Docker unavailable, weakened capability evidence, timeout, or output overflow is a refusal.
+
+The private temporary copy is currently bind-mounted into a container, and containers share the host kernel. That is a strong container boundary, not a VM or zero-host-mount claim.
+
+## Deliver the exact proven patch
+
+After a `PROVEN` result, `--open-pr` replays the sealed patch into a temporary Git worktree:
 
 ```bash
 agentdiff api migrate \
@@ -115,38 +129,39 @@ agentdiff api migrate \
   --base-branch main
 ```
 
-This path requires a clean tracked worktree, an unchanged certified base SHA, an `origin` remote, and an authenticated `gh` CLI. AgentDiff re-verifies every base and result file digest, stages only sealed paths, pushes a dedicated branch, and creates a PR body from the certificate. It never regenerates during delivery and never auto-merges.
+Delivery requires a clean tracked worktree, unchanged certified base, `origin`, and authenticated `gh`. It verifies base/result digests, stages only sealed paths, pushes a dedicated branch, and creates a certificate-backed PR body. It never regenerates or auto-merges.
 
-## Any coding agent as the worker
-
-The built-in deterministic AST transform is the default. A custom coding-agent command can be used as an untrusted generator:
+## Coordinate Verified Campaigns
 
 ```bash
-agentdiff api migrate \
-  --provider openai \
-  --change chat_to_responses \
-  --generator command \
-  --generator-argv your-agent migrate-source
+agentdiff fleet simulate --config demos/fleet/fleet.yaml
+agentdiff fleet migrate --config demos/fleet/fleet.yaml
+agentdiff fleet verify .agentdiff/campaigns/openai-responses-2026.json
 ```
 
-The worker receives a private copy of the sealed source snapshot. AgentDiff captures changes only from that copy, but a custom command still runs with the caller's host permissions: this is observation, not an OS sandbox. Use only trusted commands until a sandbox-backed generator runtime is configured. Exact argv, time/output bounds, generated files, and generator identity are recorded. Missing expected edits, extra files, or policy violations force `NOT_PROVEN` even when the raw test command exits successfully.
+Every affected repository runs its own migration and proof. The aggregate binds child certificate, certificate-integrity, patch, and proof digests; it cannot become `PROVEN` unless every affected repository is independently proven.
 
-## Provider intelligence
+Campaigns accept explicit local directories. They do not discover an organization, clone URLs, bulk merge, or provide a hosted dashboard.
 
-Create a data-only provider definition and configure official HTTPS sources:
+## General trust commands
 
-```bash
-agentdiff provider init acme
-agentdiff provider discover acme
-```
+| Command | Purpose |
+|---|---|
+| `agentdiff init` / `bootstrap` | Compile repository trust configuration and proof plans |
+| `agentdiff wrap -- <agent>` | Run a worker through the local sidecar pipeline |
+| `agentdiff run -- <cmd>` | Record a local command transaction |
+| `agentdiff prove <run-id>` | Run clean-room proof for a sealed patch |
+| `agentdiff promote <run-id>` | Conflict-check and promote proven evidence |
+| `agentdiff repair <run-id>` | Run the bounded general repair loop |
+| `agentdiff inspect` / `verify` / `runs` | Inspect and validate evidence capsules |
+| `agentdiff rollback <run-id> --safe-only` | Recover eligible regular-file collateral |
+| `agentdiff trust` / `impact` / `proof cache-status` | Inspect trust and proof planning |
+| `agentdiff workspace status/warm/prune` | Manage immutable warm snapshots |
 
-Remote fetches are bounded by scheme, redirect count, DNS/IP validation, time, size, and content type. Responses are cached with provenance, validators, and a SHA-256 digest. Provider discovery emits untrusted manifest candidates; it never applies them directly.
-
-Provider plugins default to `DATA_ONLY`. Python transform code is not imported during install or list operations. Executable provider code requires both `TRUSTED_CODE` metadata and explicit caller opt-in.
+> [!IMPORTANT]
+> `agentdiff run` observes a normal host subprocess. It is not OS isolation, and local filesystem policy is primarily a post-condition check. Use a disposable unprivileged workspace or reviewed external sandbox for untrusted general commands. The API custom-generator path is separate and fails closed to Docker.
 
 ## Reproducible demos
-
-The repository includes focused OpenAI and campaign fixtures:
 
 ```bash
 agentdiff api simulate \
@@ -155,59 +170,37 @@ agentdiff api simulate \
   --change chat_to_responses
 ```
 
-- `demos/openai-success` is the supported text-only migration with explicit Docker proof commands.
-- `demos/openai-failure` includes a deliberately unsafe worker that also edits a deployment workflow. Policy rejects the unexpected file and the verdict stays `NOT_PROVEN`.
-- `demos/fleet/fleet.yaml` combines one supported, one review-required, and one unaffected repository for a read-only Verified Campaigns demo.
+- `demos/openai-success`: supported text-only migration and explicit Docker proof commands.
+- `demos/openai-failure`: unsafe worker that also edits a deployment workflow; policy rejects it.
+- `demos/fleet/fleet.yaml`: one supported, one review-required, and one unaffected repository.
 
-## Foundation commands
+Website proof surfaces are captured from these fixtures and preserve their real simulation or rejection status. They are not fabricated customer results.
 
-The same trust infrastructure also supports general coding-agent transactions:
+## Website and documentation
 
-| Command | Purpose |
-|---|---|
-| `agentdiff init` / `bootstrap` | Compile repository trust configuration and proof plans |
-| `agentdiff wrap -- <agent>` | Run an agent through the local sidecar pipeline |
-| `agentdiff run -- <cmd>` | Record an explicit local command transaction |
-| `agentdiff prove <run-id>` | Run clean-room proof for a sealed patch |
-| `agentdiff promote <run-id>` | Conflict-check and promote proven evidence |
-| `agentdiff repair <run-id>` | Run the bounded general repair loop |
-| `agentdiff inspect` / `verify` / `runs` | Inspect and validate evidence capsules |
-| `agentdiff rollback <run-id> --safe-only` | Recover eligible regular-file collateral |
-| `agentdiff trust` / `impact` / `proof cache-status` | Inspect trust compilation and proof planning |
-| `agentdiff workspace status/warm/prune` | Manage immutable warm workspace snapshots |
+The canonical warm editorial site and complete docs IA are maintained in the private `agentdiff-web` repository and deploy to GitHub Pages at [kam6l.github.io/agentdiff-web](https://kam6l.github.io/agentdiff-web/).
 
-The general `repair` loop is implemented, but `api migrate` does not invoke it automatically in 0.4.0. A failed API migration is preserved as evidence and returned for review.
+```bash
+cd agentdiff-web
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm run check
+```
 
-## Available now and coming next
+The production build creates crawlable deep-route HTML, route-specific metadata, sitemap, `.nojekyll`, and a Pages fallback under the `/agentdiff-web/` base path.
 
-Available now:
-
-- OpenAI Python usage scanning and a fail-closed Chat Completions → Responses transform;
-- read-only simulation, private generation, deterministic policy, impact analysis, clean-room proof, integrity certificates, and verified-PR delivery;
-- explicit multi-repository Verified Campaigns with integrity-bound child evidence;
-- data-only custom providers and bounded official-source discovery;
-- general transaction, proof, promotion, repair, recovery, and workspace primitives; and
-- Linux/macOS/Windows CI across Python 3.12–3.14, package validation, dependency auditing, Bandit, and CodeQL.
-
-Coming next:
-
-- broader deterministic OpenAI shapes and additional provider migrations;
-- automatic API-specific repair-loop integration;
-- authenticated certificate signatures and external transparency storage; and
-- a maintained hosted isolation backend.
-
-There is no hosted dashboard, telemetry service, or hidden approval system. Evidence stays under the repository's `.agentdiff/` directory unless the user deliberately shares it.
-
-## Development
+## Development checks
 
 ```bash
 uv run pytest -p no:cacheprovider tests/
 uv run ruff format --check src tests examples benchmarks demos
 uv run ruff check src tests examples benchmarks demos
 uv run mypy src/agentdiff
-uv build
-uv run twine check dist/*
-uv run check-wheel-contents dist/*.whl
+
+cd agentdiff-web
+pnpm run check
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). AgentDiff is MIT licensed pre-release software.
+The public repository CI adds cross-platform Python coverage, Docker proof, dependency auditing, Bandit, Python CodeQL, package build/smoke testing, and the recovery safety benchmark. The website repository independently validates lint, types, production builds, dependency changes, and JavaScript/TypeScript CodeQL.
+
+Read [AGENTS.md](AGENTS.md) for the repository map, [SECURITY.md](SECURITY.md) for the full threat model, and [CONTRIBUTING.md](CONTRIBUTING.md) before changing trust boundaries. AgentDiff is MIT-licensed pre-release software.

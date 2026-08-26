@@ -49,7 +49,6 @@ dmypy.json
 
 # Generated documentation and Pages output
 /site/
-/docs/
 /docs_build/
 
 # AgentDiff local run artifacts

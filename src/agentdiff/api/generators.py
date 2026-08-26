@@ -6,8 +6,6 @@ only the AgentDiff trust pipeline can decide whether that patch is proven.
 
 from __future__ import annotations
 
-import subprocess  # nosec B404 -- custom generators use exact argv without a shell
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,8 +29,8 @@ class GenerationResult:
     returncode: int = 0
 
 
-class MigrationGenerator(ABC):
-    """Interface implemented by deterministic, agent, and custom workers."""
+class MigrationGenerator:
+    """Metadata shared by deterministic workers and isolated command specs."""
 
     name: str
     strategy: MigrationStrategy
@@ -42,10 +40,6 @@ class MigrationGenerator(ABC):
         """Stable policy subject recorded for the generator transaction."""
 
         return self.name
-
-    @abstractmethod
-    def generate(self, plan: MigrationPlan, workspace: Path) -> GenerationResult:
-        """Generate a patch inside a private workspace."""
 
 
 class DeterministicASTGenerator(MigrationGenerator):
@@ -154,12 +148,14 @@ class DeterministicASTGenerator(MigrationGenerator):
 
 
 class CustomCommandGenerator(MigrationGenerator):
-    """Run a user-supplied exact argv sequence in the private workspace."""
+    """Describe a user-supplied exact argv sequence for an isolated runtime."""
 
     strategy = MigrationStrategy.CODING_AGENT
 
     def __init__(self, argv: tuple[str, ...], *, name: str = "custom-command") -> None:
-        if not argv or any(not argument or "\x00" in argument for argument in argv):
+        if not argv or any(
+            not isinstance(argument, str) or not argument or "\x00" in argument for argument in argv
+        ):
             raise ValueError("custom generator argv must contain valid arguments")
         self.argv = argv
         self.name = name
@@ -167,35 +163,6 @@ class CustomCommandGenerator(MigrationGenerator):
     @property
     def command_label(self) -> str:
         return Path(self.argv[0]).name
-
-    def generate(self, plan: MigrationPlan, workspace: Path) -> GenerationResult:
-        del plan
-        try:
-            completed = subprocess.run(  # nosec B603
-                self.argv,
-                cwd=workspace,
-                shell=False,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=900,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
-            return GenerationResult(
-                success=False,
-                generator=self.name,
-                strategy=self.strategy,
-                errors=(f"custom generator failed: {type(error).__name__}",),
-                returncode=1,
-            )
-        detail = (completed.stderr or completed.stdout)[-1000:].strip()
-        return GenerationResult(
-            success=completed.returncode == 0,
-            generator=self.name,
-            strategy=self.strategy,
-            errors=() if completed.returncode == 0 else (detail or "custom generator failed",),
-            returncode=completed.returncode,
-        )
 
 
 class ExternalCodingAgentGenerator(CustomCommandGenerator):

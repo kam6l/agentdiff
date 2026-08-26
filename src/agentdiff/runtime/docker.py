@@ -9,6 +9,7 @@ depends on the Docker daemon, kernel, platform, and administrator policy.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import secrets
@@ -36,6 +37,14 @@ if TYPE_CHECKING:
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 
 
+class DockerLifecycleError(OSError):
+    """A deterministic timeout from one Docker control-plane lifecycle stage."""
+
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        super().__init__(errno.ETIMEDOUT, f"Docker {stage} timed out")
+
+
 class DockerRuntime:
     """Execute exact argv in an ephemeral, resource-bounded Docker container."""
 
@@ -51,6 +60,7 @@ class DockerRuntime:
         network: str = "none",
         environment_allowlist: Sequence[str] = (),
         poll_interval_seconds: float = 0.1,
+        control_timeout_seconds: float = 120.0,
     ) -> None:
         self.root = Path(root).expanduser().resolve(strict=True)
         if not self.root.is_dir():
@@ -61,14 +71,22 @@ class DockerRuntime:
             if not candidate.is_absolute() or not candidate.is_file():
                 raise FileNotFoundError(f"Docker executable not found: {executable}")
             located = str(candidate.resolve(strict=True))
-        if not image or any(character in image for character in "\r\n\x00"):
-            raise ValueError("Docker image must be a non-empty single-line value")
+        if (
+            not image
+            or image.startswith("-")
+            or any(character in image for character in "\r\n\x00")
+        ):
+            raise ValueError(
+                "Docker image must be a non-empty single-line value and cannot be an option"
+            )
         if cpus <= 0:
             raise ValueError("cpus must be greater than zero")
         if pids_limit <= 0:
             raise ValueError("pids_limit must be greater than zero")
         if network not in {"none", "bridge"}:
             raise ValueError("Docker network must be none or bridge")
+        if control_timeout_seconds <= 0:
+            raise ValueError("control_timeout_seconds must be greater than zero")
         names = tuple(dict.fromkeys(environment_allowlist))
         if any(not _ENV_NAME.fullmatch(name) for name in names):
             raise ValueError("invalid environment allowlist name")
@@ -80,6 +98,7 @@ class DockerRuntime:
         self.network = network
         self.environment_allowlist = names
         self.poll_interval_seconds = poll_interval_seconds
+        self.control_timeout_seconds = float(control_timeout_seconds)
         self._source_dir: Path | None = None
         self._workspace: Path | None = None
         self._temporary_root: Path | None = None
@@ -128,7 +147,11 @@ class DockerRuntime:
         create_argv = self._create_argv(container_name, workspace, user, command)
         container_id: str | None = None
         try:
-            created = self._docker_call(create_argv, capture_output=True)
+            created = self._lifecycle_call(
+                create_argv,
+                capture_output=True,
+                stage="create",
+            )
             if created.returncode != 0:
                 message = (created.stderr or created.stdout or "docker create failed").strip()
                 raise OSError(message)
@@ -171,9 +194,10 @@ class DockerRuntime:
             )
         finally:
             if container_id is not None:
-                self._docker_call(
+                self._lifecycle_call(
                     [self.executable, "rm", "--force", "--volumes", container_id],
                     capture_output=True,
+                    stage="cleanup",
                 )
 
     def close(self) -> None:
@@ -271,7 +295,20 @@ class DockerRuntime:
             "pids_limit": self.pids_limit,
             "environment_allowlist": list(self.environment_allowlist),
             "ephemeral_container": True,
+            "control_timeout_seconds": self.control_timeout_seconds,
         }
+
+    def _lifecycle_call(
+        self,
+        argv: Sequence[str],
+        *,
+        capture_output: bool,
+        stage: str,
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            return self._docker_call(argv, capture_output=capture_output)
+        except subprocess.TimeoutExpired as error:
+            raise DockerLifecycleError(stage) from error
 
     def _docker_call(
         self,
@@ -286,6 +323,7 @@ class DockerRuntime:
             capture_output=capture_output,
             text=True,
             env=self._docker_environment(),
+            timeout=self.control_timeout_seconds,
         )
 
     def _docker_environment(self) -> dict[str, str]:
@@ -298,7 +336,7 @@ class DockerRuntime:
         return allowed
 
     def _image_digest(self) -> str | None:
-        inspected = self._docker_call(
+        inspected = self._lifecycle_call(
             [
                 self.executable,
                 "image",
@@ -308,6 +346,7 @@ class DockerRuntime:
                 self.image,
             ],
             capture_output=True,
+            stage="inspect",
         )
         if inspected.returncode != 0:
             return None

@@ -34,6 +34,23 @@ Command policy can prevent a denied executable from being launched through Agent
 
 `--runtime srt` is an optional adapter for a separately installed Anthropic Sandbox Runtime. In that mode, the external tool owns OS enforcement and its settings are a separate security boundary. AgentDiff checks that the executable and optional settings path exist, preserves argv boundaries, and labels the delegated backend in evidence; it does not audit upstream code, validate that settings are sufficiently restrictive, or prove that host prerequisites enforce the declared policy. Current project tests use a fake wrapper and do not certify upstream isolation.
 
+### API generator isolation
+
+The API migration path treats the exact built-in `DeterministicASTGenerator` as trusted AgentDiff code. Command and external generators are inert exact-argv specifications and have no host execution method. They require `DockerGeneratorRuntime`; an unavailable or weakened Docker boundary never falls back to `LocalRuntime` or a host subprocess.
+
+The generator runtime verifies evidence for:
+
+- a private temporary source copy that is disjoint from the live repository;
+- no live repository or Docker socket mount;
+- non-root execution, read-only root filesystem, dropped capabilities, and `no-new-privileges`;
+- no inherited caller environment and networking disabled by default;
+- CPU, memory, PID, wall-clock, and per-stream output bounds; and
+- exact argv without shell parsing or option-like image injection.
+
+Output above 1 MiB per stream fails closed. Docker control calls and container attachment have explicit time limits and stage-specific error evidence.
+
+The current implementation bind-mounts the private temporary copy into the container. Docker containers also share the host kernel. This is a constrained container boundary, not a virtual machine, kernel boundary, or strict zero-host-mount design.
+
 ### Filesystem observation
 
 The transaction scanner:
@@ -59,7 +76,7 @@ Do not commit `.agentdiff/`. Filesystem metadata, paths, process IDs, process cr
 
 AgentDiff redacts common credential-bearing command flags and recursively redacts values under common sensitive keys before persistence. Environment observations use stable SHA-256-derived fingerprints rather than raw values. Terminal display escapes control characters.
 
-Redaction is defense in depth, not a data-loss-prevention guarantee. Secrets can appear in filenames, task descriptions, source files, unknown argument formats, child output, or fields with nonstandard names. Child stdout/stderr is passed through and is not stored by the transaction runner, but it may still reach the user's terminal or surrounding CI logs.
+Redaction is defense in depth, not a data-loss-prevention guarantee. Secrets can appear in filenames, task descriptions, source files, unknown argument formats, child output, or fields with nonstandard names. Child stdout/stderr is passed through and is not stored by the general transaction runner, but it may still reach the user's terminal or surrounding CI logs. Generator output is bounded and represented by capture metadata/digests; generators receive no inherited caller environment, but source content itself may still be sensitive.
 
 Review capsules before sharing them.
 
@@ -115,4 +132,4 @@ Use version control, disposable workspaces, and real sandboxing alongside AgentD
 
 ## Security testing
 
-Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, and post-run divergence. Pull requests run CodeQL, Bandit, `pip-audit`, Dependency Review, cross-platform tests, and package validation.
+Security-sensitive changes should include regression tests for path confinement, symlink behavior, identity checks, redaction, backup integrity, post-run divergence, runtime capability weakening, timeouts, and output overflow. Pull requests run CodeQL for Python and JavaScript/TypeScript, Bandit, `pip-audit`, Dependency Review, cross-platform tests, real Docker proof, frontend validation, and package validation.

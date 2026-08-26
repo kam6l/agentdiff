@@ -36,8 +36,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://agentdiff.usernameort.chatgpt.site/"
-Documentation = "https://agentdiff.usernameort.chatgpt.site/docs/"
+Homepage = "https://kam6l.github.io/agentdiff-web/"
+Documentation = "https://kam6l.github.io/agentdiff-web/docs/"
 Repository = "https://github.com/kam6l/agentdiff"
 Issues = "https://github.com/kam6l/agentdiff/issues"
 
